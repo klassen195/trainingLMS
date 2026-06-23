@@ -9,6 +9,8 @@ export type EnrollmentStatus = "active" | "completed";
 export type Profile = {
   id: string;
   display_name: string | null;
+  email: string | null;
+  rank: string | null;
   role: UserRole;
   created_at: string;
 };

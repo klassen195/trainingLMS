@@ -217,4 +217,21 @@ export async function updateUserRole(input: { userId: string; role: UserRole }) 
   revalidatePath("/admin");
 }
 
+export async function updateUserProfile(input: {
+  userId: string;
+  displayName: string;
+  rank: string | null;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      display_name: input.displayName.trim() || null,
+      rank: input.rank?.trim() || null,
+    })
+    .eq("id", input.userId);
+  throwIfDbError(error);
+  revalidatePath("/admin");
+}
+
 

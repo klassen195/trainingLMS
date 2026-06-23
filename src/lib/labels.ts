@@ -23,3 +23,16 @@ export function roleLabel(role: UserRole) {
 }
 
 export const courseCategories = Object.keys(categoryLabels) as CourseCategory[];
+
+export const fireRanks = [
+  "Probationary Firefighter",
+  "Firefighter",
+  "Engineer",
+  "Lieutenant",
+  "Captain",
+  "Battalion Chief",
+  "Deputy Chief",
+  "Fire Chief",
+] as const;
+
+export type FireRank = (typeof fireRanks)[number];

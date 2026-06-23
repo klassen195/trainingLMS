@@ -27,8 +27,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${lato.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-white font-sans text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+      <body
+        className="min-h-full flex flex-col bg-white font-sans text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

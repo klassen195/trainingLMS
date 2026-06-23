@@ -16,9 +16,16 @@ export async function getCurrentUserProfile(): Promise<Profile | null> {
 }
 
 export async function requireUserProfile(): Promise<Profile> {
-  const profile = await getCurrentUserProfile();
-  if (!profile) redirect("/login");
-  return profile;
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+  if (error && !isMissingTrainingLmsTables(error)) throw error;
+  if (!data) redirect("/dashboard");
+  return data as Profile;
 }
 
 export function hasRole(profile: Profile, roles: UserRole[]) {

@@ -1,8 +1,10 @@
-import { requireUserProfile } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
+import { MissingProfileSetup } from "@/components/MissingProfileSetup";
 import { TopNav } from "@/components/TopNav";
+import type { Profile } from "@/lib/training-lms-types";
 import { CourseCard } from "@/components/CourseCard";
 import { ProgressBar } from "@/components/ProgressBar";
 import type { Course } from "@/lib/training-lms-types";
@@ -13,8 +15,23 @@ function progressPercent(lessonCount: number, completedCount: number) {
 }
 
 export default async function DashboardPage() {
-  const profile = await requireUserProfile();
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: profileRow, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError && isMissingTrainingLmsTables(profileError)) return <DatabaseSetup />;
+  if (profileError) throw profileError;
+  if (!profileRow) return <MissingProfileSetup userId={user.id} />;
+
+  const profile = profileRow as Profile;
 
   const { data: enrollments, error: enrollError } = await supabase
     .from("enrollments")
