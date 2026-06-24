@@ -1,8 +1,8 @@
 export type UserRole = "admin" | "instructor" | "learner";
 
-export type CourseCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems";
+export type ProgramCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems";
 
-export type CourseStatus = "draft" | "published" | "archived";
+export type ProgramStatus = "draft" | "published" | "archived";
 
 export type EnrollmentStatus = "active" | "completed";
 
@@ -15,54 +15,37 @@ export type Profile = {
   created_at: string;
 };
 
-export type Course = {
+export type Program = {
   id: string;
   title: string;
   description: string | null;
-  category: CourseCategory;
-  status: CourseStatus;
+  category: ProgramCategory;
+  status: ProgramStatus;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type Lesson = {
+export type Module = {
   id: string;
-  course_id: string;
+  program_id: string;
   title: string;
   content: string;
-  sort_order: number;
-  created_at: string;
-};
-
-export type Assignment = {
-  id: string;
-  course_id: string;
-  title: string;
-  description: string;
   sort_order: number;
   created_at: string;
 };
 
 export type Enrollment = {
   id: string;
-  course_id: string;
+  program_id: string;
   user_id: string;
   status: EnrollmentStatus;
   enrolled_at: string;
 };
 
-export type LessonProgress = {
+export type ModuleProgress = {
   id: string;
-  lesson_id: string;
+  module_id: string;
   user_id: string;
   completed_at: string;
-};
-
-export type AssignmentSubmission = {
-  id: string;
-  assignment_id: string;
-  user_id: string;
-  content: string;
-  submitted_at: string;
 };

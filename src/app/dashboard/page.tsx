@@ -4,14 +4,13 @@ import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { MissingProfileSetup } from "@/components/MissingProfileSetup";
 import { TopNav } from "@/components/TopNav";
-import type { Profile } from "@/lib/training-lms-types";
-import { CourseCard } from "@/components/CourseCard";
+import { ProgramCard } from "@/components/ProgramCard";
 import { ProgressBar } from "@/components/ProgressBar";
-import type { Course } from "@/lib/training-lms-types";
+import type { Profile, Program } from "@/lib/training-lms-types";
 
-function progressPercent(lessonCount: number, completedCount: number) {
-  if (lessonCount === 0) return 0;
-  return Math.round((completedCount / lessonCount) * 100);
+function progressPercent(moduleCount: number, completedCount: number) {
+  if (moduleCount === 0) return 0;
+  return Math.round((completedCount / moduleCount) * 100);
 }
 
 export default async function DashboardPage() {
@@ -35,40 +34,40 @@ export default async function DashboardPage() {
 
   const { data: enrollments, error: enrollError } = await supabase
     .from("enrollments")
-    .select("course_id, status")
+    .select("program_id, status")
     .eq("user_id", profile.id)
     .eq("status", "active");
 
   if (isMissingTrainingLmsTables(enrollError)) return <DatabaseSetup />;
   if (enrollError) throw enrollError;
 
-  const courseIds = (enrollments ?? []).map((e) => e.course_id);
-  let courses: Course[] = [];
-  if (courseIds.length) {
-    const { data, error } = await supabase.from("courses").select("*").in("id", courseIds);
+  const programIds = (enrollments ?? []).map((e) => e.program_id);
+  let programs: Program[] = [];
+  if (programIds.length) {
+    const { data, error } = await supabase.from("programs").select("*").in("id", programIds);
     if (error) throw error;
-    courses = (data ?? []) as Course[];
+    programs = (data ?? []) as Program[];
   }
 
-  const progressByCourse = new Map<string, number>();
-  for (const course of courses) {
-    const { count: lessonCount } = await supabase
-      .from("lessons")
+  const progressByProgram = new Map<string, number>();
+  for (const program of programs) {
+    const { count: moduleCount } = await supabase
+      .from("modules")
       .select("id", { count: "exact", head: true })
-      .eq("course_id", course.id);
+      .eq("program_id", program.id);
 
-    const { data: lessons } = await supabase.from("lessons").select("id").eq("course_id", course.id);
-    const lessonIds = (lessons ?? []).map((l) => l.id);
+    const { data: modules } = await supabase.from("modules").select("id").eq("program_id", program.id);
+    const moduleIds = (modules ?? []).map((m) => m.id);
     let completedCount = 0;
-    if (lessonIds.length) {
+    if (moduleIds.length) {
       const { count } = await supabase
-        .from("lesson_progress")
+        .from("module_progress")
         .select("id", { count: "exact", head: true })
         .eq("user_id", profile.id)
-        .in("lesson_id", lessonIds);
+        .in("module_id", moduleIds);
       completedCount = count ?? 0;
     }
-    progressByCourse.set(course.id, progressPercent(lessonCount ?? 0, completedCount));
+    progressByProgram.set(program.id, progressPercent(moduleCount ?? 0, completedCount));
   }
 
   return (
@@ -77,20 +76,24 @@ export default async function DashboardPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
         <h1 className="text-2xl font-semibold text-[#0B2E4B]">My training</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Courses you are enrolled in and lesson progress.
+          Programs you are enrolled in and module progress.
         </p>
 
-        {courses.length === 0 ? (
+        {programs.length === 0 ? (
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            You are not enrolled in any courses yet. Browse the <a href="/courses" className="font-medium text-[#C11B2B] underline">course catalog</a>.
+            You are not enrolled in any programs yet. Browse the{" "}
+            <a href="/programs" className="font-medium text-[#C11B2B] underline">
+              program catalog
+            </a>
+            .
           </p>
         ) : (
           <ul className="mt-6 space-y-4">
-            {courses.map((course) => {
-              const pct = progressByCourse.get(course.id) ?? 0;
+            {programs.map((program) => {
+              const pct = progressByProgram.get(program.id) ?? 0;
               return (
-                <li key={course.id} className="space-y-2">
-                  <CourseCard course={course} enrolled progressPercent={pct} />
+                <li key={program.id} className="space-y-2">
+                  <ProgramCard program={program} enrolled progressPercent={pct} />
                   <ProgressBar value={pct} />
                 </li>
               );

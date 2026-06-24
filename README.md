@@ -1,12 +1,12 @@
 # TrainingLMS (Supabase + Next.js)
 
-Internal fire department learning management system for course enrollment, lessons, assignments, and role-based access.
+Internal fire department learning management system for program enrollment, modules, and role-based access.
 
 ## What's included
 
 - Next.js App Router UI with fire department branding
 - Supabase Auth (email magic link) — login required
-- SQL migration with RLS, profile bootstrap trigger, and seed catalog courses
+- SQL migration with RLS, profile bootstrap trigger, and seed catalog programs
 - Roles: learner, instructor, admin
 
 ## Setup
@@ -27,9 +27,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 
 ### 3) Apply the database migration
 
-Migration file:
+Migration files:
 
-- `supabase/migrations/20260623120000_training_lms_schema.sql`
+- `supabase/migrations/20260623120000_training_lms_schema.sql` (fresh install)
+- `supabase/migrations/20260623210000_programs_modules_no_assignments.sql` (upgrade existing DB)
 
 Apply via Supabase CLI (`supabase db push`) or paste into the Supabase SQL editor and run.
 
@@ -52,7 +53,7 @@ update public.profiles set role = 'admin' where id = '<your-auth-user-uuid>';
 ## Manual QA checklist
 
 1. Sign in with magic link.
-2. Browse **Courses** and enroll in a seed course.
-3. Open a lesson and mark it complete; submit an assignment.
-4. As instructor/admin, create and publish a course with lessons and assignments.
+2. Browse **Programs** and enroll in a seed program.
+3. Open a module and mark it complete.
+4. As instructor/admin, create and publish a program with modules.
 5. As admin, change a user's role on **Admin**.

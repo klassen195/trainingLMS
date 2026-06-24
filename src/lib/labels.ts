@@ -1,6 +1,6 @@
-import type { CourseCategory, UserRole } from "@/lib/training-lms-types";
+import type { ProgramCategory, UserRole } from "@/lib/training-lms-types";
 
-const categoryLabels: Record<CourseCategory, string> = {
+const categoryLabels: Record<ProgramCategory, string> = {
   fire: "Fire",
   engineer: "Engineer",
   officer: "Officer",
@@ -14,7 +14,7 @@ const roleLabels: Record<UserRole, string> = {
   learner: "Learner",
 };
 
-export function categoryLabel(category: CourseCategory) {
+export function categoryLabel(category: ProgramCategory) {
   return categoryLabels[category];
 }
 
@@ -22,7 +22,7 @@ export function roleLabel(role: UserRole) {
   return roleLabels[role];
 }
 
-export const courseCategories = Object.keys(categoryLabels) as CourseCategory[];
+export const programCategories = Object.keys(categoryLabels) as ProgramCategory[];
 
 export const fireRanks = [
   "Probationary Firefighter",

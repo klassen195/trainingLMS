@@ -3,7 +3,7 @@ import type { Profile } from "@/lib/training-lms-types";
 import { hasRole } from "@/lib/auth";
 import { SignOutButton } from "@/components/SignOutButton";
 
-type NavKey = "dashboard" | "courses" | "instructor" | "admin";
+type NavKey = "dashboard" | "programs" | "instructor" | "admin";
 
 function navClass(active: boolean) {
   return active
@@ -29,8 +29,8 @@ export function TopNav({ profile, active }: { profile: Profile; active: NavKey }
           <Link href="/dashboard" className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${navClass(active === "dashboard")}`}>
             Dashboard
           </Link>
-          <Link href="/courses" className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${navClass(active === "courses")}`}>
-            Courses
+          <Link href="/programs" className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${navClass(active === "programs")}`}>
+            Programs
           </Link>
           {showInstructor ? (
             <Link href="/instructor" className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${navClass(active === "instructor")}`}>
