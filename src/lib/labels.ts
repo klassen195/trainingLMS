@@ -6,6 +6,7 @@ const categoryLabels: Record<ProgramCategory, string> = {
   officer: "Officer",
   battalion_chief: "Battalion Chief",
   ems: "EMS",
+  administration: "Administration",
 };
 
 const roleLabels: Record<UserRole, string> = {

@@ -1,8 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addModuleResourceYoutube, deleteModuleResource, prepareModuleResourceUpload } from "@/app/actions";
+import {
+  addModuleResourceQuiz,
+  addModuleResourceYoutube,
+  deleteModuleResource,
+  prepareModuleResourceUpload,
+} from "@/app/actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   detectResourceType,
@@ -19,14 +25,17 @@ export function ModuleResourcesEditor({
   programId,
   moduleId,
   resources,
+  isAdmin = false,
 }: {
   programId: string;
   moduleId: string;
   resources: ModuleResource[];
+  isAdmin?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [quizTitle, setQuizTitle] = useState("");
   const [youtubeTitle, setYoutubeTitle] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +58,13 @@ export function ModuleResourcesEditor({
                   {resourceTypeLabel(resource.resource_type)} · {resourceSubtitle(resource)}
                 </p>
               </div>
-              <Button
+              <div className="flex flex-wrap gap-2">
+                {resource.resource_type === "quiz" && isAdmin ? (
+                  <Button size="sm" variant="outline" asChild>
+                    <Link href={`/admin/quizzes/${resource.id}/edit`}>Configure quiz</Link>
+                  </Button>
+                ) : null}
+                <Button
                 size="sm"
                 variant="secondary"
                 disabled={pending}
@@ -72,11 +87,12 @@ export function ModuleResourcesEditor({
               >
                 Remove
               </Button>
+              </div>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-zinc-500">No videos, PDFs, PowerPoints, or YouTube links yet.</p>
+        <p className="text-xs text-zinc-500">No videos, PDFs, PowerPoints, YouTube links, or quizzes yet.</p>
       )}
 
       <div className="space-y-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
@@ -203,6 +219,45 @@ export function ModuleResourcesEditor({
           }
         >
           {pending ? "Adding..." : "Add YouTube video"}
+        </Button>
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700">
+        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quiz</p>
+        <div className="space-y-2">
+          <FieldLabel htmlFor={`quiz-title-${moduleId}`}>Quiz title</FieldLabel>
+          <Input
+            id={`quiz-title-${moduleId}`}
+            placeholder="e.g. Module knowledge check"
+            value={quizTitle}
+            onChange={(e) => setQuizTitle(e.target.value)}
+          />
+        </div>
+        <p className="text-xs text-zinc-500">
+          Creates a quiz resource. An admin configures the question pool and pass rules.
+        </p>
+        <Button
+          size="sm"
+          disabled={pending || !quizTitle.trim()}
+          onClick={() =>
+            startTransition(async () => {
+              setError(null);
+              try {
+                await addModuleResourceQuiz({
+                  programId,
+                  moduleId,
+                  title: quizTitle.trim(),
+                  sortOrder: resources.length + 1,
+                });
+                setQuizTitle("");
+                router.refresh();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to add quiz");
+              }
+            })
+          }
+        >
+          {pending ? "Adding..." : "Add quiz"}
         </Button>
       </div>
 

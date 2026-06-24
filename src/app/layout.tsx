@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Lato } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AppHeader } from "@/components/AppHeader";
 
-const lato = Lato({
-  variable: "--font-lato",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  weight: ["400", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -24,16 +24,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${lato.variable} ${geistMono.variable} h-full antialiased`}
-      suppressHydrationWarning
-    >
-      <body
-        className="min-h-full flex flex-col bg-white font-sans text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50"
-        suppressHydrationWarning
-      >
-        {children}
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="flex min-h-full flex-col font-sans" suppressHydrationWarning>
+        <AppHeader />
+        <main className="min-h-[calc(100vh-4rem)] flex-1">{children}</main>
+        <footer className="mt-auto border-t bg-muted/50 py-8">
+          <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+            <p>TrainingLMS · Fire Department Training</p>
+          </div>
+        </footer>
       </body>
     </html>
   );

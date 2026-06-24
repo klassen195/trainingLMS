@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "instructor" | "learner";
 
-export type ProgramCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems";
+export type ProgramCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems" | "administration";
 
 export type ProgramStatus = "draft" | "published" | "archived";
 
@@ -59,7 +59,21 @@ export type ModuleProgress = {
   completed_at: string;
 };
 
-export type ModuleResourceType = "video" | "pdf" | "powerpoint" | "youtube";
+export type ModuleEnrollment = {
+  id: string;
+  module_id: string;
+  user_id: string;
+  enrolled_at: string;
+};
+
+export type ResourceProgress = {
+  id: string;
+  resource_id: string;
+  user_id: string;
+  completed_at: string;
+};
+
+export type ModuleResourceType = "video" | "pdf" | "powerpoint" | "youtube" | "quiz";
 
 export type ModuleResource = {
   id: string;
@@ -75,4 +89,49 @@ export type ModuleResource = {
 
 export type ModuleResourceWithUrl = ModuleResource & {
   url: string | null;
+};
+
+export type QuestionBankOption = {
+  id: string;
+  question_id: string;
+  option_text: string;
+  is_correct: boolean;
+  sort_order: number;
+};
+
+export type QuestionBankItem = {
+  id: string;
+  prompt: string;
+  explanation: string | null;
+  topic: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type QuestionBankItemWithOptions = QuestionBankItem & {
+  options: QuestionBankOption[];
+};
+
+export type QuizSettings = {
+  resource_id: string;
+  questions_per_attempt: number;
+  pass_percent: number;
+  updated_at: string;
+};
+
+export type QuizAttempt = {
+  id: string;
+  resource_id: string;
+  user_id: string;
+  score_percent: number | null;
+  passed: boolean | null;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type QuizQuestionForAttempt = {
+  id: string;
+  prompt: string;
+  options: { id: string; option_text: string }[];
 };

@@ -24,6 +24,8 @@ export function resourceTypeLabel(type: ModuleResourceType) {
       return "PowerPoint";
     case "youtube":
       return "YouTube";
+    case "quiz":
+      return "Quiz";
   }
 }
 
@@ -34,6 +36,9 @@ export function resourceSubtitle(resource: {
 }) {
   if (resource.resource_type === "youtube") {
     return resource.external_url ?? "YouTube video";
+  }
+  if (resource.resource_type === "quiz") {
+    return "Randomized quiz from question bank";
   }
   return resource.file_name ?? "";
 }

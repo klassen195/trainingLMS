@@ -1,21 +1,28 @@
 -- Shared modules: link modules to many programs via program_modules.
 -- Remove enrollment requirement for viewing programs and marking progress.
 
-create table public.program_modules (
+create table if not exists public.program_modules (
   program_id uuid not null references public.programs (id) on delete cascade,
   module_id uuid not null references public.modules (id) on delete cascade,
   sort_order integer not null default 0,
   primary key (program_id, module_id)
 );
 
-create index program_modules_module_id_idx on public.program_modules (module_id);
+create index if not exists program_modules_module_id_idx on public.program_modules (module_id);
 
 insert into public.program_modules (program_id, module_id, sort_order)
-select program_id, id, sort_order
-from public.modules;
+select m.program_id, m.id, m.sort_order
+from public.modules m
+where m.program_id is not null
+on conflict (program_id, module_id) do nothing;
 
 alter table public.modules
   add column if not exists created_by uuid references public.profiles (id) on delete set null;
+
+drop policy if exists "modules_select_if_program_visible" on public.modules;
+drop policy if exists "modules_mutate_program_owner" on public.modules;
+drop policy if exists "programs_select_published_or_owner_or_admin" on public.programs;
+drop policy if exists "module_progress_insert_own_enrolled" on public.module_progress;
 
 alter table public.modules drop column if exists program_id;
 alter table public.modules drop column if exists sort_order;
@@ -72,10 +79,14 @@ $$;
 
 alter table public.program_modules enable row level security;
 
-drop policy if exists "modules_select_if_program_visible" on public.modules;
-drop policy if exists "modules_mutate_program_owner" on public.modules;
 drop policy if exists "programs_select_published_or_owner_or_admin" on public.programs;
-drop policy if exists "module_progress_insert_own_enrolled" on public.module_progress;
+drop policy if exists "modules_select_if_visible_or_manageable" on public.modules;
+drop policy if exists "modules_insert_instructor" on public.modules;
+drop policy if exists "modules_update_owner_or_admin" on public.modules;
+drop policy if exists "modules_delete_owner_or_admin" on public.modules;
+drop policy if exists "program_modules_select_if_program_visible" on public.program_modules;
+drop policy if exists "program_modules_mutate_program_owner" on public.program_modules;
+drop policy if exists "module_progress_insert_own_accessible" on public.module_progress;
 
 create policy "programs_select_published_or_owner_or_admin"
   on public.programs for select

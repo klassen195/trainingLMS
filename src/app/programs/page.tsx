@@ -1,61 +1,74 @@
+import { GraduationCap } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
-import { TopNav } from "@/components/TopNav";
 import { ProgramCard } from "@/components/ProgramCard";
-import { categoryLabel, programCategories } from "@/lib/labels";
-import type { Program, ProgramCategory } from "@/lib/training-lms-types";
-import Link from "next/link";
+import { categoryLabel } from "@/lib/labels";
+import { groupProgramsByCategory } from "@/lib/program-catalog";
+import type { Program } from "@/lib/training-lms-types";
 
-function filterLinkClass(active: boolean) {
-  return active
-    ? "rounded-lg border border-[#C11B2B] bg-[#C11B2B] px-3 py-1.5 text-sm text-white"
-    : "rounded-lg border border-zinc-200 px-3 py-1.5 text-sm";
-}
-
-export default async function ProgramsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ category?: string }>;
-}) {
-  const profile = await requireUserProfile();
-  const params = await searchParams;
-  const category = params.category as ProgramCategory | undefined;
+export default async function ProgramsPage() {
+  await requireUserProfile();
   const supabase = await createSupabaseServerClient();
 
-  let query = supabase.from("programs").select("*").eq("status", "published").order("title");
-  if (category && programCategories.includes(category)) {
-    query = query.eq("category", category);
-  }
-  const { data: programs, error } = await query;
+  const { data: programs, error } = await supabase
+    .from("programs")
+    .select("*")
+    .eq("status", "published")
+    .order("title");
+
   if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
   if (error) throw error;
 
+  const programList = (programs ?? []) as Program[];
+  const moduleCounts = new Map<string, number>();
+
+  for (const program of programList) {
+    const { count } = await supabase
+      .from("program_modules")
+      .select("module_id", { count: "exact", head: true })
+      .eq("program_id", program.id);
+    moduleCounts.set(program.id, count ?? 0);
+  }
+
+  const sections = groupProgramsByCategory(programList);
+
   return (
-    <>
-      <TopNav profile={profile} active="programs" />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-        <h1 className="text-2xl font-semibold text-[#0B2E4B]">Program catalog</h1>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/programs" className={filterLinkClass(!category)}>
-            All
-          </Link>
-          {programCategories.map((cat) => (
-            <Link key={cat} href={`/programs?category=${cat}`} className={filterLinkClass(category === cat)}>
-              {categoryLabel(cat)}
-            </Link>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <div className="mb-2 flex items-center gap-3">
+          <GraduationCap className="h-8 w-8 text-primary" />
+          <h1 className="text-4xl font-bold">Program Catalog</h1>
+        </div>
+        <p className="text-lg text-muted-foreground">
+          Browse published training programs organized by division.
+        </p>
+      </div>
+
+      {sections.length === 0 ? (
+        <div className="rounded-lg border py-12 text-center">
+          <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+          <p className="text-muted-foreground">No published programs yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-12">
+          {sections.map(({ category, programs: categoryPrograms }) => (
+            <section key={category}>
+              <h2 className="mb-6 border-b pb-3 text-2xl font-bold">{categoryLabel(category)}</h2>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {categoryPrograms.map((program) => (
+                  <ProgramCard
+                    key={program.id}
+                    program={program}
+                    moduleCount={moduleCounts.get(program.id) ?? 0}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
-
-        <ul className="mt-6 grid gap-4 sm:grid-cols-2">
-          {((programs ?? []) as Program[]).map((program) => (
-            <li key={program.id}>
-              <ProgramCard program={program} />
-            </li>
-          ))}
-        </ul>
-      </main>
-    </>
+      )}
+    </div>
   );
 }

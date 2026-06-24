@@ -1,25 +1,105 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 220 16% 7%;
+  --foreground: 210 20% 96%;
+  --card: 220 16% 10%;
+  --card-foreground: 210 20% 96%;
+  --popover: 220 16% 10%;
+  --popover-foreground: 210 20% 96%;
+  --primary: 356 82% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 12% 16%;
+  --secondary-foreground: 210 20% 92%;
+  --muted: 220 12% 16%;
+  --muted-foreground: 220 12% 68%;
+  --accent: 356 70% 38%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 75% 45%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 220 14% 18%;
+  --input: 220 14% 18%;
+  --ring: 356 82% 45%;
+  --radius: 0.5rem;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-lato);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Radix popper wrapper must sit above page content (e.g. action buttons). */
+  [data-radix-popper-content-wrapper] {
+    z-index: 200;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    mix-blend-mode: screen;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.06) 0, rgba(255, 255, 255, 0) 20%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800' viewBox='0 0 800 800'%3E%3Cpath d='M0 520c80-40 160-40 240 0s160 40 240 0 160-40 240 0 160 40 240 0' fill='none' stroke='%23ffffff' stroke-width='0.8' opacity='0.45'/%3E%3Cpath d='M0 360c70-50 140-50 210 0s140 50 210 0 140-50 210 0 140 50 210 0' fill='none' stroke='%23ffffff' stroke-width='0.8' opacity='0.32'/%3E%3Cpath d='M0 200c90-60 180-60 270 0s180 60 270 0 180-60 270 0 180 60 270 0' fill='none' stroke='%23ffffff' stroke-width='0.8' opacity='0.26'/%3E%3C/svg%3E");
+    background-size: 2200px 2200px, 900px 900px;
+    background-repeat: repeat;
+    z-index: 0;
+  }
 }

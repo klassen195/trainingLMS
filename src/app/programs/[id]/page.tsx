@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUserProfile } from "@/lib/auth";
+import { BookOpen, Pencil, PlayCircle } from "lucide-react";
+import { hasRole, requireUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { programModulesFromRows } from "@/lib/program-modules";
+import { loadProgramModuleProgress } from "@/lib/program-module-progress";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
-import { TopNav } from "@/components/TopNav";
+import { ProgramBreadcrumb } from "@/components/ProgramBreadcrumb";
+import { ProgramModuleList } from "@/components/ProgramModuleList";
+import { ProgressBar } from "@/components/ProgressBar";
 import { categoryLabel } from "@/lib/labels";
-import type { Program, ProgramModuleEntry } from "@/lib/training-lms-types";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import type { Program } from "@/lib/training-lms-types";
 
 export default async function ProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const profile = await requireUserProfile();
@@ -27,37 +33,91 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
 
   const modules = programModulesFromRows(programModuleRows);
   const typedProgram = program as Program;
-  const canOpenModules = typedProgram.status === "published" || typedProgram.created_by === profile.id || profile.role === "admin";
+  const canOpenModules =
+    typedProgram.status === "published" || typedProgram.created_by === profile.id || profile.role === "admin";
+  const canEdit =
+    hasRole(profile, ["admin"]) ||
+    (hasRole(profile, ["instructor"]) && typedProgram.created_by === profile.id);
+
+  const moduleIds = modules.map((m) => m.id);
+  const moduleProgress = await loadProgramModuleProgress(supabase, profile.id, moduleIds);
+  const overallProgress = moduleProgress.progressPercent;
+  const firstModule = modules[0];
 
   return (
     <>
-      <TopNav profile={profile} active="programs" />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:px-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-[#C11B2B]">
-          {categoryLabel(typedProgram.category)}
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold text-[#0B2E4B]">{typedProgram.title}</h1>
-        {typedProgram.description ? (
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{typedProgram.description}</p>
+      <ProgramBreadcrumb programId={id} programTitle={typedProgram.title} />
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{categoryLabel(typedProgram.category)}</Badge>
+              <Badge variant="secondary" className="capitalize">
+                {typedProgram.status}
+              </Badge>
+            </div>
+            {canEdit ? (
+              <Button variant="outline" asChild>
+                <Link href={`/instructor/programs/${id}/edit`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit program
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+          <h1 className="mb-4 text-4xl font-bold">{typedProgram.title}</h1>
+          {typedProgram.description ? (
+            <p className="text-lg text-muted-foreground">{typedProgram.description}</p>
+          ) : null}
+        </div>
+
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="flex items-center gap-3 rounded-lg border p-4">
+            <BookOpen className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Modules</p>
+              <p className="font-medium">{modules.length}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border p-4">
+            <PlayCircle className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Your progress</p>
+              <p className="font-medium">
+                {overallProgress === null ? "Not enrolled" : `${overallProgress}%`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {overallProgress !== null && overallProgress > 0 ? (
+          <div className="mb-8">
+            <ProgressBar value={overallProgress} showLabel />
+          </div>
         ) : null}
 
-        <section className="mt-8">
-          <h2 className="text-lg font-semibold">Modules</h2>
-          <ul className="mt-3 space-y-2">
-            {modules.map((moduleItem: ProgramModuleEntry) => (
-              <li key={moduleItem.id}>
-                {canOpenModules ? (
-                  <Link href={`/programs/${id}/modules/${moduleItem.id}`} className="text-[#0B2E4B] underline">
-                    {moduleItem.title}
-                  </Link>
-                ) : (
-                  <span className="text-zinc-500">{moduleItem.title}</span>
-                )}
-              </li>
-            ))}
-          </ul>
+        {firstModule && canOpenModules && overallProgress === 0 ? (
+          <div className="mb-8">
+            <Button size="lg" asChild>
+              <Link href={`/programs/${id}/modules/${firstModule.id}`}>
+                <PlayCircle className="mr-2 h-5 w-5" />
+                Start program
+              </Link>
+            </Button>
+          </div>
+        ) : null}
+
+        <section>
+          <h2 className="mb-4 text-2xl font-bold">Program modules</h2>
+          <ProgramModuleList
+            programId={id}
+            modules={modules}
+            enrolledModuleIds={moduleProgress.enrolledModuleIds}
+            completedModuleIds={moduleProgress.completedModuleIds}
+            canOpen={canOpenModules}
+          />
         </section>
-      </main>
+      </div>
     </>
   );
 }

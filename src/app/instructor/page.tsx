@@ -1,12 +1,14 @@
 import Link from "next/link";
+import { BookOpen, Plus } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
-import { TopNav } from "@/components/TopNav";
 import { categoryLabel } from "@/lib/labels";
-import type { Program } from "@/lib/training-lms-types";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import type { Program } from "@/lib/training-lms-types";
 
 export default async function InstructorPage() {
   const profile = await requireRole(["instructor", "admin"]);
@@ -20,40 +22,58 @@ export default async function InstructorPage() {
   if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
   if (error) throw error;
 
-  return (
-    <>
-      <TopNav profile={profile} active="instructor" />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-[#0B2E4B]">Instructor programs</h1>
-          <Link href="/instructor/programs/new">
-            <Button variant="primary" className="bg-[#C11B2B] text-white dark:bg-[#C11B2B] dark:text-white">
-              New program
-            </Button>
-          </Link>
-        </div>
+  const programList = (programs ?? []) as Program[];
 
-        <ul className="mt-6 space-y-3">
-          {((programs ?? []) as Program[]).map((program) => (
-            <li key={program.id} className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="mb-2 flex items-center gap-3">
+            <BookOpen className="h-8 w-8 text-primary" />
+            <h1 className="text-4xl font-bold">Instructor Programs</h1>
+          </div>
+          <p className="text-lg text-muted-foreground">Create and manage training programs and modules.</p>
+        </div>
+        <Button asChild>
+          <Link href="/instructor/programs/new">
+            <Plus className="mr-2 h-4 w-4" />
+            New program
+          </Link>
+        </Button>
+      </div>
+
+      {programList.length === 0 ? (
+        <div className="rounded-lg border py-12 text-center">
+          <BookOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+          <p className="text-muted-foreground">No programs yet. Create your first one.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {programList.map((program) => (
+            <Card key={program.id}>
+              <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-[#C11B2B]">
-                    {categoryLabel(program.category)} · {program.status}
-                  </p>
-                  <h2 className="text-lg font-semibold">{program.title}</h2>
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <Badge variant="outline">{categoryLabel(program.category)}</Badge>
+                    <Badge variant="secondary" className="capitalize">
+                      {program.status}
+                    </Badge>
+                  </div>
+                  <CardTitle>{program.title}</CardTitle>
                 </div>
-                <Link
-                  href={`/instructor/programs/${program.id}/edit`}
-                  className="text-sm font-medium text-[#0B2E4B] underline"
-                >
-                  Edit
-                </Link>
-              </div>
-            </li>
+                <Button variant="outline" asChild>
+                  <Link href={`/instructor/programs/${program.id}/edit`}>Edit</Link>
+                </Button>
+              </CardHeader>
+              {program.description ? (
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">{program.description}</p>
+                </CardContent>
+              ) : null}
+            </Card>
           ))}
-        </ul>
-      </main>
-    </>
+        </div>
+      )}
+    </div>
   );
 }

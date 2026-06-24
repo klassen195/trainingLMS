@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type { ProgramCategory, ProgramStatus, UserRole } from "@/lib/training-lms-types";
 import { buildModuleResourceStoragePath, parseYouTubeVideoId } from "@/lib/module-resources";
+import { scorePercent, shuffleArray } from "@/lib/quiz";
 import type { ModuleResourceType } from "@/lib/training-lms-types";
 
 function throwIfDbError(error: import("@supabase/supabase-js").PostgrestError | null) {
@@ -29,26 +30,153 @@ async function requireAuthUserId() {
   return { supabase, userId: user.id };
 }
 
+async function requireAdminUser() {
+  const { supabase, userId } = await requireAuthUserId();
+  const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  throwIfDbError(error);
+  if (profile?.role !== "admin") throw new Error("Admin access required");
+  return { supabase, userId };
+}
+
+function revalidateModuleViews(programId: string, moduleId: string) {
+  revalidatePath(`/programs/${programId}/modules/${moduleId}`, "layout");
+  revalidatePath(`/programs/${programId}/modules/${moduleId}`);
+}
+
+async function requireModuleEnrollment(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  moduleId: string
+) {
+  const { data } = await supabase
+    .from("module_enrollments")
+    .select("id")
+    .eq("module_id", moduleId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data) throw new Error("Enroll in this module to track progress");
+}
+
 export async function signOut() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/login");
 }
 
-export async function markModuleComplete(input: { programId: string; moduleId: string }) {
+export async function enrollInModule(input: { programId: string; moduleId: string }) {
   const { supabase, userId } = await requireAuthUserId();
-  const { error } = await supabase.from("module_progress").upsert(
+  const { error } = await supabase.from("module_enrollments").upsert(
     {
       module_id: input.moduleId,
       user_id: userId,
-      completed_at: new Date().toISOString(),
+      enrolled_at: new Date().toISOString(),
     },
     { onConflict: "module_id,user_id" }
   );
   throwIfDbError(error);
   revalidatePath("/dashboard");
   revalidatePath(`/programs/${input.programId}`);
-  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function setModuleComplete(input: {
+  programId: string;
+  moduleId: string;
+  completed: boolean;
+}) {
+  const { supabase, userId } = await requireAuthUserId();
+  await requireModuleEnrollment(supabase, userId, input.moduleId);
+
+  if (input.completed) {
+    const { error } = await supabase.from("module_progress").upsert(
+      {
+        module_id: input.moduleId,
+        user_id: userId,
+        completed_at: new Date().toISOString(),
+      },
+      { onConflict: "module_id,user_id" }
+    );
+    throwIfDbError(error);
+  } else {
+    const { error } = await supabase
+      .from("module_progress")
+      .delete()
+      .eq("module_id", input.moduleId)
+      .eq("user_id", userId);
+    throwIfDbError(error);
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/programs/${input.programId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function setResourceComplete(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  completed: boolean;
+}) {
+  const { supabase, userId } = await requireAuthUserId();
+  await requireModuleEnrollment(supabase, userId, input.moduleId);
+
+  if (input.completed) {
+    const { error } = await supabase.from("resource_progress").upsert(
+      {
+        resource_id: input.resourceId,
+        user_id: userId,
+        completed_at: new Date().toISOString(),
+      },
+      { onConflict: "resource_id,user_id" }
+    );
+    throwIfDbError(error);
+  } else {
+    const { error: resourceError } = await supabase
+      .from("resource_progress")
+      .delete()
+      .eq("resource_id", input.resourceId)
+      .eq("user_id", userId);
+    throwIfDbError(resourceError);
+
+    const { error: moduleError } = await supabase
+      .from("module_progress")
+      .delete()
+      .eq("module_id", input.moduleId)
+      .eq("user_id", userId);
+    throwIfDbError(moduleError);
+  }
+
+  if (input.completed) {
+    const { data: resources } = await supabase
+      .from("module_resources")
+      .select("id")
+      .eq("module_id", input.moduleId);
+    const resourceIds = (resources ?? []).map((row) => row.id);
+
+    if (resourceIds.length > 0) {
+      const { count } = await supabase
+        .from("resource_progress")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .in("resource_id", resourceIds);
+
+      if (count === resourceIds.length) {
+        const { error: moduleError } = await supabase.from("module_progress").upsert(
+          {
+            module_id: input.moduleId,
+            user_id: userId,
+            completed_at: new Date().toISOString(),
+          },
+          { onConflict: "module_id,user_id" }
+        );
+        throwIfDbError(moduleError);
+      }
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/programs/${input.programId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
 }
 
 export async function createProgram(input: {
@@ -105,26 +233,26 @@ export async function addModule(input: {
   sortOrder: number;
 }) {
   const { supabase, userId } = await requireAuthUserId();
-  const { data: moduleRow, error: moduleError } = await supabase
-    .from("modules")
-    .insert({
-      title: input.title,
-      content: input.content,
-      created_by: userId,
-    })
-    .select("id")
-    .single();
+  const moduleId = crypto.randomUUID();
+  const { error: moduleError } = await supabase.from("modules").insert({
+    id: moduleId,
+    title: input.title,
+    content: input.content,
+    created_by: userId,
+  });
   throwIfDbError(moduleError);
-  if (!moduleRow) throw new Error("Failed to create module");
 
   const { error: linkError } = await supabase.from("program_modules").insert({
     program_id: input.programId,
-    module_id: moduleRow.id,
+    module_id: moduleId,
     sort_order: input.sortOrder,
   });
   throwIfDbError(linkError);
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${moduleId}/edit`);
   revalidatePath(`/programs/${input.programId}`);
+  revalidateModuleViews(input.programId, moduleId);
+  return moduleId;
 }
 
 export async function linkModuleToProgram(input: {
@@ -171,6 +299,22 @@ export async function updateProgramModuleOrder(input: {
   revalidatePath(`/programs/${input.programId}`);
 }
 
+export async function reorderProgramModules(input: { programId: string; moduleIds: string[] }) {
+  const { supabase } = await requireAuthUserId();
+
+  for (let index = 0; index < input.moduleIds.length; index++) {
+    const { error } = await supabase
+      .from("program_modules")
+      .update({ sort_order: index + 1 })
+      .eq("program_id", input.programId)
+      .eq("module_id", input.moduleIds[index]);
+    throwIfDbError(error);
+  }
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/programs/${input.programId}`);
+}
+
 export async function updateModule(input: {
   programId: string;
   moduleId: string;
@@ -196,8 +340,9 @@ export async function updateModule(input: {
   throwIfDbError(sortError);
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
   revalidatePath(`/programs/${input.programId}`);
-  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
 }
 
 export async function prepareModuleResourceUpload(input: {
@@ -230,7 +375,7 @@ export async function prepareModuleResourceUpload(input: {
   if (!data) throw new Error("Failed to create module resource");
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
-  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
 
   return { resourceId: data.id as string, storagePath: data.storage_path as string };
 }
@@ -258,7 +403,7 @@ export async function addModuleResourceYoutube(input: {
   throwIfDbError(error);
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
-  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
 }
 
 export async function deleteModuleResource(input: {
@@ -277,7 +422,7 @@ export async function deleteModuleResource(input: {
   throwIfDbError(error);
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
-  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
 }
 
 export async function updateUserRole(input: { userId: string; role: UserRole }) {
@@ -302,4 +447,297 @@ export async function updateUserProfile(input: {
     .eq("id", input.userId);
   throwIfDbError(error);
   revalidatePath("/admin");
+}
+
+export async function createQuestionBankItem(input: {
+  prompt: string;
+  explanation: string;
+  topic: string;
+  options: { text: string; isCorrect: boolean }[];
+}) {
+  const { supabase, userId } = await requireAdminUser();
+  if (input.options.filter((o) => o.isCorrect).length !== 1) {
+    throw new Error("Each question must have exactly one correct answer.");
+  }
+  if (input.options.length < 2) throw new Error("Add at least two answer options.");
+
+  const { data: question, error } = await supabase
+    .from("question_bank_items")
+    .insert({
+      prompt: input.prompt.trim(),
+      explanation: input.explanation.trim() || null,
+      topic: input.topic.trim() || null,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  throwIfDbError(error);
+  if (!question) throw new Error("Failed to create question");
+
+  const { error: optionsError } = await supabase.from("question_bank_options").insert(
+    input.options.map((option, index) => ({
+      question_id: question.id,
+      option_text: option.text.trim(),
+      is_correct: option.isCorrect,
+      sort_order: index + 1,
+    }))
+  );
+  throwIfDbError(optionsError);
+  revalidatePath("/admin/question-bank");
+}
+
+export async function updateQuestionBankItem(input: {
+  questionId: string;
+  prompt: string;
+  explanation: string;
+  topic: string;
+  options: { id?: string; text: string; isCorrect: boolean }[];
+}) {
+  const { supabase } = await requireAdminUser();
+  if (input.options.filter((o) => o.isCorrect).length !== 1) {
+    throw new Error("Each question must have exactly one correct answer.");
+  }
+  if (input.options.length < 2) throw new Error("Add at least two answer options.");
+
+  const { error: questionError } = await supabase
+    .from("question_bank_items")
+    .update({
+      prompt: input.prompt.trim(),
+      explanation: input.explanation.trim() || null,
+      topic: input.topic.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.questionId);
+  throwIfDbError(questionError);
+
+  const { error: deleteError } = await supabase
+    .from("question_bank_options")
+    .delete()
+    .eq("question_id", input.questionId);
+  throwIfDbError(deleteError);
+
+  const { error: optionsError } = await supabase.from("question_bank_options").insert(
+    input.options.map((option, index) => ({
+      question_id: input.questionId,
+      option_text: option.text.trim(),
+      is_correct: option.isCorrect,
+      sort_order: index + 1,
+    }))
+  );
+  throwIfDbError(optionsError);
+  revalidatePath("/admin/question-bank");
+}
+
+export async function deleteQuestionBankItem(questionId: string) {
+  const { supabase } = await requireAdminUser();
+  const { error } = await supabase.from("question_bank_items").delete().eq("id", questionId);
+  throwIfDbError(error);
+  revalidatePath("/admin/question-bank");
+}
+
+export async function addModuleResourceQuiz(input: {
+  programId: string;
+  moduleId: string;
+  title: string;
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const { data: resource, error } = await supabase
+    .from("module_resources")
+    .insert({
+      module_id: input.moduleId,
+      title: input.title.trim(),
+      resource_type: "quiz",
+      storage_path: null,
+      file_name: null,
+      external_url: null,
+      sort_order: input.sortOrder,
+    })
+    .select("id")
+    .single();
+  throwIfDbError(error);
+  if (!resource) throw new Error("Failed to create quiz resource");
+
+  const { error: settingsError } = await supabase.from("quiz_settings").insert({
+    resource_id: resource.id,
+    questions_per_attempt: 5,
+    pass_percent: 80,
+  });
+  throwIfDbError(settingsError);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+  return resource.id as string;
+}
+
+export async function updateQuizSettings(input: {
+  resourceId: string;
+  questionsPerAttempt: number;
+  passPercent: number;
+}) {
+  const { supabase } = await requireAdminUser();
+  const { error } = await supabase
+    .from("quiz_settings")
+    .update({
+      questions_per_attempt: input.questionsPerAttempt,
+      pass_percent: input.passPercent,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("resource_id", input.resourceId);
+  throwIfDbError(error);
+  revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
+}
+
+export async function setQuizPoolQuestions(input: { resourceId: string; questionIds: string[] }) {
+  const { supabase } = await requireAdminUser();
+  const { error: deleteError } = await supabase
+    .from("quiz_pool_questions")
+    .delete()
+    .eq("resource_id", input.resourceId);
+  throwIfDbError(deleteError);
+
+  if (input.questionIds.length > 0) {
+    const { error: insertError } = await supabase.from("quiz_pool_questions").insert(
+      input.questionIds.map((questionId) => ({
+        resource_id: input.resourceId,
+        question_id: questionId,
+      }))
+    );
+    throwIfDbError(insertError);
+  }
+
+  revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
+}
+
+export async function startQuizAttempt(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+}) {
+  const { supabase, userId } = await requireAuthUserId();
+  await requireModuleEnrollment(supabase, userId, input.moduleId);
+
+  const { data: settings } = await supabase
+    .from("quiz_settings")
+    .select("questions_per_attempt")
+    .eq("resource_id", input.resourceId)
+    .maybeSingle();
+  if (!settings) throw new Error("Quiz is not configured yet.");
+
+  const { data: poolRows } = await supabase
+    .from("quiz_pool_questions")
+    .select("question_id")
+    .eq("resource_id", input.resourceId);
+  const poolIds = (poolRows ?? []).map((row) => row.question_id);
+  if (poolIds.length === 0) throw new Error("This quiz has no questions in its pool yet.");
+
+  const drawCount = Math.min(settings.questions_per_attempt, poolIds.length);
+  const selectedIds = shuffleArray(poolIds).slice(0, drawCount);
+
+  const { data: attempt, error: attemptError } = await supabase
+    .from("quiz_attempts")
+    .insert({
+      resource_id: input.resourceId,
+      user_id: userId,
+    })
+    .select("id")
+    .single();
+  throwIfDbError(attemptError);
+  if (!attempt) throw new Error("Failed to start quiz");
+
+  const { error: questionsError } = await supabase.from("quiz_attempt_questions").insert(
+    selectedIds.map((questionId, index) => ({
+      attempt_id: attempt.id,
+      question_id: questionId,
+      sort_order: index + 1,
+    }))
+  );
+  throwIfDbError(questionsError);
+
+  revalidateModuleViews(input.programId, input.moduleId);
+  return attempt.id as string;
+}
+
+export async function submitQuizAttempt(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  attemptId: string;
+  answers: { questionId: string; selectedOptionId: string }[];
+}) {
+  const { supabase, userId } = await requireAuthUserId();
+  await requireModuleEnrollment(supabase, userId, input.moduleId);
+
+  const { data: attempt } = await supabase
+    .from("quiz_attempts")
+    .select("id, completed_at")
+    .eq("id", input.attemptId)
+    .eq("user_id", userId)
+    .eq("resource_id", input.resourceId)
+    .maybeSingle();
+  if (!attempt) throw new Error("Quiz attempt not found");
+  if (attempt.completed_at) throw new Error("This quiz attempt is already submitted.");
+
+  const { data: attemptQuestions } = await supabase
+    .from("quiz_attempt_questions")
+    .select("question_id")
+    .eq("attempt_id", input.attemptId);
+  const expectedQuestionIds = new Set((attemptQuestions ?? []).map((row) => row.question_id));
+
+  const { data: correctOptions } = await supabase
+    .from("question_bank_options")
+    .select("id, question_id, is_correct")
+    .in("question_id", [...expectedQuestionIds]);
+  const correctByQuestion = new Map(
+    (correctOptions ?? []).filter((row) => row.is_correct).map((row) => [row.question_id, row.id])
+  );
+
+  let correctCount = 0;
+  const answerRows = [...expectedQuestionIds].map((questionId) => {
+    const selectedOptionId = input.answers.find((a) => a.questionId === questionId)?.selectedOptionId ?? null;
+    const isCorrect = selectedOptionId !== null && selectedOptionId === correctByQuestion.get(questionId);
+    if (isCorrect) correctCount++;
+    return {
+      attempt_id: input.attemptId,
+      question_id: questionId,
+      selected_option_id: selectedOptionId,
+      is_correct: isCorrect,
+    };
+  });
+
+  const { error: answersError } = await supabase.from("quiz_attempt_answers").insert(answerRows);
+  throwIfDbError(answersError);
+
+  const total = expectedQuestionIds.size;
+  const pct = scorePercent(correctCount, total);
+
+  const { data: settings } = await supabase
+    .from("quiz_settings")
+    .select("pass_percent")
+    .eq("resource_id", input.resourceId)
+    .single();
+  const passed = pct >= (settings?.pass_percent ?? 80);
+
+  const { error: attemptError } = await supabase
+    .from("quiz_attempts")
+    .update({
+      score_percent: pct,
+      passed,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", input.attemptId);
+  throwIfDbError(attemptError);
+
+  if (passed) {
+    await setResourceComplete({
+      programId: input.programId,
+      moduleId: input.moduleId,
+      resourceId: input.resourceId,
+      completed: true,
+    });
+  }
+
+  revalidateModuleViews(input.programId, input.moduleId);
+  return { scorePercent: pct, passed, correctCount, total };
 }
