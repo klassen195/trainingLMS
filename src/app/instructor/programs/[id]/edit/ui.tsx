@@ -1,14 +1,36 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addModule, updateModule, updateProgram } from "@/app/actions";
+import { useRouter } from "next/navigation";
+import {
+  addModule,
+  linkModuleToProgram,
+  unlinkModuleFromProgram,
+  updateModule,
+  updateProgram,
+  updateProgramModuleOrder,
+} from "@/app/actions";
 import { programCategories, categoryLabel } from "@/lib/labels";
-import type { Module, Program, ProgramCategory, ProgramStatus } from "@/lib/training-lms-types";
+import type { Module, ModuleResource, Program, ProgramCategory, ProgramModuleEntry, ProgramStatus } from "@/lib/training-lms-types";
+import { ModuleResourcesEditor } from "@/components/ModuleResourcesEditor";
 import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 
-export function EditProgramForm({ program, modules }: { program: Program; modules: Module[] }) {
+export function EditProgramForm({
+  program,
+  modules,
+  linkableModules,
+  editableModuleIds,
+  resourcesByModuleId,
+}: {
+  program: Program;
+  modules: ProgramModuleEntry[];
+  linkableModules: Module[];
+  editableModuleIds: Set<string>;
+  resourcesByModuleId: Record<string, ModuleResource[]>;
+}) {
+  const router = useRouter();
   const [title, setTitle] = useState(program.title);
   const [description, setDescription] = useState(program.description ?? "");
   const [category, setCategory] = useState<ProgramCategory>(program.category);
@@ -17,6 +39,7 @@ export function EditProgramForm({ program, modules }: { program: Program; module
 
   const [newModuleTitle, setNewModuleTitle] = useState("");
   const [newModuleContent, setNewModuleContent] = useState("");
+  const [linkModuleId, setLinkModuleId] = useState("");
 
   return (
     <div className="space-y-10">
@@ -79,11 +102,62 @@ export function EditProgramForm({ program, modules }: { program: Program; module
 
       <section className="space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
         <h2 className="text-lg font-semibold">Modules</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Modules can be shared across programs. Removing a module from this program does not delete it.
+        </p>
         <ul className="space-y-4">
           {modules.map((moduleItem) => (
-            <ModuleEditor key={moduleItem.id} programId={program.id} moduleItem={moduleItem} />
+            <ModuleEditor
+              key={moduleItem.id}
+              programId={program.id}
+              moduleItem={moduleItem}
+              canEdit={editableModuleIds.has(moduleItem.id)}
+              resources={resourcesByModuleId[moduleItem.id] ?? []}
+              onUnlinked={() => router.refresh()}
+            />
           ))}
         </ul>
+
+        {linkableModules.length ? (
+          <div className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <h3 className="text-sm font-medium">Link existing module</h3>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[16rem] flex-1 space-y-2">
+                <FieldLabel htmlFor="link-module">Module</FieldLabel>
+                <select
+                  id="link-module"
+                  value={linkModuleId}
+                  onChange={(e) => setLinkModuleId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <option value="">Select a module</option>
+                  {linkableModules.map((moduleItem) => (
+                    <option key={moduleItem.id} value={moduleItem.id}>
+                      {moduleItem.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                disabled={pending || !linkModuleId}
+                onClick={() =>
+                  startTransition(async () => {
+                    await linkModuleToProgram({
+                      programId: program.id,
+                      moduleId: linkModuleId,
+                      sortOrder: modules.length + 1,
+                    });
+                    setLinkModuleId("");
+                    router.refresh();
+                  })
+                }
+              >
+                Link module
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <form
           className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800"
           onSubmit={(e) => {
@@ -97,10 +171,11 @@ export function EditProgramForm({ program, modules }: { program: Program; module
               });
               setNewModuleTitle("");
               setNewModuleContent("");
+              router.refresh();
             });
           }}
         >
-          <h3 className="text-sm font-medium">Add module</h3>
+          <h3 className="text-sm font-medium">Create new module</h3>
           <Input
             placeholder="Module title"
             required
@@ -116,7 +191,7 @@ export function EditProgramForm({ program, modules }: { program: Program; module
             className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
           />
           <Button type="submit" disabled={pending}>
-            Add module
+            Create and add module
           </Button>
         </form>
       </section>
@@ -124,7 +199,19 @@ export function EditProgramForm({ program, modules }: { program: Program; module
   );
 }
 
-function ModuleEditor({ programId, moduleItem }: { programId: string; moduleItem: Module }) {
+function ModuleEditor({
+  programId,
+  moduleItem,
+  canEdit,
+  resources,
+  onUnlinked,
+}: {
+  programId: string;
+  moduleItem: ProgramModuleEntry;
+  canEdit: boolean;
+  resources: ModuleResource[];
+  onUnlinked: () => void;
+}) {
   const [title, setTitle] = useState(moduleItem.title);
   const [content, setContent] = useState(moduleItem.content);
   const [sortOrder, setSortOrder] = useState(String(moduleItem.sort_order));
@@ -132,31 +219,77 @@ function ModuleEditor({ programId, moduleItem }: { programId: string; moduleItem
 
   return (
     <li className="space-y-2 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-900">
-      <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea
-        rows={3}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-      />
+      {canEdit ? (
+        <>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          <textarea
+            rows={3}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+          />
+        </>
+      ) : (
+        <>
+          <p className="font-medium">{moduleItem.title}</p>
+          <p className="whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">{moduleItem.content}</p>
+          <p className="text-xs text-zinc-500">Shared module — only the creator can edit content.</p>
+        </>
+      )}
       <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} />
-      <Button
-        size="sm"
-        disabled={pending}
-        onClick={() =>
-          startTransition(() =>
-            updateModule({
-              programId,
-              moduleId: moduleItem.id,
-              title,
-              content,
-              sortOrder: Number(sortOrder) || 0,
+      <div className="flex flex-wrap gap-2">
+        {canEdit ? (
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() =>
+              startTransition(() =>
+                updateModule({
+                  programId,
+                  moduleId: moduleItem.id,
+                  title,
+                  content,
+                  sortOrder: Number(sortOrder) || 0,
+                })
+              )
+            }
+          >
+            Save module
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            disabled={pending}
+            onClick={() =>
+              startTransition(() =>
+                updateProgramModuleOrder({
+                  programId,
+                  moduleId: moduleItem.id,
+                  sortOrder: Number(sortOrder) || 0,
+                })
+              )
+            }
+          >
+            Save order
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              await unlinkModuleFromProgram({ programId, moduleId: moduleItem.id });
+              onUnlinked();
             })
-          )
-        }
-      >
-        Save module
-      </Button>
+          }
+        >
+          Remove from program
+        </Button>
+      </div>
+      {canEdit ? (
+        <ModuleResourcesEditor programId={programId} moduleId={moduleItem.id} resources={resources} />
+      ) : null}
     </li>
   );
 }

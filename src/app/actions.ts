@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type { ProgramCategory, ProgramStatus, UserRole } from "@/lib/training-lms-types";
+import { buildModuleResourceStoragePath, parseYouTubeVideoId } from "@/lib/module-resources";
+import type { ModuleResourceType } from "@/lib/training-lms-types";
 
 function throwIfDbError(error: import("@supabase/supabase-js").PostgrestError | null) {
   if (!error) return;
@@ -31,19 +33,6 @@ export async function signOut() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/login");
-}
-
-export async function enrollInProgram(programId: string) {
-  const { supabase, userId } = await requireAuthUserId();
-  const { error } = await supabase.from("enrollments").insert({
-    program_id: programId,
-    user_id: userId,
-    status: "active",
-  });
-  throwIfDbError(error);
-  revalidatePath("/dashboard");
-  revalidatePath("/programs");
-  revalidatePath(`/programs/${programId}`);
 }
 
 export async function markModuleComplete(input: { programId: string; moduleId: string }) {
@@ -115,13 +104,68 @@ export async function addModule(input: {
   content: string;
   sortOrder: number;
 }) {
-  const { supabase } = await requireAuthUserId();
-  const { error } = await supabase.from("modules").insert({
+  const { supabase, userId } = await requireAuthUserId();
+  const { data: moduleRow, error: moduleError } = await supabase
+    .from("modules")
+    .insert({
+      title: input.title,
+      content: input.content,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  throwIfDbError(moduleError);
+  if (!moduleRow) throw new Error("Failed to create module");
+
+  const { error: linkError } = await supabase.from("program_modules").insert({
     program_id: input.programId,
-    title: input.title,
-    content: input.content,
+    module_id: moduleRow.id,
     sort_order: input.sortOrder,
   });
+  throwIfDbError(linkError);
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/programs/${input.programId}`);
+}
+
+export async function linkModuleToProgram(input: {
+  programId: string;
+  moduleId: string;
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const { error } = await supabase.from("program_modules").insert({
+    program_id: input.programId,
+    module_id: input.moduleId,
+    sort_order: input.sortOrder,
+  });
+  throwIfDbError(error);
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/programs/${input.programId}`);
+}
+
+export async function unlinkModuleFromProgram(input: { programId: string; moduleId: string }) {
+  const { supabase } = await requireAuthUserId();
+  const { error } = await supabase
+    .from("program_modules")
+    .delete()
+    .eq("program_id", input.programId)
+    .eq("module_id", input.moduleId);
+  throwIfDbError(error);
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/programs/${input.programId}`);
+}
+
+export async function updateProgramModuleOrder(input: {
+  programId: string;
+  moduleId: string;
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const { error } = await supabase
+    .from("program_modules")
+    .update({ sort_order: input.sortOrder })
+    .eq("program_id", input.programId)
+    .eq("module_id", input.moduleId);
   throwIfDbError(error);
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
   revalidatePath(`/programs/${input.programId}`);
@@ -135,17 +179,104 @@ export async function updateModule(input: {
   sortOrder: number;
 }) {
   const { supabase } = await requireAuthUserId();
-  const { error } = await supabase
+  const { error: moduleError } = await supabase
     .from("modules")
     .update({
       title: input.title,
       content: input.content,
-      sort_order: input.sortOrder,
     })
     .eq("id", input.moduleId);
-  throwIfDbError(error);
+  throwIfDbError(moduleError);
+
+  const { error: sortError } = await supabase
+    .from("program_modules")
+    .update({ sort_order: input.sortOrder })
+    .eq("program_id", input.programId)
+    .eq("module_id", input.moduleId);
+  throwIfDbError(sortError);
+
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
   revalidatePath(`/programs/${input.programId}`);
+  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+}
+
+export async function prepareModuleResourceUpload(input: {
+  programId: string;
+  moduleId: string;
+  title: string;
+  resourceType: ModuleResourceType;
+  fileName: string;
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const resourceId = crypto.randomUUID();
+  const storagePath = buildModuleResourceStoragePath(input.moduleId, resourceId, input.fileName);
+
+  const { data, error } = await supabase
+    .from("module_resources")
+    .insert({
+      id: resourceId,
+      module_id: input.moduleId,
+      title: input.title.trim(),
+      resource_type: input.resourceType,
+      storage_path: storagePath,
+      file_name: input.fileName,
+      sort_order: input.sortOrder,
+    })
+    .select("id, storage_path")
+    .single();
+
+  throwIfDbError(error);
+  if (!data) throw new Error("Failed to create module resource");
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+
+  return { resourceId: data.id as string, storagePath: data.storage_path as string };
+}
+
+export async function addModuleResourceYoutube(input: {
+  programId: string;
+  moduleId: string;
+  title: string;
+  youtubeUrl: string;
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const videoId = parseYouTubeVideoId(input.youtubeUrl);
+  if (!videoId) throw new Error("Enter a valid YouTube URL.");
+
+  const { error } = await supabase.from("module_resources").insert({
+    module_id: input.moduleId,
+    title: input.title.trim(),
+    resource_type: "youtube",
+    storage_path: null,
+    file_name: videoId,
+    external_url: input.youtubeUrl.trim(),
+    sort_order: input.sortOrder,
+  });
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
+}
+
+export async function deleteModuleResource(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  storagePath: string | null;
+}) {
+  const { supabase } = await requireAuthUserId();
+
+  if (input.storagePath) {
+    await supabase.storage.from("module-resources").remove([input.storagePath]);
+  }
+
+  const { error } = await supabase.from("module_resources").delete().eq("id", input.resourceId);
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
   revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
 }
 

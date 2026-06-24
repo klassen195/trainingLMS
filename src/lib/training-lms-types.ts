@@ -28,11 +28,20 @@ export type Program = {
 
 export type Module = {
   id: string;
-  program_id: string;
   title: string;
   content: string;
-  sort_order: number;
+  created_by: string | null;
   created_at: string;
+};
+
+export type ProgramModule = {
+  program_id: string;
+  module_id: string;
+  sort_order: number;
+};
+
+export type ProgramModuleEntry = Module & {
+  sort_order: number;
 };
 
 export type Enrollment = {
@@ -48,4 +57,22 @@ export type ModuleProgress = {
   module_id: string;
   user_id: string;
   completed_at: string;
+};
+
+export type ModuleResourceType = "video" | "pdf" | "powerpoint" | "youtube";
+
+export type ModuleResource = {
+  id: string;
+  module_id: string;
+  title: string;
+  resource_type: ModuleResourceType;
+  storage_path: string | null;
+  file_name: string | null;
+  external_url: string | null;
+  sort_order: number;
+  created_at: string;
+};
+
+export type ModuleResourceWithUrl = ModuleResource & {
+  url: string | null;
 };

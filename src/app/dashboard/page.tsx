@@ -32,32 +32,23 @@ export default async function DashboardPage() {
 
   const profile = profileRow as Profile;
 
-  const { data: enrollments, error: enrollError } = await supabase
-    .from("enrollments")
-    .select("program_id, status")
-    .eq("user_id", profile.id)
-    .eq("status", "active");
+  const { data: programs, error: programsError } = await supabase
+    .from("programs")
+    .select("*")
+    .eq("status", "published")
+    .order("title");
 
-  if (isMissingTrainingLmsTables(enrollError)) return <DatabaseSetup />;
-  if (enrollError) throw enrollError;
-
-  const programIds = (enrollments ?? []).map((e) => e.program_id);
-  let programs: Program[] = [];
-  if (programIds.length) {
-    const { data, error } = await supabase.from("programs").select("*").in("id", programIds);
-    if (error) throw error;
-    programs = (data ?? []) as Program[];
-  }
+  if (isMissingTrainingLmsTables(programsError)) return <DatabaseSetup />;
+  if (programsError) throw programsError;
 
   const progressByProgram = new Map<string, number>();
-  for (const program of programs) {
-    const { count: moduleCount } = await supabase
-      .from("modules")
-      .select("id", { count: "exact", head: true })
+  for (const program of (programs ?? []) as Program[]) {
+    const { data: programModuleRows } = await supabase
+      .from("program_modules")
+      .select("module_id")
       .eq("program_id", program.id);
 
-    const { data: modules } = await supabase.from("modules").select("id").eq("program_id", program.id);
-    const moduleIds = (modules ?? []).map((m) => m.id);
+    const moduleIds = (programModuleRows ?? []).map((row) => row.module_id);
     let completedCount = 0;
     if (moduleIds.length) {
       const { count } = await supabase
@@ -67,7 +58,7 @@ export default async function DashboardPage() {
         .in("module_id", moduleIds);
       completedCount = count ?? 0;
     }
-    progressByProgram.set(program.id, progressPercent(moduleCount ?? 0, completedCount));
+    progressByProgram.set(program.id, progressPercent(moduleIds.length, completedCount));
   }
 
   return (
@@ -76,24 +67,20 @@ export default async function DashboardPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-6">
         <h1 className="text-2xl font-semibold text-[#0B2E4B]">My training</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Programs you are enrolled in and module progress.
+          Published programs and your module progress.
         </p>
 
-        {programs.length === 0 ? (
+        {(programs ?? []).length === 0 ? (
           <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-            You are not enrolled in any programs yet. Browse the{" "}
-            <a href="/programs" className="font-medium text-[#C11B2B] underline">
-              program catalog
-            </a>
-            .
+            No published programs yet. Check back soon.
           </p>
         ) : (
           <ul className="mt-6 space-y-4">
-            {programs.map((program) => {
+            {((programs ?? []) as Program[]).map((program) => {
               const pct = progressByProgram.get(program.id) ?? 0;
               return (
                 <li key={program.id} className="space-y-2">
-                  <ProgramCard program={program} enrolled progressPercent={pct} />
+                  <ProgramCard program={program} progressPercent={pct} />
                   <ProgressBar value={pct} />
                 </li>
               );

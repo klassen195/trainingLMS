@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { requireUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { TopNav } from "@/components/TopNav";
 import { MarkModuleCompleteButton } from "@/components/MarkModuleCompleteButton";
-import type { Module } from "@/lib/training-lms-types";
+import { ModuleResourcesViewer } from "@/components/ModuleResourcesViewer";
+import { getYouTubeEmbedUrl, parseYouTubeVideoId } from "@/lib/module-resources";
+import type { Module, ModuleResource, ModuleResourceWithUrl } from "@/lib/training-lms-types";
 
 export default async function ModulePage({
   params,
@@ -15,20 +17,15 @@ export default async function ModulePage({
   const { id, moduleId } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const { data: enrollment } = await supabase
-    .from("enrollments")
-    .select("id")
+  const { data: programLink } = await supabase
+    .from("program_modules")
+    .select("module_id")
     .eq("program_id", id)
-    .eq("user_id", profile.id)
+    .eq("module_id", moduleId)
     .maybeSingle();
-  if (!enrollment) redirect(`/programs/${id}`);
+  if (!programLink) notFound();
 
-  const { data: moduleRow } = await supabase
-    .from("modules")
-    .select("*")
-    .eq("id", moduleId)
-    .eq("program_id", id)
-    .maybeSingle();
+  const { data: moduleRow } = await supabase.from("modules").select("*").eq("id", moduleId).maybeSingle();
   if (!moduleRow) notFound();
 
   const { data: progress } = await supabase
@@ -39,6 +36,26 @@ export default async function ModulePage({
     .maybeSingle();
 
   const typedModule = moduleRow as Module;
+
+  const { data: resources } = await supabase
+    .from("module_resources")
+    .select("*")
+    .eq("module_id", moduleId)
+    .order("sort_order");
+
+  const resourcesWithUrls: ModuleResourceWithUrl[] = await Promise.all(
+    ((resources ?? []) as ModuleResource[]).map(async (resource) => {
+      if (resource.resource_type === "youtube") {
+        const videoId = parseYouTubeVideoId(resource.external_url ?? "");
+        return { ...resource, url: videoId ? getYouTubeEmbedUrl(videoId) : null };
+      }
+      if (!resource.storage_path) return { ...resource, url: null };
+      const { data: signed } = await supabase.storage
+        .from("module-resources")
+        .createSignedUrl(resource.storage_path, 3600);
+      return { ...resource, url: signed?.signedUrl ?? null };
+    })
+  );
 
   return (
     <>
@@ -51,6 +68,7 @@ export default async function ModulePage({
         <article className="prose prose-zinc mt-6 max-w-none whitespace-pre-wrap text-sm dark:prose-invert">
           {typedModule.content}
         </article>
+        <ModuleResourcesViewer resources={resourcesWithUrls} />
         <div className="mt-8">
           <MarkModuleCompleteButton programId={id} moduleId={moduleId} completed={Boolean(progress)} />
         </div>

@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { requireUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
+import { programModulesFromRows } from "@/lib/program-modules";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { TopNav } from "@/components/TopNav";
-import { EnrollButton } from "@/components/EnrollButton";
 import { categoryLabel } from "@/lib/labels";
-import type { Module, Program } from "@/lib/training-lms-types";
+import type { Program, ProgramModuleEntry } from "@/lib/training-lms-types";
 
 export default async function ProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const profile = await requireUserProfile();
@@ -19,21 +19,15 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
   if (error) throw error;
   if (!program) notFound();
 
-  const { data: modules } = await supabase
-    .from("modules")
-    .select("*")
+  const { data: programModuleRows } = await supabase
+    .from("program_modules")
+    .select("sort_order, modules(*)")
     .eq("program_id", id)
     .order("sort_order");
 
-  const { data: enrollment } = await supabase
-    .from("enrollments")
-    .select("id")
-    .eq("program_id", id)
-    .eq("user_id", profile.id)
-    .maybeSingle();
-
-  const enrolled = Boolean(enrollment);
+  const modules = programModulesFromRows(programModuleRows);
   const typedProgram = program as Program;
+  const canOpenModules = typedProgram.status === "published" || typedProgram.created_by === profile.id || profile.role === "admin";
 
   return (
     <>
@@ -47,18 +41,12 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{typedProgram.description}</p>
         ) : null}
 
-        {typedProgram.status === "published" && !enrolled ? (
-          <div className="mt-4">
-            <EnrollButton programId={id} />
-          </div>
-        ) : null}
-
         <section className="mt-8">
           <h2 className="text-lg font-semibold">Modules</h2>
           <ul className="mt-3 space-y-2">
-            {((modules ?? []) as Module[]).map((moduleItem) => (
+            {modules.map((moduleItem: ProgramModuleEntry) => (
               <li key={moduleItem.id}>
-                {enrolled ? (
+                {canOpenModules ? (
                   <Link href={`/programs/${id}/modules/${moduleItem.id}`} className="text-[#0B2E4B] underline">
                     {moduleItem.title}
                   </Link>

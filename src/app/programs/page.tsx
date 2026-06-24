@@ -32,9 +32,6 @@ export default async function ProgramsPage({
   if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
   if (error) throw error;
 
-  const { data: enrollments } = await supabase.from("enrollments").select("program_id").eq("user_id", profile.id);
-  const enrolledIds = new Set((enrollments ?? []).map((e) => e.program_id));
-
   return (
     <>
       <TopNav profile={profile} active="programs" />
@@ -54,7 +51,7 @@ export default async function ProgramsPage({
         <ul className="mt-6 grid gap-4 sm:grid-cols-2">
           {((programs ?? []) as Program[]).map((program) => (
             <li key={program.id}>
-              <ProgramCard program={program} enrolled={enrolledIds.has(program.id)} />
+              <ProgramCard program={program} />
             </li>
           ))}
         </ul>
