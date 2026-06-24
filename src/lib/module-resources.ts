@@ -38,7 +38,7 @@ export function resourceSubtitle(resource: {
     return resource.external_url ?? "YouTube video";
   }
   if (resource.resource_type === "quiz") {
-    return "Randomized quiz from question bank";
+    return "Randomized quiz";
   }
   return resource.file_name ?? "";
 }

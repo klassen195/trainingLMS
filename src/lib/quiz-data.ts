@@ -7,11 +7,13 @@ import type {
 } from "@/lib/training-lms-types";
 
 export async function loadQuestionBank(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  resourceId: string
 ): Promise<QuestionBankItemWithOptions[]> {
   const { data: questions } = await supabase
     .from("question_bank_items")
     .select("*")
+    .eq("resource_id", resourceId)
     .order("created_at", { ascending: false });
 
   if (!questions?.length) return [];
@@ -46,14 +48,8 @@ export async function loadQuizConfig(
     .eq("resource_id", resourceId)
     .maybeSingle();
 
-  const { data: poolRows } = await supabase
-    .from("quiz_pool_questions")
-    .select("question_id")
-    .eq("resource_id", resourceId);
-
   return {
     settings: (settings ?? null) as QuizSettings | null,
-    poolQuestionIds: (poolRows ?? []).map((row) => row.question_id),
   };
 }
 
@@ -145,8 +141,8 @@ export async function loadQuizSettingsSummary(
     .maybeSingle();
 
   const { count } = await supabase
-    .from("quiz_pool_questions")
-    .select("question_id", { count: "exact", head: true })
+    .from("question_bank_items")
+    .select("id", { count: "exact", head: true })
     .eq("resource_id", resourceId);
 
   return {

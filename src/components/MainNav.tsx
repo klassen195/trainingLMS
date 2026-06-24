@@ -10,7 +10,6 @@ import {
   LogOut,
   Menu,
   BookOpen,
-  HelpCircle,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -118,15 +117,9 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link href="/admin/question-bank">
-                        <HelpCircle className="mr-2 h-4 w-4" />
-                        Question bank
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
                       <Link href="/admin">
                         <Shield className="mr-2 h-4 w-4" />
-                        Admin: Users
+                        Admin
                       </Link>
                     </DropdownMenuItem>
                   </>

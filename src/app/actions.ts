@@ -450,6 +450,7 @@ export async function updateUserProfile(input: {
 }
 
 export async function createQuestionBankItem(input: {
+  resourceId: string;
   prompt: string;
   explanation: string;
   topic: string;
@@ -464,6 +465,7 @@ export async function createQuestionBankItem(input: {
   const { data: question, error } = await supabase
     .from("question_bank_items")
     .insert({
+      resource_id: input.resourceId,
       prompt: input.prompt.trim(),
       explanation: input.explanation.trim() || null,
       topic: input.topic.trim() || null,
@@ -483,10 +485,11 @@ export async function createQuestionBankItem(input: {
     }))
   );
   throwIfDbError(optionsError);
-  revalidatePath("/admin/question-bank");
+  revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
 }
 
 export async function updateQuestionBankItem(input: {
+  resourceId: string;
   questionId: string;
   prompt: string;
   explanation: string;
@@ -507,7 +510,8 @@ export async function updateQuestionBankItem(input: {
       topic: input.topic.trim() || null,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", input.questionId);
+    .eq("id", input.questionId)
+    .eq("resource_id", input.resourceId);
   throwIfDbError(questionError);
 
   const { error: deleteError } = await supabase
@@ -525,14 +529,18 @@ export async function updateQuestionBankItem(input: {
     }))
   );
   throwIfDbError(optionsError);
-  revalidatePath("/admin/question-bank");
+  revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
 }
 
-export async function deleteQuestionBankItem(questionId: string) {
+export async function deleteQuestionBankItem(input: { resourceId: string; questionId: string }) {
   const { supabase } = await requireAdminUser();
-  const { error } = await supabase.from("question_bank_items").delete().eq("id", questionId);
+  const { error } = await supabase
+    .from("question_bank_items")
+    .delete()
+    .eq("id", input.questionId)
+    .eq("resource_id", input.resourceId);
   throwIfDbError(error);
-  revalidatePath("/admin/question-bank");
+  revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
 }
 
 export async function addModuleResourceQuiz(input: {
@@ -589,27 +597,6 @@ export async function updateQuizSettings(input: {
   revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
 }
 
-export async function setQuizPoolQuestions(input: { resourceId: string; questionIds: string[] }) {
-  const { supabase } = await requireAdminUser();
-  const { error: deleteError } = await supabase
-    .from("quiz_pool_questions")
-    .delete()
-    .eq("resource_id", input.resourceId);
-  throwIfDbError(deleteError);
-
-  if (input.questionIds.length > 0) {
-    const { error: insertError } = await supabase.from("quiz_pool_questions").insert(
-      input.questionIds.map((questionId) => ({
-        resource_id: input.resourceId,
-        question_id: questionId,
-      }))
-    );
-    throwIfDbError(insertError);
-  }
-
-  revalidatePath(`/admin/quizzes/${input.resourceId}/edit`);
-}
-
 export async function startQuizAttempt(input: {
   programId: string;
   moduleId: string;
@@ -625,12 +612,12 @@ export async function startQuizAttempt(input: {
     .maybeSingle();
   if (!settings) throw new Error("Quiz is not configured yet.");
 
-  const { data: poolRows } = await supabase
-    .from("quiz_pool_questions")
-    .select("question_id")
+  const { data: bankRows } = await supabase
+    .from("question_bank_items")
+    .select("id")
     .eq("resource_id", input.resourceId);
-  const poolIds = (poolRows ?? []).map((row) => row.question_id);
-  if (poolIds.length === 0) throw new Error("This quiz has no questions in its pool yet.");
+  const poolIds = (bankRows ?? []).map((row) => row.id);
+  if (poolIds.length === 0) throw new Error("This quiz has no questions yet.");
 
   const drawCount = Math.min(settings.questions_per_attempt, poolIds.length);
   const selectedIds = shuffleArray(poolIds).slice(0, drawCount);

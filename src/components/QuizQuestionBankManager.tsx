@@ -22,7 +22,13 @@ const emptyOptions = (): OptionDraft[] => [
   { text: "", isCorrect: false },
 ];
 
-export function QuestionBankManager({ questions }: { questions: QuestionBankItemWithOptions[] }) {
+export function QuizQuestionBankManager({
+  resourceId,
+  questions,
+}: {
+  resourceId: string;
+  questions: QuestionBankItemWithOptions[];
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +133,7 @@ export function QuestionBankManager({ questions }: { questions: QuestionBankItem
                   try {
                     if (editingId) {
                       await updateQuestionBankItem({
+                        resourceId,
                         questionId: editingId,
                         prompt,
                         explanation,
@@ -134,7 +141,7 @@ export function QuestionBankManager({ questions }: { questions: QuestionBankItem
                         options,
                       });
                     } else {
-                      await createQuestionBankItem({ prompt, explanation, topic, options });
+                      await createQuestionBankItem({ resourceId, prompt, explanation, topic, options });
                     }
                     resetForm();
                     router.refresh();
@@ -144,7 +151,7 @@ export function QuestionBankManager({ questions }: { questions: QuestionBankItem
                 })
               }
             >
-              {pending ? "Saving..." : editingId ? "Update question" : "Add to bank"}
+              {pending ? "Saving..." : editingId ? "Update question" : "Add question"}
             </Button>
             {editingId ? (
               <Button variant="outline" disabled={pending} onClick={resetForm}>
@@ -162,7 +169,7 @@ export function QuestionBankManager({ questions }: { questions: QuestionBankItem
         </CardHeader>
         <CardContent className="space-y-3">
           {questions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No questions yet. Add your first question.</p>
+            <p className="text-sm text-muted-foreground">No questions yet. Add your first question for this quiz.</p>
           ) : (
             questions.map((question) => (
               <div key={question.id} className="rounded-lg border p-4">
@@ -190,7 +197,7 @@ export function QuestionBankManager({ questions }: { questions: QuestionBankItem
                       startTransition(async () => {
                         setError(null);
                         try {
-                          await deleteQuestionBankItem(question.id);
+                          await deleteQuestionBankItem({ resourceId, questionId: question.id });
                           if (editingId === question.id) resetForm();
                           router.refresh();
                         } catch (err) {

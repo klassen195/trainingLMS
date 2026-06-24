@@ -101,6 +101,7 @@ export type QuestionBankOption = {
 
 export type QuestionBankItem = {
   id: string;
+  resource_id: string;
   prompt: string;
   explanation: string | null;
   topic: string | null;

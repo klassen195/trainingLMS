@@ -1,11 +1,8 @@
-import Link from "next/link";
-import { HelpCircle, Shield } from "lucide-react";
+import { Shield } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
-import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { Profile } from "@/lib/training-lms-types";
 import { AdminUserManager } from "./ui";
 
@@ -24,24 +21,7 @@ export default async function AdminPage() {
           <Shield className="h-8 w-8 text-primary" />
           <h1 className="text-4xl font-bold">Admin</h1>
         </div>
-        <p className="text-lg text-muted-foreground">Manage users, question banks, and quiz configuration.</p>
-      </div>
-
-      <div className="mb-8 grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <HelpCircle className="h-5 w-5" />
-              Question bank
-            </CardTitle>
-            <CardDescription>Create and edit reusable quiz questions.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/admin/question-bank">Open question bank</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <p className="text-lg text-muted-foreground">Manage users and roles.</p>
       </div>
 
       <div className="mb-4">
