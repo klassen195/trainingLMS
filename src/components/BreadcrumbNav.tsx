@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutDashboard, GraduationCap, BookOpen, Shield } from "lucide-react";
+import { Home, LayoutDashboard, GraduationCap, BookOpen, Shield, ClipboardList } from "lucide-react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -52,6 +52,12 @@ export function BreadcrumbNav() {
         label: "Admin",
         href: isLast ? undefined : "/admin",
         icon: <Shield className="h-4 w-4" />,
+      });
+    } else if (path === "ems-qi") {
+      breadcrumbs.push({
+        label: "EMS QI",
+        href: isLast ? undefined : "/ems-qi",
+        icon: <ClipboardList className="h-4 w-4" />,
       });
     } else if (!isLast || paths[index - 1] !== "programs") {
       breadcrumbs.push({

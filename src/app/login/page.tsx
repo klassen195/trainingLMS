@@ -3,7 +3,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { LoginForm } from "./ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -17,11 +22,11 @@ export default async function LoginPage() {
         <CardHeader>
           <CardTitle>TrainingLMS</CardTitle>
           <CardDescription>
-            Sign in with your department email to access programs and track training progress.
+            Sign in with a magic link, email code, or password. First-time users should start with magic link.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm />
+          <LoginForm initialError={params.error} />
         </CardContent>
       </Card>
     </div>

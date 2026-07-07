@@ -39,11 +39,12 @@ export async function proxy(request: NextRequest) {
   });
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: claimsData,
+  } = await supabase.auth.getClaims();
+  const isAuthenticated = Boolean(claimsData?.claims?.sub);
 
   const pathname = request.nextUrl.pathname;
-  if (!user && !isPublicPath(pathname)) {
+  if (!isAuthenticated && !isPublicPath(pathname)) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("redirectedFrom", pathname);

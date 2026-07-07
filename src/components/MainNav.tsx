@@ -10,6 +10,8 @@ import {
   LogOut,
   Menu,
   BookOpen,
+  ClipboardList,
+  UserRound,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -64,7 +66,12 @@ export function MainNav({ profile }: { profile: Profile | null }) {
 
   const allNavItems = [
     ...navItems,
-    ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
+    ...(showInstructor
+      ? [
+          { href: "/instructor", label: "Instructor", icon: BookOpen },
+          { href: "/ems-qi", label: "EMS QI", icon: ClipboardList },
+        ]
+      : []),
   ];
 
   return (
@@ -125,6 +132,13 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                   </>
                 ) : null}
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/account">
+                    <UserRound className="mr-2 h-4 w-4" />
+                    Account
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem disabled={pending} onSelect={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   {pending ? "Signing out..." : "Sign out"}
@@ -181,6 +195,16 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                   >
                     <Shield className="h-5 w-5" />
                     Admin
+                  </Link>
+                ) : null}
+                {profile ? (
+                  <Link
+                    href="/account"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors hover:bg-accent"
+                  >
+                    <UserRound className="h-5 w-5" />
+                    Account
                   </Link>
                 ) : null}
                 {profile ? (

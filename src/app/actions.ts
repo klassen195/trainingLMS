@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { formatAuthError, normalizeAuthEmail } from "@/lib/auth-messages";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type { ProgramCategory, ProgramStatus, UserRole } from "@/lib/training-lms-types";
@@ -61,6 +62,153 @@ export async function signOut() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+function parseAuthEmail(email: string) {
+  const normalized = normalizeAuthEmail(email);
+  if (!normalized) {
+    return { error: "Enter your email address." as const };
+  }
+  return { email: normalized };
+}
+
+function parseAuthOrigin(origin: string) {
+  try {
+    return { origin: new URL(origin) };
+  } catch {
+    return { error: "Invalid request origin." as const };
+  }
+}
+
+export async function signInWithMagicLink(input: { email: string; origin: string }) {
+  const emailResult = parseAuthEmail(input.email);
+  if ("error" in emailResult) return emailResult;
+
+  const originResult = parseAuthOrigin(input.origin);
+  if ("error" in originResult) return originResult;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email: emailResult.email,
+    options: {
+      emailRedirectTo: `${originResult.origin.origin}/auth/callback?next=/dashboard`,
+      shouldCreateUser: true,
+    },
+  });
+
+  if (error) {
+    return { error: formatAuthError(error.message) };
+  }
+
+  return { success: true as const };
+}
+
+export async function sendSignInCode(input: { email: string }) {
+  const emailResult = parseAuthEmail(input.email);
+  if ("error" in emailResult) return emailResult;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email: emailResult.email,
+    options: {
+      shouldCreateUser: false,
+    },
+  });
+
+  if (error) {
+    return { error: formatAuthError(error.message) };
+  }
+
+  return { success: true as const };
+}
+
+export async function verifySignInCode(input: { email: string; code: string }) {
+  const emailResult = parseAuthEmail(input.email);
+  if ("error" in emailResult) return emailResult;
+
+  const token = input.code.trim();
+  if (!/^\d{6}$/.test(token)) {
+    return { error: "Enter the 6-digit code from your email." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.verifyOtp({
+    email: emailResult.email,
+    token,
+    type: "email",
+  });
+
+  if (error) {
+    return { error: formatAuthError(error.message) };
+  }
+
+  return { success: true as const };
+}
+
+export async function signInWithPassword(input: { email: string; password: string }) {
+  const emailResult = parseAuthEmail(input.email);
+  if ("error" in emailResult) return emailResult;
+
+  if (!input.password) {
+    return { error: "Enter your password." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: emailResult.email,
+    password: input.password,
+  });
+
+  if (error) {
+    return { error: formatAuthError(error.message) };
+  }
+
+  return { success: true as const };
+}
+
+export async function requestPasswordReset(input: { email: string; origin: string }) {
+  const emailResult = parseAuthEmail(input.email);
+  if ("error" in emailResult) return emailResult;
+
+  const originResult = parseAuthOrigin(input.origin);
+  if ("error" in originResult) return originResult;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(emailResult.email, {
+    redirectTo: `${originResult.origin.origin}/auth/callback?next=/account`,
+  });
+
+  if (error) {
+    return { error: formatAuthError(error.message) };
+  }
+
+  return { success: true as const };
+}
+
+export async function setAccountPassword(input: { password: string; confirmPassword: string }) {
+  if (!input.password || input.password.length < 8) {
+    return { error: "Password must be at least 8 characters." };
+  }
+
+  if (input.password !== input.confirmPassword) {
+    return { error: "Passwords do not match." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+  if (userError) return { error: formatAuthError(userError.message) };
+  if (!user) return { error: "Not authenticated." };
+
+  const { error } = await supabase.auth.updateUser({ password: input.password });
+  if (error) {
+    return { error: formatAuthError(error.message) };
+  }
+
+  revalidatePath("/account");
+  return { success: true as const };
 }
 
 export async function enrollInModule(input: { programId: string; moduleId: string }) {

@@ -14,7 +14,26 @@ Internal fire department learning management system for program enrollment, modu
 ### 1) Create a Supabase project
 
 - Enable **Email** auth provider
-- Configure **Site URL / Redirect URLs** for magic-link return to your app (e.g. `http://localhost:3000/dashboard`)
+- Configure **Site URL / Redirect URLs** for magic-link return (e.g. `http://localhost:3000/auth/callback`)
+- Configure **custom SMTP** so login emails are sent from your domain (see below)
+
+### Email deliverability (avoid spam folder)
+
+Supabase’s built-in email sender is for testing only. Messages often land in spam because they come from a shared Supabase address with no reputation on your domain.
+
+**Recommended:** send auth email through your own `@kootenaifire.com` mail.
+
+1. In Supabase → **Project Settings → Authentication → SMTP Settings**, enable custom SMTP.
+2. Use one of these senders:
+   - **Microsoft 365** (if your department already uses it): host `smtp.office365.com`, port `587`, user = a dedicated mailbox such as `training-lms@kootenaifire.com`, password = that account’s password or app password. Your IT admin may need to enable SMTP AUTH for the account.
+   - **Resend / Postmark / SendGrid**: create an account, verify the `kootenaifire.com` domain (add the DNS records they provide), then paste their SMTP credentials into Supabase.
+3. Set **Sender email** to something like `training-lms@kootenaifire.com` and **Sender name** to `Kootenai Fire Training LMS`.
+4. In **Authentication → Email Templates**, edit the Magic Link template:
+   - Subject: `Sign in to Training LMS` (short, no marketing language)
+   - Keep the body simple — one clear link, no extra images or promotional text
+5. Confirm SPF, DKIM, and DMARC are configured for the sending domain (your email provider’s docs cover this; Resend/Postmark walk you through it).
+
+Optional but helpful: set a **custom auth domain** in Supabase so magic-link URLs use your domain instead of `*.supabase.co` (Authentication → URL Configuration).
 
 ### 2) Environment variables
 
