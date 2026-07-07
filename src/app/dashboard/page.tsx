@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Award, BookOpen, LayoutDashboard, TrendingUp } from "lucide-react";
+import { Award, BookOpen, GraduationCap, LayoutDashboard, TrendingUp } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
@@ -8,11 +7,11 @@ import { MissingProfileSetup } from "@/components/MissingProfileSetup";
 import { ProgramCard } from "@/components/ProgramCard";
 import { ProgramCategoryFilters } from "@/components/ProgramCategoryFilters";
 import { ProgressBar } from "@/components/ProgressBar";
-import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { loadProgramModuleProgress } from "@/lib/program-module-progress";
 import { programProgressStatus } from "@/lib/program-progress";
-import { programCategories } from "@/lib/labels";
+import { categoryLabel, programCategories } from "@/lib/labels";
+import { groupProgramsByCategory } from "@/lib/program-catalog";
 import type { Profile, Program, ProgramCategory } from "@/lib/training-lms-types";
 
 type ProgramWithProgress = {
@@ -81,7 +80,13 @@ export default async function DashboardPage({
   if (isMissingTrainingLmsTables(programsError)) return <DatabaseSetup />;
   if (programsError) throw programsError;
 
-  const withProgress = await loadProgramProgress(supabase, profile, (programs ?? []) as Program[]);
+  const programList = (programs ?? []) as Program[];
+  const withProgress = await loadProgramProgress(supabase, profile, programList);
+  const progressByProgramId = new Map(withProgress.map((item) => [item.program.id, item]));
+  const filteredPrograms = activeCategory
+    ? programList.filter((program) => program.category === activeCategory)
+    : programList;
+  const catalogSections = groupProgramsByCategory(filteredPrograms);
   const filteredProgress = activeCategory
     ? withProgress.filter((item) => item.program.category === activeCategory)
     : withProgress;
@@ -156,29 +161,37 @@ export default async function DashboardPage({
       ) : null}
 
       <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold">All Programs</h2>
-          <Button variant="outline" asChild>
-            <Link href="/programs">View catalog</Link>
-          </Button>
+        <div className="mb-6 flex items-center gap-3">
+          <GraduationCap className="h-6 w-6 text-primary" />
+          <h2 className="text-2xl font-bold">Program Catalog</h2>
         </div>
-        {filteredProgress.length === 0 ? (
+        {catalogSections.length === 0 ? (
           <div className="rounded-lg border py-12 text-center">
-            <BookOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
             <p className="text-muted-foreground">
               {activeCategory ? "No programs in this category." : "No published programs yet. Check back soon."}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {filteredProgress.map((item) => (
-              <ProgramCard
-                key={item.program.id}
-                program={item.program}
-                progressPercent={item.pct ?? undefined}
-                enrolledCount={item.enrolledCount}
-                moduleCount={item.moduleCount}
-              />
+          <div className="space-y-12">
+            {catalogSections.map(({ category, programs: categoryPrograms }) => (
+              <div key={category}>
+                <h3 className="mb-6 border-b pb-3 text-2xl font-bold">{categoryLabel(category)}</h3>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {categoryPrograms.map((program) => {
+                    const progress = progressByProgramId.get(program.id);
+                    return (
+                      <ProgramCard
+                        key={program.id}
+                        program={program}
+                        progressPercent={progress?.pct ?? undefined}
+                        enrolledCount={progress?.enrolledCount ?? 0}
+                        moduleCount={progress?.moduleCount ?? 0}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         )}

@@ -18,7 +18,8 @@ export function BreadcrumbNav() {
   const pathname = usePathname();
   const paths = pathname.split("/").filter(Boolean);
 
-  if (paths[0] === "programs" && paths[2] === "modules") {
+  // Program detail, module, and resource pages render ProgramBreadcrumb in their layout/page.
+  if (paths[0] === "programs" && paths.length > 1) {
     return null;
   }
 
