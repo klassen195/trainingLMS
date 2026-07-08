@@ -6,7 +6,7 @@ import { formatAuthError, normalizeAuthEmail } from "@/lib/auth-messages";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type { ProgramCategory, ProgramStatus, UserRole } from "@/lib/training-lms-types";
-import { buildModuleResourceStoragePath, parseYouTubeVideoId } from "@/lib/module-resources";
+import { buildModuleResourceStoragePath, normalizeWebsiteUrl, parseYouTubeVideoId } from "@/lib/module-resources";
 import { scorePercent, shuffleArray } from "@/lib/quiz";
 import type { ModuleResourceType } from "@/lib/training-lms-types";
 
@@ -463,6 +463,27 @@ export async function reorderProgramModules(input: { programId: string; moduleId
   revalidatePath(`/programs/${input.programId}`);
 }
 
+export async function reorderModuleResources(input: {
+  programId: string;
+  moduleId: string;
+  resourceIds: string[];
+}) {
+  const { supabase } = await requireAuthUserId();
+
+  for (let index = 0; index < input.resourceIds.length; index++) {
+    const { error } = await supabase
+      .from("module_resources")
+      .update({ sort_order: index + 1 })
+      .eq("id", input.resourceIds[index])
+      .eq("module_id", input.moduleId);
+    throwIfDbError(error);
+  }
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
 export async function updateModule(input: {
   programId: string;
   moduleId: string;
@@ -551,6 +572,62 @@ export async function addModuleResourceYoutube(input: {
   throwIfDbError(error);
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function addModuleResourceLink(input: {
+  programId: string;
+  moduleId: string;
+  title: string;
+  url: string;
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const externalUrl = normalizeWebsiteUrl(input.url);
+  if (!externalUrl) throw new Error("Enter a valid website URL.");
+
+  const { error } = await supabase.from("module_resources").insert({
+    module_id: input.moduleId,
+    title: input.title.trim(),
+    resource_type: "link",
+    storage_path: null,
+    file_name: null,
+    external_url: externalUrl,
+    sort_order: input.sortOrder,
+  });
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function updateModuleResourceLink(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  title: string;
+  url: string;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const title = input.title.trim();
+  const externalUrl = normalizeWebsiteUrl(input.url);
+  if (!title) throw new Error("Enter a link title.");
+  if (!externalUrl) throw new Error("Enter a valid website URL.");
+
+  const { error } = await supabase
+    .from("module_resources")
+    .update({
+      title,
+      external_url: externalUrl,
+    })
+    .eq("id", input.resourceId)
+    .eq("module_id", input.moduleId)
+    .eq("resource_type", "link");
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
   revalidateModuleViews(input.programId, input.moduleId);
 }
 
@@ -727,6 +804,185 @@ export async function addModuleResourceQuiz(input: {
   return resource.id as string;
 }
 
+export async function addModuleResourceChecklist(input: {
+  programId: string;
+  moduleId: string;
+  title: string;
+  items: string[];
+  sortOrder: number;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const labels = input.items.map((item) => item.trim()).filter(Boolean);
+  if (labels.length === 0) throw new Error("Add at least one checklist item.");
+
+  const { data: resource, error } = await supabase
+    .from("module_resources")
+    .insert({
+      module_id: input.moduleId,
+      title: input.title.trim(),
+      resource_type: "checklist",
+      storage_path: null,
+      file_name: null,
+      external_url: null,
+      sort_order: input.sortOrder,
+    })
+    .select("id")
+    .single();
+  throwIfDbError(error);
+  if (!resource) throw new Error("Failed to create checklist resource");
+
+  const { error: itemsError } = await supabase.from("checklist_items").insert(
+    labels.map((label, index) => ({
+      resource_id: resource.id,
+      label,
+      sort_order: index + 1,
+    }))
+  );
+  throwIfDbError(itemsError);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+  return resource.id as string;
+}
+
+export async function addChecklistItem(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  label: string;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const label = input.label.trim();
+  if (!label) throw new Error("Enter a checklist item.");
+
+  const { data: existing } = await supabase
+    .from("checklist_items")
+    .select("sort_order")
+    .eq("resource_id", input.resourceId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error } = await supabase.from("checklist_items").insert({
+    resource_id: input.resourceId,
+    label,
+    sort_order: (existing?.sort_order ?? 0) + 1,
+  });
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function updateChecklistItem(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  itemId: string;
+  label: string;
+}) {
+  const { supabase } = await requireAuthUserId();
+  const label = input.label.trim();
+  if (!label) throw new Error("Checklist item cannot be empty.");
+
+  const { error } = await supabase
+    .from("checklist_items")
+    .update({ label })
+    .eq("id", input.itemId)
+    .eq("resource_id", input.resourceId);
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function deleteChecklistItem(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  itemId: string;
+}) {
+  const { supabase } = await requireAuthUserId();
+
+  const { error } = await supabase
+    .from("checklist_items")
+    .delete()
+    .eq("id", input.itemId)
+    .eq("resource_id", input.resourceId);
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function setChecklistItemComplete(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  itemId: string;
+  completed: boolean;
+}) {
+  const { supabase, userId } = await requireAuthUserId();
+  await requireModuleEnrollment(supabase, userId, input.moduleId);
+
+  if (input.completed) {
+    const { error } = await supabase.from("checklist_item_progress").upsert(
+      {
+        item_id: input.itemId,
+        user_id: userId,
+        completed_at: new Date().toISOString(),
+      },
+      { onConflict: "item_id,user_id" }
+    );
+    throwIfDbError(error);
+  } else {
+    const { error } = await supabase
+      .from("checklist_item_progress")
+      .delete()
+      .eq("item_id", input.itemId)
+      .eq("user_id", userId);
+    throwIfDbError(error);
+
+    await setResourceComplete({
+      programId: input.programId,
+      moduleId: input.moduleId,
+      resourceId: input.resourceId,
+      completed: false,
+    });
+  }
+
+  const { data: items } = await supabase
+    .from("checklist_items")
+    .select("id")
+    .eq("resource_id", input.resourceId);
+  const itemIds = (items ?? []).map((row) => row.id as string);
+
+  if (itemIds.length === 0) {
+    revalidateModuleViews(input.programId, input.moduleId);
+    return;
+  }
+
+  const { count } = await supabase
+    .from("checklist_item_progress")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("item_id", itemIds);
+
+  if (input.completed && count === itemIds.length) {
+    await setResourceComplete({
+      programId: input.programId,
+      moduleId: input.moduleId,
+      resourceId: input.resourceId,
+      completed: true,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/programs/${input.programId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
 export async function updateQuizSettings(input: {
   resourceId: string;
   questionsPerAttempt: number;
@@ -875,4 +1131,58 @@ export async function submitQuizAttempt(input: {
 
   revalidateModuleViews(input.programId, input.moduleId);
   return { scorePercent: pct, passed, correctCount, total };
+}
+
+export async function toggleProgramHighlight(input: { programId: string }) {
+  const { supabase, userId } = await requireAuthUserId();
+
+  const { data: existing, error: selectError } = await supabase
+    .from("user_highlights")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("program_id", input.programId)
+    .maybeSingle();
+  throwIfDbError(selectError);
+
+  if (existing) {
+    const { error } = await supabase.from("user_highlights").delete().eq("id", existing.id);
+    throwIfDbError(error);
+  } else {
+    const { error } = await supabase.from("user_highlights").insert({
+      user_id: userId,
+      program_id: input.programId,
+    });
+    throwIfDbError(error);
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/programs");
+  revalidatePath(`/programs/${input.programId}`);
+}
+
+export async function toggleModuleHighlight(input: { moduleId: string; programId: string }) {
+  const { supabase, userId } = await requireAuthUserId();
+
+  const { data: existing, error: selectError } = await supabase
+    .from("user_highlights")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("module_id", input.moduleId)
+    .maybeSingle();
+  throwIfDbError(selectError);
+
+  if (existing) {
+    const { error } = await supabase.from("user_highlights").delete().eq("id", existing.id);
+    throwIfDbError(error);
+  } else {
+    const { error } = await supabase.from("user_highlights").insert({
+      user_id: userId,
+      module_id: input.moduleId,
+    });
+    throwIfDbError(error);
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/programs/${input.programId}`);
+  revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
 }

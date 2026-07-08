@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, CheckCircle2, Circle } from "lucide-react";
-import { resourceTypeLabel } from "@/lib/module-resources";
+import { resourceTypeLabel, partitionModuleResources } from "@/lib/module-resources";
 import type { ModuleResource } from "@/lib/training-lms-types";
 import { cn } from "@/lib/cn";
 
@@ -26,6 +26,7 @@ export function ModuleResourceSidebar({
   const overviewHref = `/programs/${programId}/modules/${moduleId}`;
   const isOverview = pathname === overviewHref;
   const completedSet = new Set(completedResourceIds);
+  const { linkedResources } = partitionModuleResources(resources);
 
   return (
     <nav className="rounded-lg border bg-card p-4">
@@ -52,11 +53,11 @@ export function ModuleResourceSidebar({
         </li>
       </ul>
 
-      {resources.length > 0 ? (
+      {linkedResources.length > 0 ? (
         <div className="mt-4 border-t pt-4">
           <p className="mb-2 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">Resources</p>
           <ul className="space-y-1">
-            {resources.map((resource) => {
+            {linkedResources.map((resource) => {
               const href = `/programs/${programId}/modules/${moduleId}/resources/${resource.id}`;
               const isActive = pathname === href;
               const isCompleted = enrolled && completedSet.has(resource.id);

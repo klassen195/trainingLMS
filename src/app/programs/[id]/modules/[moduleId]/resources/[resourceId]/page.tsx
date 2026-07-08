@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
 import { getModulePageContext } from "@/lib/module-page-data";
@@ -28,6 +28,9 @@ export default async function ModuleResourcePage({
 
   const resource = ctx.resourcesWithUrls.find((item) => item.id === resourceId);
   if (!resource) notFound();
+  if (resource.resource_type === "checklist") {
+    redirect(`/programs/${id}/modules/${moduleId}`);
+  }
 
   const isQuiz = resource.resource_type === "quiz";
   const supabase = await createSupabaseServerClient();

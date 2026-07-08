@@ -12,7 +12,7 @@ export function ModuleResourceDisplay({ resource }: { resource: ModuleResourceWi
             {resourceTypeLabel(resource.resource_type)}
           </Badge>
         </div>
-        {resource.url && resource.resource_type !== "youtube" ? (
+        {resource.url && resource.resource_type !== "youtube" && resource.resource_type !== "link" ? (
           <a
             href={resource.url}
             target="_blank"
@@ -20,6 +20,16 @@ export function ModuleResourceDisplay({ resource }: { resource: ModuleResourceWi
             className="text-sm font-medium text-primary underline"
           >
             Open / download
+          </a>
+        ) : null}
+        {resource.resource_type === "link" && resource.url ? (
+          <a
+            href={resource.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-primary underline"
+          >
+            Open website
           </a>
         ) : null}
         {resource.resource_type === "youtube" && resource.file_name ? (
@@ -60,13 +70,30 @@ export function ModuleResourceDisplay({ resource }: { resource: ModuleResourceWi
         />
       ) : null}
 
+      {resource.resource_type === "link" && resource.url ? (
+        <div className="rounded-lg border bg-muted/30 p-4">
+          <p className="text-sm text-muted-foreground">External resource</p>
+          <a
+            href={resource.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block break-all text-base font-medium text-primary underline"
+          >
+            {resource.url}
+          </a>
+        </div>
+      ) : null}
+
       {resource.resource_type === "powerpoint" ? (
         <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
           PowerPoint files download for viewing in Microsoft PowerPoint or another compatible app.
         </p>
       ) : null}
 
-      {!resource.url && resource.resource_type !== "powerpoint" ? (
+      {!resource.url &&
+      resource.resource_type !== "powerpoint" &&
+      resource.resource_type !== "link" &&
+      resource.resource_type !== "checklist" ? (
         <p className="text-sm text-muted-foreground">This resource is not available right now.</p>
       ) : null}
     </article>

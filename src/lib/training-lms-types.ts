@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "instructor" | "learner";
 
-export type ProgramCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems" | "administration";
+export type ProgramCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems" | "administration" | "taskbooks";
 
 export type ProgramStatus = "draft" | "published" | "archived";
 
@@ -73,7 +73,7 @@ export type ResourceProgress = {
   completed_at: string;
 };
 
-export type ModuleResourceType = "video" | "pdf" | "powerpoint" | "youtube" | "quiz";
+export type ModuleResourceType = "video" | "pdf" | "powerpoint" | "youtube" | "quiz" | "link" | "checklist";
 
 export type ModuleResource = {
   id: string;
@@ -135,4 +135,15 @@ export type QuizQuestionForAttempt = {
   id: string;
   prompt: string;
   options: { id: string; option_text: string }[];
+};
+
+export type ChecklistItem = {
+  id: string;
+  resource_id: string;
+  label: string;
+  sort_order: number;
+};
+
+export type ChecklistItemWithProgress = ChecklistItem & {
+  completed_at: string | null;
 };

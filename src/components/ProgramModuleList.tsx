@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { CheckCircle2, Circle, ChevronRight } from "lucide-react";
 import type { ProgramModuleEntry } from "@/lib/training-lms-types";
+import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
@@ -12,12 +13,14 @@ export function ProgramModuleList({
   modules,
   enrolledModuleIds,
   completedModuleIds,
+  highlightedModuleIds,
   canOpen,
 }: {
   programId: string;
   modules: ProgramModuleEntry[];
   enrolledModuleIds: Set<string>;
   completedModuleIds: Set<string>;
+  highlightedModuleIds?: Set<string>;
   canOpen: boolean;
 }) {
   if (modules.length === 0) {
@@ -33,6 +36,7 @@ export function ProgramModuleList({
         {modules.map((moduleItem, index) => {
           const isEnrolled = enrolledModuleIds.has(moduleItem.id);
           const isCompleted = isEnrolled && completedModuleIds.has(moduleItem.id);
+          const isHighlighted = highlightedModuleIds?.has(moduleItem.id) ?? false;
           const row = (
             <motion.div
               whileHover={canOpen ? { x: 4 } : undefined}
@@ -70,7 +74,14 @@ export function ProgramModuleList({
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{moduleItem.content}</p>
                 ) : null}
               </div>
-              {canOpen ? <ChevronRight className="h-5 w-5 text-muted-foreground" /> : null}
+              <HighlightStarButton
+                target="module"
+                moduleId={moduleItem.id}
+                programId={programId}
+                highlighted={isHighlighted}
+                label={moduleItem.title}
+              />
+              {canOpen ? <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" /> : null}
             </motion.div>
           );
 

@@ -30,6 +30,9 @@ export async function resolveResourceUrls(
         const videoId = parseYouTubeVideoId(resource.external_url ?? "");
         return { ...resource, url: videoId ? getYouTubeEmbedUrl(videoId) : null };
       }
+      if (resource.resource_type === "link") {
+        return { ...resource, url: resource.external_url };
+      }
       if (!resource.storage_path) return { ...resource, url: null };
       const { data: signed } = await supabase.storage
         .from("module-resources")

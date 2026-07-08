@@ -26,6 +26,10 @@ export function resourceTypeLabel(type: ModuleResourceType) {
       return "YouTube";
     case "quiz":
       return "Quiz";
+    case "link":
+      return "Website link";
+    case "checklist":
+      return "Checklist";
   }
 }
 
@@ -37,8 +41,14 @@ export function resourceSubtitle(resource: {
   if (resource.resource_type === "youtube") {
     return resource.external_url ?? "YouTube video";
   }
+  if (resource.resource_type === "link") {
+    return resource.external_url ?? "Website link";
+  }
   if (resource.resource_type === "quiz") {
     return "Randomized quiz";
+  }
+  if (resource.resource_type === "checklist") {
+    return "Checklist items";
   }
   return resource.file_name ?? "";
 }
@@ -73,6 +83,18 @@ export function getYouTubeWatchUrl(videoId: string) {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
+export function normalizeWebsiteUrl(url: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function fileExtension(fileName: string) {
   const dot = fileName.lastIndexOf(".");
   return dot === -1 ? "" : fileName.slice(dot).toLowerCase();
@@ -99,4 +121,33 @@ export function sanitizeFileName(fileName: string) {
 
 export function buildModuleResourceStoragePath(moduleId: string, resourceId: string, fileName: string) {
   return `${moduleId}/${resourceId}/${sanitizeFileName(fileName)}`;
+}
+
+export function isChecklistResource(resource: { resource_type: ModuleResourceType }) {
+  return resource.resource_type === "checklist";
+}
+
+export function partitionModuleResources<T extends { resource_type: ModuleResourceType }>(resources: T[]) {
+  const linkedResources: T[] = [];
+  const checklists: T[] = [];
+  for (const resource of resources) {
+    if (isChecklistResource(resource)) {
+      checklists.push(resource);
+    } else {
+      linkedResources.push(resource);
+    }
+  }
+  return { linkedResources, checklists };
+}
+
+export function buildModuleResourceOrder<T extends { id: string; resource_type: ModuleResourceType; sort_order: number }>(
+  allResources: T[],
+  reorderedIds: string[],
+  group: "linked" | "checklist"
+): string[] {
+  const sorted = [...allResources].sort((a, b) => a.sort_order - b.sort_order);
+  const inGroup = group === "checklist" ? isChecklistResource : (resource: T) => !isChecklistResource(resource);
+  const queue = [...reorderedIds];
+
+  return sorted.map((resource) => (inGroup(resource) ? queue.shift()! : resource.id));
 }

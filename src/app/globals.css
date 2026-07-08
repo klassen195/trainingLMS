@@ -76,11 +76,24 @@ body {
 }
 
 @layer base {
+  html {
+    color-scheme: dark;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
   }
 
   /* Radix popper wrapper must sit above page content (e.g. action buttons). */

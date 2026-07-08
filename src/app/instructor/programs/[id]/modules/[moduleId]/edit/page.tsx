@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { programModulesFromRows } from "@/lib/program-modules";
+import { loadChecklistItemsByResourceIds } from "@/lib/checklist-data";
 import { ModuleEditForm } from "@/components/ModuleEditForm";
 import { Button } from "@/components/ui/Button";
 import type { ModuleResource } from "@/lib/training-lms-types";
@@ -39,6 +40,12 @@ export default async function EditModulePage({
     .eq("module_id", moduleId)
     .order("sort_order");
 
+  const resourceList = (resources ?? []) as ModuleResource[];
+  const checklistResourceIds = resourceList
+    .filter((resource) => resource.resource_type === "checklist")
+    .map((resource) => resource.id);
+  const checklistItemsByResourceId = await loadChecklistItemsByResourceIds(supabase, checklistResourceIds);
+
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -61,7 +68,8 @@ export default async function EditModulePage({
         moduleItem={moduleItem}
         canEdit={canEditContent}
         isAdmin={profile.role === "admin"}
-        resources={(resources ?? []) as ModuleResource[]}
+        resources={resourceList}
+        checklistItemsByResourceId={checklistItemsByResourceId}
       />
     </div>
   );

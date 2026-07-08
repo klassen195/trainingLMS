@@ -6,9 +6,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { programModulesFromRows } from "@/lib/program-modules";
 import { loadProgramModuleProgress } from "@/lib/program-module-progress";
+import { loadUserHighlightIds } from "@/lib/user-highlights";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { ProgramBreadcrumb } from "@/components/ProgramBreadcrumb";
 import { ProgramModuleList } from "@/components/ProgramModuleList";
+import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { ProgressBar } from "@/components/ProgressBar";
 import { categoryLabel } from "@/lib/labels";
 import { Badge } from "@/components/ui/Badge";
@@ -41,6 +43,8 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
 
   const moduleIds = modules.map((m) => m.id);
   const moduleProgress = await loadProgramModuleProgress(supabase, profile.id, moduleIds);
+  const { programIds: highlightedProgramIds, moduleIds: highlightedModuleIds } =
+    await loadUserHighlightIds(supabase, profile.id);
   const overallProgress = moduleProgress.progressPercent;
   const firstModule = modules[0];
 
@@ -56,14 +60,22 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
                 {typedProgram.status}
               </Badge>
             </div>
-            {canEdit ? (
-              <Button variant="outline" asChild>
-                <Link href={`/instructor/programs/${id}/edit`}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit program
-                </Link>
-              </Button>
-            ) : null}
+            <div className="flex items-center gap-2">
+              <HighlightStarButton
+                target="program"
+                programId={id}
+                highlighted={highlightedProgramIds.has(id)}
+                label={typedProgram.title}
+              />
+              {canEdit ? (
+                <Button variant="outline" asChild>
+                  <Link href={`/instructor/programs/${id}/edit`}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit program
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           </div>
           <h1 className="mb-4 text-4xl font-bold">{typedProgram.title}</h1>
           {typedProgram.description ? (
@@ -114,6 +126,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
             modules={modules}
             enrolledModuleIds={moduleProgress.enrolledModuleIds}
             completedModuleIds={moduleProgress.completedModuleIds}
+            highlightedModuleIds={highlightedModuleIds}
             canOpen={canOpenModules}
           />
         </section>

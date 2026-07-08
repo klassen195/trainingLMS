@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { programModulesFromRows } from "@/lib/program-modules";
 import { EditProgramForm } from "./ui";
+import { Button } from "@/components/ui/Button";
 import type { Module, Program } from "@/lib/training-lms-types";
 
 export default async function EditProgramPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,8 +35,15 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-2 text-4xl font-bold">Edit program</h1>
-      <p className="mb-8 text-lg text-muted-foreground">Update program details and manage modules.</p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="mb-2 text-4xl font-bold">Edit program</h1>
+          <p className="text-lg text-muted-foreground">Update program details and manage modules.</p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link href={`/programs/${id}`}>View program</Link>
+        </Button>
+      </div>
       <EditProgramForm
         program={program as Program}
         modules={modules}

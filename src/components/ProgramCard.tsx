@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import type { Program } from "@/lib/training-lms-types";
 import { categoryLabel } from "@/lib/labels";
+import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ProgressBar";
@@ -14,21 +15,36 @@ export function ProgramCard({
   progressPercent,
   moduleCount = 0,
   enrolledCount = 0,
+  highlighted = false,
+  showStar = false,
 }: {
   program: Program;
   progressPercent?: number | null;
   moduleCount?: number;
   enrolledCount?: number;
+  highlighted?: boolean;
+  showStar?: boolean;
 }) {
   const showProgress = progressPercent !== null && progressPercent !== undefined;
   const notEnrolled = enrolledCount === 0;
+  const starVisible = showStar || highlighted;
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} whileHover={{ y: -4 }}>
-      <Link href={`/programs/${program.id}`}>
-        <Card className="h-full cursor-pointer transition-shadow hover:shadow-lg">
+      <Card className="relative h-full transition-shadow hover:shadow-lg">
+        {starVisible ? (
+          <div className="absolute right-2 top-2 z-10">
+            <HighlightStarButton
+              target="program"
+              programId={program.id}
+              highlighted={highlighted}
+              label={program.title}
+            />
+          </div>
+        ) : null}
+        <Link href={`/programs/${program.id}`} className="block h-full cursor-pointer">
           <CardHeader>
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2 pr-10">
               <Badge variant="outline">{categoryLabel(program.category)}</Badge>
               <Badge variant="secondary" className="capitalize">
                 {program.status}
@@ -55,8 +71,8 @@ export function ProgramCard({
           <CardFooter>
             <span className="text-sm font-medium text-primary">View program →</span>
           </CardFooter>
-        </Card>
-      </Link>
+        </Link>
+      </Card>
     </motion.div>
   );
 }

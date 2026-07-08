@@ -10,7 +10,7 @@ export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 
 const dropdownMenuContentClassName =
-  "z-[200] min-w-[8rem] overflow-hidden rounded-md border border-border bg-[hsl(var(--card))] p-1 text-card-foreground shadow-xl";
+  "z-[200] min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-xl";
 
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
@@ -48,7 +48,7 @@ export const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-popover-foreground outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
