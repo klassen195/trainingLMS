@@ -1,4 +1,10 @@
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  aggregateModuleProgressUnits,
+  computeModuleProgressUnits,
+  groupChecklistItemsByResourceId,
+  groupResourcesByModuleId,
+} from "@/lib/module-progress";
 import { progressPercent } from "@/lib/program-progress";
 import type { Program } from "@/lib/training-lms-types";
 
@@ -17,6 +23,93 @@ export type ProgramModuleProgress = {
   enrolledCount: number;
   progressPercent: number | null;
 };
+
+type UserModuleProgressData = {
+  completedResourceIds: Set<string>;
+  completedChecklistItemIds: Set<string>;
+  completedModuleIds: Set<string>;
+  resourcesByModuleId: Map<string, { id: string; module_id: string; resource_type: import("@/lib/training-lms-types").ModuleResourceType }[]>;
+  checklistItemsByResourceId: Map<string, string[]>;
+};
+
+async function loadUserModuleProgressData(
+  supabase: SupabaseServerClient,
+  userId: string,
+  moduleIds: string[]
+): Promise<UserModuleProgressData> {
+  if (moduleIds.length === 0) {
+    return {
+      completedResourceIds: new Set(),
+      completedChecklistItemIds: new Set(),
+      completedModuleIds: new Set(),
+      resourcesByModuleId: new Map(),
+      checklistItemsByResourceId: new Map(),
+    };
+  }
+
+  const { data: resourceRows } = await supabase
+    .from("module_resources")
+    .select("id, module_id, resource_type")
+    .in("module_id", moduleIds);
+
+  const resources = resourceRows ?? [];
+  const resourcesByModuleId = groupResourcesByModuleId(resources);
+  const resourceIds = resources.map((row) => row.id);
+  const checklistResourceIds = resources.filter((row) => row.resource_type === "checklist").map((row) => row.id);
+
+  const { data: checklistItemRows } =
+    checklistResourceIds.length > 0
+      ? await supabase.from("checklist_items").select("id, resource_id").in("resource_id", checklistResourceIds)
+      : { data: [] as { id: string; resource_id: string }[] };
+
+  const checklistItemIds = (checklistItemRows ?? []).map((item) => item.id);
+
+  const [
+    { data: resourceProgressRows },
+    { data: checklistProgressRows },
+    { data: moduleProgressRows },
+  ] = await Promise.all([
+    resourceIds.length > 0
+      ? supabase.from("resource_progress").select("resource_id").eq("user_id", userId).in("resource_id", resourceIds)
+      : Promise.resolve({ data: [] as { resource_id: string }[] }),
+    checklistItemIds.length > 0
+      ? supabase
+          .from("checklist_item_progress")
+          .select("item_id")
+          .eq("user_id", userId)
+          .in("item_id", checklistItemIds)
+      : Promise.resolve({ data: [] as { item_id: string }[] }),
+    supabase.from("module_progress").select("module_id").eq("user_id", userId).in("module_id", moduleIds),
+  ]);
+
+  return {
+    completedResourceIds: new Set((resourceProgressRows ?? []).map((row) => row.resource_id)),
+    completedChecklistItemIds: new Set((checklistProgressRows ?? []).map((row) => row.item_id)),
+    completedModuleIds: new Set((moduleProgressRows ?? []).map((row) => row.module_id)),
+    resourcesByModuleId,
+    checklistItemsByResourceId: groupChecklistItemsByResourceId(checklistItemRows ?? []),
+  };
+}
+
+function computeEnrolledProgramProgress(
+  enrolledModuleIds: string[],
+  progressData: UserModuleProgressData
+): number | null {
+  if (enrolledModuleIds.length === 0) return null;
+
+  const moduleUnits = enrolledModuleIds.map((moduleId) =>
+    computeModuleProgressUnits({
+      resources: progressData.resourcesByModuleId.get(moduleId) ?? [],
+      checklistItemsByResourceId: progressData.checklistItemsByResourceId,
+      completedResourceIds: progressData.completedResourceIds,
+      completedChecklistItemIds: progressData.completedChecklistItemIds,
+      moduleMarkedComplete: progressData.completedModuleIds.has(moduleId),
+    })
+  );
+
+  const totals = aggregateModuleProgressUnits(moduleUnits);
+  return progressPercent(totals.totalUnits, totals.completedUnits);
+}
 
 export async function loadProgramModuleCounts(
   supabase: SupabaseServerClient,
@@ -64,37 +157,27 @@ export async function loadBulkProgramProgress(
 
   const allModuleIdsList = [...allModuleIds];
   let enrolledModuleIds = new Set<string>();
-  let completedModuleIds = new Set<string>();
 
   if (allModuleIdsList.length > 0) {
-    const [{ data: enrollmentRows }, { data: progressRows }] = await Promise.all([
-      supabase
-        .from("module_enrollments")
-        .select("module_id")
-        .eq("user_id", userId)
-        .in("module_id", allModuleIdsList),
-      supabase
-        .from("module_progress")
-        .select("module_id")
-        .eq("user_id", userId)
-        .in("module_id", allModuleIdsList),
-    ]);
+    const { data: enrollmentRows } = await supabase
+      .from("module_enrollments")
+      .select("module_id")
+      .eq("user_id", userId)
+      .in("module_id", allModuleIdsList);
 
     enrolledModuleIds = new Set((enrollmentRows ?? []).map((row) => row.module_id));
-    completedModuleIds = new Set((progressRows ?? []).map((row) => row.module_id));
   }
+
+  const enrolledModuleIdsList = [...enrolledModuleIds];
+  const progressData = await loadUserModuleProgressData(supabase, userId, enrolledModuleIdsList);
 
   return programs.map((program) => {
     const moduleIds = modulesByProgram.get(program.id) ?? [];
     const enrolledInProgram = moduleIds.filter((moduleId) => enrolledModuleIds.has(moduleId));
-    const completedInProgram = enrolledInProgram.filter((moduleId) => completedModuleIds.has(moduleId));
 
     return {
       program,
-      pct:
-        enrolledInProgram.length === 0
-          ? null
-          : progressPercent(enrolledInProgram.length, completedInProgram.length),
+      pct: computeEnrolledProgramProgress(enrolledInProgram, progressData),
       moduleCount: moduleIds.length,
       enrolledCount: enrolledInProgram.length,
     };
@@ -133,18 +216,14 @@ export async function loadProgramModuleProgress(
     };
   }
 
-  const { data: progressRows } = await supabase
-    .from("module_progress")
-    .select("module_id")
-    .eq("user_id", userId)
-    .in("module_id", enrolledList);
-
-  const completedModuleIds = new Set((progressRows ?? []).map((row) => row.module_id));
+  const progressData = await loadUserModuleProgressData(supabase, userId, enrolledList);
 
   return {
     enrolledModuleIds,
-    completedModuleIds,
+    completedModuleIds: new Set(
+      enrolledList.filter((moduleId) => progressData.completedModuleIds.has(moduleId))
+    ),
     enrolledCount: enrolledList.length,
-    progressPercent: progressPercent(enrolledList.length, completedModuleIds.size),
+    progressPercent: computeEnrolledProgramProgress(enrolledList, progressData),
   };
 }

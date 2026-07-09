@@ -2,6 +2,7 @@ import { requireUserProfile } from "@/lib/auth";
 import { getModulePageContext } from "@/lib/module-page-data";
 import { ModuleBreadcrumbNav } from "@/components/ModuleBreadcrumbNav";
 import { ModuleEnrollmentPanel } from "@/components/ModuleEnrollmentPanel";
+import { ModuleUnenrollmentPanel } from "@/components/ModuleUnenrollmentPanel";
 import { ModuleResourceSidebar } from "@/components/ModuleResourceSidebar";
 
 export default async function ModuleLayout({
@@ -37,7 +38,11 @@ export default async function ModuleLayout({
             />
           </aside>
           <div className="min-w-0 flex-1">
-            {!ctx.enrolled ? <ModuleEnrollmentPanel programId={id} moduleId={moduleId} /> : null}
+            {!ctx.enrolled ? (
+              <ModuleEnrollmentPanel programId={id} moduleId={moduleId} />
+            ) : (
+              <ModuleUnenrollmentPanel programId={id} moduleId={moduleId} />
+            )}
             {children}
           </div>
         </div>

@@ -223,8 +223,83 @@ export async function enrollInModule(input: { programId: string; moduleId: strin
   );
   throwIfDbError(error);
   revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function enrollInProgram(input: { programId: string }) {
+  const { supabase, userId } = await requireAuthUserId();
+
+  const { data: programModuleRows, error: moduleError } = await supabase
+    .from("program_modules")
+    .select("module_id")
+    .eq("program_id", input.programId);
+  throwIfDbError(moduleError);
+
+  const moduleIds = (programModuleRows ?? []).map((row) => row.module_id);
+  if (moduleIds.length === 0) {
+    throw new Error("This program has no modules to enroll in.");
+  }
+
+  const enrolledAt = new Date().toISOString();
+  const { error } = await supabase.from("module_enrollments").upsert(
+    moduleIds.map((moduleId) => ({
+      module_id: moduleId,
+      user_id: userId,
+      enrolled_at: enrolledAt,
+    })),
+    { onConflict: "module_id,user_id" }
+  );
+  throwIfDbError(error);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/programs");
+  revalidatePath(`/programs/${input.programId}`);
+  for (const moduleId of moduleIds) {
+    revalidateModuleViews(input.programId, moduleId);
+  }
+}
+
+export async function unenrollFromModule(input: { programId: string; moduleId: string }) {
+  const { supabase, userId } = await requireAuthUserId();
+  const { error } = await supabase
+    .from("module_enrollments")
+    .delete()
+    .eq("module_id", input.moduleId)
+    .eq("user_id", userId);
+  throwIfDbError(error);
+  revalidatePath("/dashboard");
+  revalidatePath("/programs");
+  revalidatePath(`/programs/${input.programId}`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+export async function unenrollFromProgram(input: { programId: string }) {
+  const { supabase, userId } = await requireAuthUserId();
+
+  const { data: programModuleRows, error: moduleError } = await supabase
+    .from("program_modules")
+    .select("module_id")
+    .eq("program_id", input.programId);
+  throwIfDbError(moduleError);
+
+  const moduleIds = (programModuleRows ?? []).map((row) => row.module_id);
+  if (moduleIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("module_enrollments")
+    .delete()
+    .eq("user_id", userId)
+    .in("module_id", moduleIds);
+  throwIfDbError(error);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/programs");
+  revalidatePath(`/programs/${input.programId}`);
+  for (const moduleId of moduleIds) {
+    revalidateModuleViews(input.programId, moduleId);
+  }
 }
 
 export async function setModuleComplete(input: {

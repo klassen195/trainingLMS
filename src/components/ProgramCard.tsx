@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import type { Program } from "@/lib/training-lms-types";
 import { categoryLabel } from "@/lib/labels";
+import { programEnrollmentLabel } from "@/lib/program-enrollment-status";
 import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -26,7 +27,7 @@ export function ProgramCard({
   showStar?: boolean;
 }) {
   const showProgress = progressPercent !== null && progressPercent !== undefined;
-  const notEnrolled = enrolledCount === 0;
+  const enrollmentStatus = programEnrollmentLabel(enrolledCount, moduleCount);
   const starVisible = showStar || highlighted;
 
   return (
@@ -58,8 +59,19 @@ export function ProgramCard({
               <BookOpen className="h-4 w-4" />
               <span>{moduleCount} module{moduleCount === 1 ? "" : "s"}</span>
             </div>
-            {notEnrolled ? (
+            {enrollmentStatus === "not_enrolled" ? (
               <p className="mt-4 text-sm text-muted-foreground">Not enrolled</p>
+            ) : enrollmentStatus === "partially_enrolled" ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Partially enrolled ({enrolledCount} of {moduleCount} modules)
+                </p>
+                {showProgress && progressPercent > 0 ? (
+                  <ProgressBar value={progressPercent} showLabel />
+                ) : showProgress ? (
+                  <p className="text-sm text-muted-foreground">0% complete</p>
+                ) : null}
+              </div>
             ) : showProgress && progressPercent > 0 ? (
               <div className="mt-4 space-y-2">
                 <ProgressBar value={progressPercent} showLabel />

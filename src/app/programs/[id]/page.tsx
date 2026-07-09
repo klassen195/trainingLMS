@@ -9,9 +9,12 @@ import { loadProgramModuleProgress } from "@/lib/program-module-progress";
 import { loadUserHighlightIds } from "@/lib/user-highlights";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { ProgramBreadcrumb } from "@/components/ProgramBreadcrumb";
+import { ProgramEnrollmentPanel } from "@/components/ProgramEnrollmentPanel";
+import { ProgramUnenrollmentPanel } from "@/components/ProgramUnenrollmentPanel";
 import { ProgramModuleList } from "@/components/ProgramModuleList";
 import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { ProgressBar } from "@/components/ProgressBar";
+import { programEnrollmentLabel, programEnrollmentSummary } from "@/lib/program-enrollment-status";
 import { categoryLabel } from "@/lib/labels";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -46,6 +49,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
   const { programIds: highlightedProgramIds, moduleIds: highlightedModuleIds } =
     await loadUserHighlightIds(supabase, profile.id);
   const overallProgress = moduleProgress.progressPercent;
+  const enrollmentStatus = programEnrollmentLabel(moduleProgress.enrolledCount, modules.length);
   const firstModule = modules[0];
 
   return (
@@ -95,9 +99,18 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
             <PlayCircle className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="text-sm text-muted-foreground">Your progress</p>
-              <p className="font-medium">
-                {overallProgress === null ? "Not enrolled" : `${overallProgress}%`}
-              </p>
+              {enrollmentStatus === "not_enrolled" ? (
+                <p className="font-medium">{programEnrollmentSummary(0, modules.length)}</p>
+              ) : (
+                <>
+                  <p className="font-medium">{overallProgress}%</p>
+                  {enrollmentStatus === "partially_enrolled" ? (
+                    <p className="text-xs text-muted-foreground">
+                      {programEnrollmentSummary(moduleProgress.enrolledCount, modules.length)}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -106,6 +119,21 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
           <div className="mb-8">
             <ProgressBar value={overallProgress} showLabel />
           </div>
+        ) : null}
+
+        {canOpenModules ? (
+          <>
+            <ProgramEnrollmentPanel
+              programId={id}
+              moduleCount={modules.length}
+              enrolledCount={moduleProgress.enrolledCount}
+            />
+            <ProgramUnenrollmentPanel
+              programId={id}
+              moduleCount={modules.length}
+              enrolledCount={moduleProgress.enrolledCount}
+            />
+          </>
         ) : null}
 
         {firstModule && canOpenModules && overallProgress === 0 ? (
