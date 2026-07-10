@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { addModule, linkModuleToProgram, updateProgram } from "@/app/actions";
-import { programCategories, categoryLabel } from "@/lib/labels";
-import type { Module, Program, ProgramCategory, ProgramModuleEntry, ProgramStatus } from "@/lib/training-lms-types";
+import { programTags, tagLabel } from "@/lib/labels";
+import type { Module, Program, ProgramModuleEntry, ProgramStatus, ProgramTag } from "@/lib/training-lms-types";
 import { ProgramModuleSortableList } from "@/components/ProgramModuleSortableList";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -26,12 +26,18 @@ export function EditProgramForm({
   const router = useRouter();
   const [title, setTitle] = useState(program.title);
   const [description, setDescription] = useState(program.description ?? "");
-  const [category, setCategory] = useState<ProgramCategory>(program.category);
+  const [tags, setTags] = useState<ProgramTag[]>(program.tags);
   const [status, setStatus] = useState<ProgramStatus>(program.status);
   const [pending, startTransition] = useTransition();
 
   const [newModuleTitle, setNewModuleTitle] = useState("");
   const [linkModuleId, setLinkModuleId] = useState("");
+
+  function toggleTag(tag: ProgramTag) {
+    setTags((current) =>
+      current.includes(tag) ? current.filter((value) => value !== tag) : [...current, tag]
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -44,7 +50,8 @@ export function EditProgramForm({
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              startTransition(() => updateProgram({ id: program.id, title, description, category, status }));
+              if (tags.length === 0) return;
+              startTransition(() => updateProgram({ id: program.id, title, description, tags, status }));
             }}
           >
             <div className="space-y-2">
@@ -60,31 +67,34 @@ export function EditProgramForm({
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <FieldLabel htmlFor="edit-category">Category</FieldLabel>
-                <Select
-                  id="edit-category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as ProgramCategory)}
-                >
-                  {programCategories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {categoryLabel(cat)}
-                    </option>
-                  ))}
-                </Select>
+            <fieldset className="space-y-2">
+              <legend className="block text-sm font-medium text-foreground">Tags</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {programTags.map((tag) => (
+                  <label key={tag} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={tags.includes(tag)}
+                      onChange={() => toggleTag(tag)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    {tagLabel(tag)}
+                  </label>
+                ))}
               </div>
-              <div className="space-y-2">
-                <FieldLabel htmlFor="edit-status">Status</FieldLabel>
-                <Select id="edit-status" value={status} onChange={(e) => setStatus(e.target.value as ProgramStatus)}>
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                  <option value="archived">Archived</option>
-                </Select>
-              </div>
+              {tags.length === 0 ? (
+                <p className="text-sm text-destructive">Select at least one tag.</p>
+              ) : null}
+            </fieldset>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="edit-status">Status</FieldLabel>
+              <Select id="edit-status" value={status} onChange={(e) => setStatus(e.target.value as ProgramStatus)}>
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </Select>
             </div>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || tags.length === 0}>
               {pending ? "Saving..." : "Save program"}
             </Button>
           </form>

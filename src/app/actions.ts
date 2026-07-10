@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { formatAuthError, normalizeAuthEmail } from "@/lib/auth-messages";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
-import type { ProgramCategory, ProgramStatus, UserRole } from "@/lib/training-lms-types";
+import { programTags } from "@/lib/labels";
+import type { ProgramStatus, ProgramTag, UserRole } from "@/lib/training-lms-types";
 import { buildModuleResourceStoragePath, normalizeWebsiteUrl, parseYouTubeVideoId } from "@/lib/module-resources";
 import { scorePercent, shuffleArray } from "@/lib/quiz";
 import type { ModuleResourceType } from "@/lib/training-lms-types";
@@ -402,19 +403,27 @@ export async function setResourceComplete(input: {
   revalidateModuleViews(input.programId, input.moduleId);
 }
 
+function normalizeProgramTags(tags: ProgramTag[]): ProgramTag[] {
+  const unique = [...new Set(tags)].filter((tag) => programTags.includes(tag));
+  if (unique.length === 0) {
+    throw new Error("Select at least one tag");
+  }
+  return programTags.filter((tag) => unique.includes(tag));
+}
+
 export async function createProgram(input: {
   title: string;
   description: string;
-  category: ProgramCategory;
+  tags: ProgramTag[];
   status: ProgramStatus;
 }) {
+  const tags = normalizeProgramTags(input.tags);
   const { supabase, userId } = await requireAuthUserId();
   const { data, error } = await supabase
     .from("programs")
     .insert({
       title: input.title,
       description: input.description || null,
-      category: input.category,
       status: input.status,
       created_by: userId,
     })
@@ -422,6 +431,15 @@ export async function createProgram(input: {
     .single();
   throwIfDbError(error);
   if (!data) throw new Error("Failed to create program");
+
+  const { error: tagsError } = await supabase.from("program_tags").insert(
+    tags.map((tag) => ({
+      program_id: data.id,
+      tag,
+    }))
+  );
+  throwIfDbError(tagsError);
+
   revalidatePath("/instructor");
   redirect(`/instructor/programs/${data.id}/edit`);
 }
@@ -430,20 +448,32 @@ export async function updateProgram(input: {
   id: string;
   title: string;
   description: string;
-  category: ProgramCategory;
+  tags: ProgramTag[];
   status: ProgramStatus;
 }) {
+  const tags = normalizeProgramTags(input.tags);
   const { supabase } = await requireAuthUserId();
   const { error } = await supabase
     .from("programs")
     .update({
       title: input.title,
       description: input.description || null,
-      category: input.category,
       status: input.status,
     })
     .eq("id", input.id);
   throwIfDbError(error);
+
+  const { error: deleteError } = await supabase.from("program_tags").delete().eq("program_id", input.id);
+  throwIfDbError(deleteError);
+
+  const { error: tagsError } = await supabase.from("program_tags").insert(
+    tags.map((tag) => ({
+      program_id: input.id,
+      tag,
+    }))
+  );
+  throwIfDbError(tagsError);
+
   revalidatePath("/instructor");
   revalidatePath(`/instructor/programs/${input.id}/edit`);
   revalidatePath(`/programs/${input.id}`);

@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { createProgram } from "@/app/actions";
-import { programCategories, categoryLabel } from "@/lib/labels";
-import type { ProgramCategory, ProgramStatus } from "@/lib/training-lms-types";
+import { programTags, tagLabel } from "@/lib/labels";
+import type { ProgramStatus, ProgramTag } from "@/lib/training-lms-types";
 import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
@@ -11,16 +11,23 @@ import { Input, Select, Textarea } from "@/components/ui/Input";
 export function NewProgramForm() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<ProgramCategory>("fire");
+  const [tags, setTags] = useState<ProgramTag[]>(["fire"]);
   const [status, setStatus] = useState<ProgramStatus>("draft");
   const [pending, startTransition] = useTransition();
+
+  function toggleTag(tag: ProgramTag) {
+    setTags((current) =>
+      current.includes(tag) ? current.filter((value) => value !== tag) : [...current, tag]
+    );
+  }
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        startTransition(() => createProgram({ title, description, category, status }));
+        if (tags.length === 0) return;
+        startTransition(() => createProgram({ title, description, tags, status }));
       }}
     >
       <div className="space-y-2">
@@ -36,20 +43,25 @@ export function NewProgramForm() {
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      <div className="space-y-2">
-        <FieldLabel htmlFor="category">Category</FieldLabel>
-        <Select
-          id="category"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as ProgramCategory)}
-        >
-          {programCategories.map((cat) => (
-            <option key={cat} value={cat}>
-              {categoryLabel(cat)}
-            </option>
+      <fieldset className="space-y-2">
+        <legend className="block text-sm font-medium text-foreground">Tags</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {programTags.map((tag) => (
+            <label key={tag} className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={tags.includes(tag)}
+                onChange={() => toggleTag(tag)}
+                className="h-4 w-4 rounded border-input"
+              />
+              {tagLabel(tag)}
+            </label>
           ))}
-        </Select>
-      </div>
+        </div>
+        {tags.length === 0 ? (
+          <p className="text-sm text-destructive">Select at least one tag.</p>
+        ) : null}
+      </fieldset>
       <div className="space-y-2">
         <FieldLabel htmlFor="status">Status</FieldLabel>
         <Select
@@ -62,7 +74,12 @@ export function NewProgramForm() {
           <option value="archived">Archived</option>
         </Select>
       </div>
-      <Button type="submit" variant="primary" disabled={pending} className="bg-[#C11B2B] text-white">
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={pending || tags.length === 0}
+        className="bg-[#C11B2B] text-white"
+      >
         {pending ? "Creating..." : "Create program"}
       </Button>
     </form>

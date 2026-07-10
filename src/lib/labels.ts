@@ -1,6 +1,6 @@
-import type { ProgramCategory, UserRole } from "@/lib/training-lms-types";
+import type { ProgramTag, UserRole } from "@/lib/training-lms-types";
 
-const categoryLabels: Record<ProgramCategory, string> = {
+const tagLabels: Record<ProgramTag, string> = {
   fire: "Fire",
   engineer: "Engineer",
   officer: "Officer",
@@ -8,6 +8,7 @@ const categoryLabels: Record<ProgramCategory, string> = {
   ems: "EMS",
   administration: "Administration",
   taskbooks: "Taskbooks",
+  special_operations: "Special Operations",
 };
 
 const roleLabels: Record<UserRole, string> = {
@@ -16,15 +17,23 @@ const roleLabels: Record<UserRole, string> = {
   learner: "Learner",
 };
 
-export function categoryLabel(category: ProgramCategory) {
-  return categoryLabels[category];
+export function tagLabel(tag: ProgramTag) {
+  return tagLabels[tag];
+}
+
+/** @deprecated Prefer tagLabel */
+export function categoryLabel(category: ProgramTag) {
+  return tagLabel(category);
 }
 
 export function roleLabel(role: UserRole) {
   return roleLabels[role];
 }
 
-export const programCategories = Object.keys(categoryLabels) as ProgramCategory[];
+export const programTags = Object.keys(tagLabels) as ProgramTag[];
+
+/** @deprecated Prefer programTags */
+export const programCategories = programTags;
 
 export const fireRanks = [
   "Probationary Firefighter",

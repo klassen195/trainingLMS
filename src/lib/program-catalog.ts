@@ -1,21 +1,31 @@
-import type { Program, ProgramCategory } from "@/lib/training-lms-types";
-import { programCategories } from "@/lib/labels";
+import type { Program, ProgramTag } from "@/lib/training-lms-types";
+import { programTags } from "@/lib/labels";
 
-export function groupProgramsByCategory(programs: Program[]) {
-  const grouped = new Map<ProgramCategory, Program[]>();
+export function groupProgramsByTag(programs: Program[]) {
+  const grouped = new Map<ProgramTag, Program[]>();
 
-  for (const category of programCategories) {
-    grouped.set(category, []);
+  for (const tag of programTags) {
+    grouped.set(tag, []);
   }
 
   for (const program of programs) {
-    grouped.get(program.category)?.push(program);
+    for (const tag of program.tags) {
+      grouped.get(tag)?.push(program);
+    }
   }
 
-  return programCategories
-    .map((category) => ({
-      category,
-      programs: grouped.get(category) ?? [],
+  return programTags
+    .map((tag) => ({
+      tag,
+      programs: grouped.get(tag) ?? [],
     }))
     .filter((section) => section.programs.length > 0);
+}
+
+/** @deprecated Prefer groupProgramsByTag */
+export function groupProgramsByCategory(programs: Program[]) {
+  return groupProgramsByTag(programs).map((section) => ({
+    category: section.tag,
+    programs: section.programs,
+  }));
 }

@@ -3,18 +3,28 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { programModulesFromRows } from "@/lib/program-modules";
+import {
+  mapProgramRow,
+  PROGRAM_WITH_TAGS_SELECT,
+  type ProgramQueryRow,
+} from "@/lib/program-tags";
 import { EditProgramForm } from "./ui";
 import { Button } from "@/components/ui/Button";
-import type { Module, Program } from "@/lib/training-lms-types";
+import type { Module } from "@/lib/training-lms-types";
 
 export default async function EditProgramPage({ params }: { params: Promise<{ id: string }> }) {
   const profile = await requireRole(["instructor", "admin"]);
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const { data: program } = await supabase.from("programs").select("*").eq("id", id).maybeSingle();
+  const { data: program } = await supabase
+    .from("programs")
+    .select(PROGRAM_WITH_TAGS_SELECT)
+    .eq("id", id)
+    .maybeSingle();
   if (!program) notFound();
-  if (profile.role === "instructor" && program.created_by !== profile.id) notFound();
+  const typedProgram = mapProgramRow(program as ProgramQueryRow);
+  if (profile.role === "instructor" && typedProgram.created_by !== profile.id) notFound();
 
   const { data: programModuleRows } = await supabase
     .from("program_modules")
@@ -45,7 +55,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         </Button>
       </div>
       <EditProgramForm
-        program={program as Program}
+        program={typedProgram}
         modules={modules}
         linkableModules={linkableModules}
         editableModuleIds={[...editableModuleIds]}

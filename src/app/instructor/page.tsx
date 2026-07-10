@@ -4,17 +4,24 @@ import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
-import { categoryLabel } from "@/lib/labels";
+import { tagLabel } from "@/lib/labels";
+import {
+  mapProgramRows,
+  PROGRAM_WITH_TAGS_SELECT,
+  type ProgramQueryRow,
+} from "@/lib/program-tags";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import type { Program } from "@/lib/training-lms-types";
 
 export default async function InstructorPage() {
   const profile = await requireRole(["instructor", "admin"]);
   const supabase = await createSupabaseServerClient();
 
-  let query = supabase.from("programs").select("*").order("updated_at", { ascending: false });
+  let query = supabase
+    .from("programs")
+    .select(PROGRAM_WITH_TAGS_SELECT)
+    .order("updated_at", { ascending: false });
   if (profile.role === "instructor") {
     query = query.eq("created_by", profile.id);
   }
@@ -22,7 +29,7 @@ export default async function InstructorPage() {
   if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
   if (error) throw error;
 
-  const programList = (programs ?? []) as Program[];
+  const programList = mapProgramRows(programs as ProgramQueryRow[]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -54,7 +61,11 @@ export default async function InstructorPage() {
               <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                 <div>
                   <div className="mb-2 flex flex-wrap gap-2">
-                    <Badge variant="outline">{categoryLabel(program.category)}</Badge>
+                    {program.tags.map((tag) => (
+                      <Badge key={tag} variant="outline">
+                        {tagLabel(tag)}
+                      </Badge>
+                    ))}
                     <Badge variant="secondary" className="capitalize">
                       {program.status}
                     </Badge>

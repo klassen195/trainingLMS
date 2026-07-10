@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import type { Program } from "@/lib/training-lms-types";
-import { categoryLabel } from "@/lib/labels";
+import { tagLabel } from "@/lib/labels";
 import { programEnrollmentLabel } from "@/lib/program-enrollment-status";
 import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -46,7 +46,11 @@ export function ProgramCard({
         <Link href={`/programs/${program.id}`} className="block h-full cursor-pointer">
           <CardHeader>
             <div className="mb-2 flex flex-wrap items-center gap-2 pr-10">
-              <Badge variant="outline">{categoryLabel(program.category)}</Badge>
+              {program.tags.map((tag) => (
+                <Badge key={tag} variant="outline">
+                  {tagLabel(tag)}
+                </Badge>
+              ))}
               <Badge variant="secondary" className="capitalize">
                 {program.status}
               </Badge>

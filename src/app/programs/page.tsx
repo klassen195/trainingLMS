@@ -6,36 +6,41 @@ import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { ProgramCard } from "@/components/ProgramCard";
 import { ProgramCategoryGrid } from "@/components/ProgramCategoryGrid";
-import { categoryLabel, programCategories } from "@/lib/labels";
+import { tagLabel, programTags } from "@/lib/labels";
 import { loadBulkProgramProgress } from "@/lib/program-module-progress";
-import { countProgramsByCategory, loadUserHighlightIds } from "@/lib/user-highlights";
-import type { Program, ProgramCategory } from "@/lib/training-lms-types";
+import {
+  mapProgramRows,
+  PROGRAM_WITH_TAGS_SELECT,
+  type ProgramQueryRow,
+} from "@/lib/program-tags";
+import { countProgramsByTag, loadUserHighlightIds } from "@/lib/user-highlights";
+import type { ProgramTag } from "@/lib/training-lms-types";
 import { Button } from "@/components/ui/Button";
 
 export default async function ProgramsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ tag?: string; category?: string }>;
 }) {
   const profile = await requireUserProfile();
   const params = await searchParams;
-  const category = params.category as ProgramCategory | undefined;
-  const activeCategory = category && programCategories.includes(category) ? category : undefined;
+  const requestedTag = (params.tag ?? params.category) as ProgramTag | undefined;
+  const activeTag = requestedTag && programTags.includes(requestedTag) ? requestedTag : undefined;
   const supabase = await createSupabaseServerClient();
 
   const { data: programs, error } = await supabase
     .from("programs")
-    .select("*")
+    .select(PROGRAM_WITH_TAGS_SELECT)
     .eq("status", "published")
     .order("title");
 
   if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
   if (error) throw error;
 
-  const programList = (programs ?? []) as Program[];
-  const categoryCounts = countProgramsByCategory(programList);
+  const programList = mapProgramRows(programs as ProgramQueryRow[]);
+  const tagCounts = countProgramsByTag(programList);
 
-  if (!activeCategory) {
+  if (!activeTag) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
@@ -45,12 +50,12 @@ export default async function ProgramsPage({
           </div>
           <p className="text-lg text-muted-foreground">Browse training by division.</p>
         </div>
-        <ProgramCategoryGrid programCounts={categoryCounts} />
+        <ProgramCategoryGrid programCounts={tagCounts} />
       </div>
     );
   }
 
-  const filteredPrograms = programList.filter((program) => program.category === activeCategory);
+  const filteredPrograms = programList.filter((program) => program.tags.includes(activeTag));
   const withProgress = await loadBulkProgramProgress(supabase, profile.id, filteredPrograms);
   const progressByProgramId = new Map(withProgress.map((item) => [item.program.id, item]));
   const { programIds: highlightedProgramIds } = await loadUserHighlightIds(supabase, profile.id);
@@ -66,7 +71,7 @@ export default async function ProgramsPage({
         </Button>
         <div className="mb-2 flex items-center gap-3">
           <GraduationCap className="h-8 w-8 text-primary" />
-          <h1 className="text-4xl font-bold">{categoryLabel(activeCategory)}</h1>
+          <h1 className="text-4xl font-bold">{tagLabel(activeTag)}</h1>
         </div>
         <p className="text-lg text-muted-foreground">
           {filteredPrograms.length} published program{filteredPrograms.length === 1 ? "" : "s"} in this division.
@@ -76,7 +81,7 @@ export default async function ProgramsPage({
       {filteredPrograms.length === 0 ? (
         <div className="rounded-lg border py-12 text-center">
           <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No programs in this category yet.</p>
+          <p className="text-muted-foreground">No programs with this tag yet.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">

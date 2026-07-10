@@ -1,6 +1,17 @@
 export type UserRole = "admin" | "instructor" | "learner";
 
-export type ProgramCategory = "fire" | "engineer" | "officer" | "battalion_chief" | "ems" | "administration" | "taskbooks";
+export type ProgramTag =
+  | "fire"
+  | "engineer"
+  | "officer"
+  | "battalion_chief"
+  | "ems"
+  | "administration"
+  | "taskbooks"
+  | "special_operations";
+
+/** @deprecated Prefer ProgramTag */
+export type ProgramCategory = ProgramTag;
 
 export type ProgramStatus = "draft" | "published" | "archived";
 
@@ -19,7 +30,7 @@ export type Program = {
   id: string;
   title: string;
   description: string | null;
-  category: ProgramCategory;
+  tags: ProgramTag[];
   status: ProgramStatus;
   created_by: string | null;
   created_at: string;

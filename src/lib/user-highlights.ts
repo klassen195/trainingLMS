@@ -1,4 +1,9 @@
 import type { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  mapProgramRows,
+  PROGRAM_WITH_TAGS_SELECT,
+  type ProgramQueryRow,
+} from "@/lib/program-tags";
 import type { Module, Program } from "@/lib/training-lms-types";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -73,10 +78,12 @@ export async function loadUserHighlights(
   if (highlightProgramIds.length > 0) {
     const { data: programs, error: programsError } = await supabase
       .from("programs")
-      .select("*")
+      .select(PROGRAM_WITH_TAGS_SELECT)
       .in("id", highlightProgramIds);
     if (programsError) throw programsError;
-    programsById = new Map((programs ?? []).map((program) => [program.id, program as Program]));
+    programsById = new Map(
+      mapProgramRows(programs as ProgramQueryRow[]).map((program) => [program.id, program])
+    );
   }
 
   let modulesById = new Map<string, Module>();
@@ -160,10 +167,17 @@ export async function loadUserHighlights(
   return items;
 }
 
-export function countProgramsByCategory(programs: Program[]) {
+export function countProgramsByTag(programs: Program[]) {
   const counts = new Map<string, number>();
   for (const program of programs) {
-    counts.set(program.category, (counts.get(program.category) ?? 0) + 1);
+    for (const tag of program.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
   }
   return counts;
+}
+
+/** @deprecated Prefer countProgramsByTag */
+export function countProgramsByCategory(programs: Program[]) {
+  return countProgramsByTag(programs);
 }

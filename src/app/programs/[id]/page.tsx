@@ -15,17 +15,25 @@ import { ProgramModuleList } from "@/components/ProgramModuleList";
 import { HighlightStarButton } from "@/components/HighlightStarButton";
 import { ProgressBar } from "@/components/ProgressBar";
 import { programEnrollmentLabel, programEnrollmentSummary } from "@/lib/program-enrollment-status";
-import { categoryLabel } from "@/lib/labels";
+import { tagLabel } from "@/lib/labels";
+import {
+  mapProgramRow,
+  PROGRAM_WITH_TAGS_SELECT,
+  type ProgramQueryRow,
+} from "@/lib/program-tags";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import type { Program } from "@/lib/training-lms-types";
 
 export default async function ProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const profile = await requireUserProfile();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const { data: program, error } = await supabase.from("programs").select("*").eq("id", id).maybeSingle();
+  const { data: program, error } = await supabase
+    .from("programs")
+    .select(PROGRAM_WITH_TAGS_SELECT)
+    .eq("id", id)
+    .maybeSingle();
   if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
   if (error) throw error;
   if (!program) notFound();
@@ -37,7 +45,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
     .order("sort_order");
 
   const modules = programModulesFromRows(programModuleRows);
-  const typedProgram = program as Program;
+  const typedProgram = mapProgramRow(program as ProgramQueryRow);
   const canOpenModules =
     typedProgram.status === "published" || typedProgram.created_by === profile.id || profile.role === "admin";
   const canEdit =
@@ -59,7 +67,11 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
         <div className="mb-8">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{categoryLabel(typedProgram.category)}</Badge>
+              {typedProgram.tags.map((tag) => (
+                <Badge key={tag} variant="outline">
+                  {tagLabel(tag)}
+                </Badge>
+              ))}
               <Badge variant="secondary" className="capitalize">
                 {typedProgram.status}
               </Badge>

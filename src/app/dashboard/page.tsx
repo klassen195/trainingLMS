@@ -12,8 +12,12 @@ import { ProgressBar } from "@/components/ProgressBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { loadBulkProgramProgress } from "@/lib/program-module-progress";
 import { programProgressStatus } from "@/lib/program-progress";
-import { countProgramsByCategory, loadUserHighlightIds, loadUserHighlights } from "@/lib/user-highlights";
-import type { Program } from "@/lib/training-lms-types";
+import {
+  mapProgramRows,
+  PROGRAM_WITH_TAGS_SELECT,
+  type ProgramQueryRow,
+} from "@/lib/program-tags";
+import { countProgramsByTag, loadUserHighlightIds, loadUserHighlights } from "@/lib/user-highlights";
 
 export default async function DashboardPage() {
   const auth = await getAuthContext();
@@ -26,14 +30,14 @@ export default async function DashboardPage() {
 
   const { data: programs, error: programsError } = await supabase
     .from("programs")
-    .select("*")
+    .select(PROGRAM_WITH_TAGS_SELECT)
     .eq("status", "published")
     .order("title");
 
   if (isMissingTrainingLmsTables(programsError)) return <DatabaseSetup />;
   if (programsError) throw programsError;
 
-  const programList = (programs ?? []) as Program[];
+  const programList = mapProgramRows(programs as ProgramQueryRow[]);
   const withProgress = await loadBulkProgramProgress(supabase, profile.id, programList);
   const progressByProgramId = new Map(
     withProgress.map((item) => [
@@ -48,7 +52,7 @@ export default async function DashboardPage() {
   );
   const myPrograms = await loadUserHighlights(supabase, profile.id, progressByProgramId);
   const { programIds: highlightedProgramIds } = await loadUserHighlightIds(supabase, profile.id);
-  const categoryCounts = countProgramsByCategory(programList);
+  const tagCounts = countProgramsByTag(programList);
 
   const enrolledPrograms = withProgress.filter((item) => item.pct !== null);
   const inProgress = enrolledPrograms.filter((item) => programProgressStatus(item.pct!) === "in_progress");
@@ -133,7 +137,7 @@ export default async function DashboardPage() {
           <GraduationCap className="h-6 w-6 text-primary" />
           <h2 className="text-2xl font-bold">Programs</h2>
         </div>
-        <ProgramCategoryGrid programCounts={categoryCounts} />
+        <ProgramCategoryGrid programCounts={tagCounts} />
       </section>
     </div>
   );
