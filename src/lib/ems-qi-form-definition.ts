@@ -87,6 +87,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "Baseline vitals documented",
         type: "scored_select",
         required: true,
+        helpText: "Minimum: BP, HR, RR, SpO2, Mental Status/GCS",
         options: SCORED_YES_NO_OPTIONS,
       },
       {
@@ -108,6 +109,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "Narrative present and structured",
         type: "scored_select",
         required: true,
+        helpText: "DRAATT, SOAP, or CHART format",
         options: SCORED_YES_NO_OPTIONS,
       },
       {
@@ -115,6 +117,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "All times documented appropriately",
         type: "scored_select",
         required: true,
+        helpText: "Onset time must be before PSAP time",
         options: SCORED_YES_NO_OPTIONS,
       },
     ],
@@ -136,6 +139,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "Last known well documented",
         type: "scored_select",
         required: true,
+        helpText: "If: stroke or TIA",
         options: SCORED_YES_NO_NA_OPTIONS,
       },
       {
@@ -143,6 +147,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "12 lead documented",
         type: "scored_select",
         required: true,
+        helpText: "If: Cardiac/Arrest, Syncope, Stroke/TIA, Chest Pain or Abdominal Pain with age >35",
         options: SCORED_YES_NO_NA_OPTIONS,
       },
       {
@@ -150,6 +155,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "Aspirin administered <10 min",
         type: "scored_select",
         required: true,
+        helpText: "If: Chest Pain",
         options: SCORED_YES_NO_NA_OPTIONS,
       },
       {
@@ -157,6 +163,7 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
         label: "Vitals before and after treatment",
         type: "scored_select",
         required: true,
+        helpText: "If: any medication or IV fluid given",
         options: SCORED_YES_NO_NA_OPTIONS,
       },
       {
@@ -170,9 +177,20 @@ export const EMS_QI_FORM_SECTIONS: EmsQiSection[] = [
   },
   {
     id: "time-critical-calls",
-    title: "Time Critical Calls",
-    description: "Mark N/A when the item does not apply to this call.",
+    title: "Time Sensitive Emergencies",
+    description: "Complete only when this report was for a time sensitive emergency.",
+    gate: {
+      fieldId: "time_sensitive_emergency",
+      requiredValue: "yes",
+    },
     fields: [
+      {
+        id: "time_sensitive_emergency",
+        label: "Was this report for a Time Sensitive Emergency?",
+        type: "select",
+        required: true,
+        options: YES_NO_OPTIONS,
+      },
       {
         id: "scene_time_under_10_min",
         label: "Scene time <10 min",

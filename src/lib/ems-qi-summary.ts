@@ -108,8 +108,7 @@ function buildCallInfoLines(answers: EmsQiAnswers): string[] {
   return lines;
 }
 
-function buildScoredSummaryLines(answers: EmsQiAnswers) {
-  const doneWell: string[] = [];
+function buildNeedsImprovementLines(answers: EmsQiAnswers): string[] {
   const needsImprovement: string[] = [];
 
   for (const section of EMS_QI_FORM_SECTIONS) {
@@ -118,17 +117,13 @@ function buildScoredSummaryLines(answers: EmsQiAnswers) {
 
       const value = answers[field.id]?.trim();
       if (!shouldIncludeInScoreSummary(field, value ?? "")) continue;
+      if (isFullScore(field, value!)) continue;
 
-      const label = field.summaryLabel ?? field.label;
-      if (isFullScore(field, value!)) {
-        doneWell.push(`- ${label}`);
-      } else {
-        needsImprovement.push(`- ${formatImprovementLine(field, value!)}`);
-      }
+      needsImprovement.push(`- ${formatImprovementLine(field, value!)}`);
     }
   }
 
-  return { doneWell, needsImprovement };
+  return needsImprovement;
 }
 
 export function buildEmsQiSummary(answers: EmsQiAnswers): string {
@@ -144,17 +139,12 @@ export function buildEmsQiSummary(answers: EmsQiAnswers): string {
     lines.push(`Total Score: ${totalScore}/${maxScore}`, "");
   }
 
-  const { doneWell, needsImprovement } = buildScoredSummaryLines(answers);
-
-  lines.push("Areas Done Well:");
-  if (doneWell.length > 0) {
-    lines.push(...doneWell);
-  } else {
-    lines.push("None identified.");
+  const strengths = answers[STRENGTHS_FIELD_ID]?.trim();
+  if (strengths) {
+    lines.push("Strengths:", strengths, "");
   }
-  appendNarrativeBlock(lines, answers[STRENGTHS_FIELD_ID] ?? "");
 
-  lines.push("");
+  const needsImprovement = buildNeedsImprovementLines(answers);
   lines.push("Points That Need Improvement:");
   if (needsImprovement.length > 0) {
     lines.push(...needsImprovement);
@@ -169,11 +159,4 @@ export function buildEmsQiSummary(answers: EmsQiAnswers): string {
   }
 
   return lines.join("\n").trim();
-}
-
-export function extractCallMetadata(answers: EmsQiAnswers) {
-  return {
-    callDate: answers.call_date || null,
-    callNumber: answers.call_number?.trim() || null,
-  };
 }

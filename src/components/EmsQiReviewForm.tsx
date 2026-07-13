@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { ClipboardCheck, Copy, RefreshCw } from "lucide-react";
-import { saveEmsQiReview } from "@/app/ems-qi/actions";
+import { useEffect, useMemo, useState } from "react";
+import { ClipboardCheck, Copy, CircleHelp, Eraser, RefreshCw } from "lucide-react";
 import { EMS_QI_FORM_SECTIONS, isEmsQiFieldActive } from "@/lib/ems-qi-form-definition";
 import { buildEmsQiSummary, calculateEmsQiScores } from "@/lib/ems-qi-summary";
 import type { EmsQiAnswers, EmsQiField } from "@/lib/ems-qi-types";
@@ -12,12 +10,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
-
-type EmsQiReviewFormProps = {
-  reviewId?: string;
-  initialAnswers?: EmsQiAnswers;
-  initialSummary?: string;
-};
 
 function emptyAnswers(): EmsQiAnswers {
   const answers: EmsQiAnswers = {};
@@ -133,20 +125,12 @@ function FieldInput({
   );
 }
 
-export function EmsQiReviewForm({ reviewId, initialAnswers, initialSummary }: EmsQiReviewFormProps) {
-  const router = useRouter();
-  const [answers, setAnswers] = useState<EmsQiAnswers>(() => {
-    const base = { ...emptyAnswers(), ...initialAnswers };
-    if (!base.lead_provider?.trim() && base.crew?.trim()) {
-      base.lead_provider = base.crew;
-    }
-    return base;
-  });
-  const [summaryText, setSummaryText] = useState(initialSummary ?? "");
-  const [summaryEdited, setSummaryEdited] = useState(Boolean(initialSummary));
+export function EmsQiReviewForm() {
+  const [answers, setAnswers] = useState<EmsQiAnswers>(emptyAnswers);
+  const [summaryText, setSummaryText] = useState("");
+  const [summaryEdited, setSummaryEdited] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
 
   const autoSummary = useMemo(() => buildEmsQiSummary(answers), [answers]);
   const scores = useMemo(() => calculateEmsQiScores(answers), [answers]);
@@ -183,42 +167,23 @@ export function EmsQiReviewForm({ reviewId, initialAnswers, initialSummary }: Em
     try {
       await navigator.clipboard.writeText(summaryText);
       setCopied(true);
+      setError(null);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setError("Could not copy to clipboard.");
     }
   }
 
-  function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  function clearForm() {
+    setAnswers(emptyAnswers());
+    setSummaryEdited(false);
+    setSummaryText(buildEmsQiSummary(emptyAnswers()));
+    setCopied(false);
     setError(null);
-
-    for (const section of EMS_QI_FORM_SECTIONS) {
-      for (const field of section.fields) {
-        if (!isEmsQiFieldActive(section, field, answers)) continue;
-        if (field.required && !answers[field.id]?.trim()) {
-          setError(`${field.label} is required.`);
-          return;
-        }
-      }
-    }
-
-    startTransition(async () => {
-      try {
-        await saveEmsQiReview({
-          id: reviewId,
-          answers,
-          summaryText,
-        });
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not save review.");
-      }
-    });
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
+    <div className="space-y-8">
       {EMS_QI_FORM_SECTIONS.map((section) => (
         <Card key={section.id}>
           <CardHeader>
@@ -230,28 +195,48 @@ export function EmsQiReviewForm({ reviewId, initialAnswers, initialSummary }: Em
               if (!isEmsQiFieldActive(section, field, answers)) return null;
 
               return (
-              <div
-                key={field.id}
-                className={cn(
-                  "space-y-2",
-                  isRadioSelectField(field) &&
-                    "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-                )}
-              >
-                <FieldLabel
-                  htmlFor={field.id}
+                <div
+                  key={field.id}
                   className={cn(
-                    "text-base font-medium text-foreground leading-snug",
-                    isRadioSelectField(field) && "sm:mb-0 sm:max-w-[45%] sm:shrink-0"
+                    "space-y-2",
+                    isRadioSelectField(field) &&
+                      "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                   )}
                 >
-                  {field.label}
-                </FieldLabel>
-                <div className={cn(isRadioSelectField(field) && "sm:min-w-0 sm:flex-1")}>
-                  <FieldInput field={field} value={answers[field.id] ?? ""} onChange={(value) => updateAnswer(field.id, value)} />
+                  <FieldLabel
+                    htmlFor={field.id}
+                    className={cn(
+                      "text-base font-medium text-foreground leading-snug",
+                      isRadioSelectField(field) && "sm:mb-0 sm:max-w-[45%] sm:shrink-0",
+                      field.helpText && "inline-flex items-start gap-1.5"
+                    )}
+                  >
+                    <span>{field.label}</span>
+                    {field.helpText ? (
+                      <span
+                        tabIndex={0}
+                        className="group relative inline-flex shrink-0 rounded-sm pt-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={field.helpText}
+                      >
+                        <CircleHelp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        <span
+                          role="tooltip"
+                          className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-[16rem] -translate-x-1/2 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-normal leading-snug text-background opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+                        >
+                          {field.helpText}
+                        </span>
+                      </span>
+                    ) : null}
+                  </FieldLabel>
+                  <div className={cn(isRadioSelectField(field) && "sm:min-w-0 sm:flex-1")}>
+                    <FieldInput
+                      field={field}
+                      value={answers[field.id] ?? ""}
+                      onChange={(value) => updateAnswer(field.id, value)}
+                    />
+                  </div>
+                  {field.hint ? <FieldHint className="sm:col-span-2">{field.hint}</FieldHint> : null}
                 </div>
-                {field.hint ? <FieldHint className="sm:col-span-2">{field.hint}</FieldHint> : null}
-              </div>
               );
             })}
             {section.gate && answers[section.gate.fieldId] === "no" ? (
@@ -273,8 +258,8 @@ export function EmsQiReviewForm({ reviewId, initialAnswers, initialSummary }: Em
                 Export Summary
               </CardTitle>
               <CardDescription>
-                Auto-generated with Areas Done Well and Points That Need Improvement from your scored answers. Edit if
-                needed, then copy into your other program.
+                Auto-generated with Points That Need Improvement from your scored answers. Edit if needed, then copy into
+                your other program.
               </CardDescription>
             </div>
             {scores.maxScore > 0 ? (
@@ -294,26 +279,23 @@ export function EmsQiReviewForm({ reviewId, initialAnswers, initialSummary }: Em
             rows={14}
             className="font-mono text-sm"
           />
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={copySummary}>
+            <Button type="button" onClick={copySummary}>
               <Copy className="mr-2 h-4 w-4" />
               {copied ? "Copied!" : "Copy summary"}
             </Button>
-            <Button type="button" variant="ghost" onClick={regenerateSummary}>
+            <Button type="button" variant="outline" onClick={regenerateSummary}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Regenerate from answers
+            </Button>
+            <Button type="button" variant="ghost" onClick={clearForm}>
+              <Eraser className="mr-2 h-4 w-4" />
+              Clear form
             </Button>
           </div>
         </CardContent>
       </Card>
-
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving..." : reviewId ? "Save changes" : "Save review"}
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }
