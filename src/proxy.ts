@@ -6,6 +6,8 @@ const PUBLIC_FILE = /\.(.*)$/;
 
 function isPublicPath(pathname: string) {
   return (
+    pathname === "/" ||
+    pathname.startsWith("/shift-exchange") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/_next") ||

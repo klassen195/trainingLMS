@@ -1,12 +1,14 @@
 # TrainingLMS (Supabase + Next.js)
 
-Internal fire department learning management system for program enrollment, modules, and role-based access.
+Internal fire department learning management system for program enrollment, modules, and role-based access — plus a public Shift Exchange tool.
 
 ## What's included
 
 - Next.js App Router UI with fire department branding
-- Supabase Auth (email magic link) — login required
-- SQL migration with RLS, profile bootstrap trigger, and seed catalog programs
+- Public **Shift Exchange** (no login) at `/shift-exchange`
+- Public landing hub at `/`
+- Supabase Auth (email magic link) for Training LMS features
+- SQL migrations with RLS, profile bootstrap trigger, and seed catalog programs
 - Roles: learner, instructor, admin
 
 ## Setup
@@ -50,6 +52,7 @@ Migration files:
 
 - `supabase/migrations/20260623120000_training_lms_schema.sql` (fresh install)
 - `supabase/migrations/20260623210000_programs_modules_no_assignments.sql` (upgrade existing DB)
+- `supabase/migrations/20260720120000_shift_exchange_requests.sql` (Shift Exchange table + open RLS)
 
 Apply via Supabase CLI (`supabase db push`) or paste into the Supabase SQL editor and run.
 

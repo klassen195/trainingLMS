@@ -10,8 +10,8 @@ import {
   LogOut,
   Menu,
   BookOpen,
-  ClipboardList,
   UserRound,
+  ArrowLeftRight,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -39,7 +39,9 @@ function hasRole(profile: Profile, roles: UserRole[]) {
   return roles.includes(profile.role);
 }
 
-const navItems = [
+const publicNavItems = [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }];
+
+const authNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/programs", label: "Programs", icon: GraduationCap },
 ];
@@ -60,24 +62,21 @@ export function MainNav({ profile }: { profile: Profile | null }) {
   function handleSignOut() {
     startTransition(async () => {
       await signOut();
-      router.push("/login");
+      router.push("/");
     });
   }
 
-  const allNavItems = [
-    ...navItems,
-    ...(showInstructor
-      ? [
-          { href: "/instructor", label: "Instructor", icon: BookOpen },
-          { href: "/ems-qi", label: "EMS QI", icon: ClipboardList },
-        ]
-      : []),
+  const loggedInNavItems = [
+    ...authNavItems,
+    ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
   ];
+
+  const allNavItems = [...publicNavItems, ...(profile ? loggedInNavItems : [])];
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link href={profile ? "/dashboard" : "/login"} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
             FD
           </div>
@@ -85,21 +84,19 @@ export function MainNav({ profile }: { profile: Profile | null }) {
         </Link>
 
         <div className="relative hidden md:flex items-center gap-2">
-          {profile
-            ? allNavItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "inline-flex h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-                    isActive(item.href) && "bg-accent text-accent-foreground"
-                  )}
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  {item.label}
-                </Link>
-              ))
-            : null}
+          {allNavItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "inline-flex h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                isActive(item.href) && "bg-accent text-accent-foreground"
+              )}
+            >
+              <item.icon className="mr-2 h-4 w-4" />
+              {item.label}
+            </Link>
+          ))}
 
           {profile ? (
             <DropdownMenu modal={false}>
@@ -171,22 +168,20 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                 <SheetDescription>TrainingLMS menu</SheetDescription>
               </SheetHeader>
               <div className="mt-8 flex flex-col gap-2">
-                {profile
-                  ? allNavItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileOpen(false)}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors hover:bg-accent",
-                          isActive(item.href) && "bg-accent"
-                        )}
-                      >
-                        <item.icon className="h-5 w-5" />
-                        {item.label}
-                      </Link>
-                    ))
-                  : null}
+                {allNavItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors hover:bg-accent",
+                      isActive(item.href) && "bg-accent"
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                ))}
                 {showAdmin ? (
                   <Link
                     href="/admin"
