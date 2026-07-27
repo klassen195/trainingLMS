@@ -101,18 +101,9 @@ body {
     z-index: 200;
   }
 
+  /* Keep the page background flat; the previous wave pattern used this pseudo-element. */
   body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.12;
-    mix-blend-mode: screen;
-    background-image:
-      radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.06) 0, rgba(255, 255, 255, 0) 20%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='800' viewBox='0 0 800 800'%3E%3Cpath d='M0 520c80-40 160-40 240 0s160 40 240 0 160-40 240 0 160 40 240 0' fill='none' stroke='%23ffffff' stroke-width='0.8' opacity='0.45'/%3E%3Cpath d='M0 360c70-50 140-50 210 0s140 50 210 0 140-50 210 0 140 50 210 0' fill='none' stroke='%23ffffff' stroke-width='0.8' opacity='0.32'/%3E%3Cpath d='M0 200c90-60 180-60 270 0s180 60 270 0 180-60 270 0 180 60 270 0' fill='none' stroke='%23ffffff' stroke-width='0.8' opacity='0.26'/%3E%3C/svg%3E");
-    background-size: 2200px 2200px, 900px 900px;
-    background-repeat: repeat;
-    z-index: 0;
+    content: none;
+    display: none;
   }
 }

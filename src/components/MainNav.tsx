@@ -12,6 +12,7 @@ import {
   BookOpen,
   UserRound,
   ArrowLeftRight,
+  Package,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -44,6 +45,7 @@ const publicNavItems = [{ href: "/shift-exchange", label: "Shift Exchange", icon
 const authNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/programs", label: "Programs", icon: GraduationCap },
+  { href: "/assets", label: "Assets", icon: Package },
 ];
 
 export function MainNav({ profile }: { profile: Profile | null }) {

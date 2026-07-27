@@ -10,6 +10,7 @@ import {
   Shield,
   ClipboardList,
   ArrowLeftRight,
+  Package,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -42,6 +43,27 @@ export function BreadcrumbNav() {
     });
     if (paths[1] === "station" && paths[2]) {
       breadcrumbs.push({ label: `Station ${paths[2]}` });
+    }
+  } else if (paths[0] === "assets") {
+    breadcrumbs.push({
+      label: "Assets",
+      href: paths.length === 1 ? undefined : "/assets",
+      icon: <Package className="h-4 w-4" />,
+    });
+    if (paths[1] === "ppe") {
+      breadcrumbs.push({ label: "PPE" });
+    } else if (paths[1] === "apparatus") {
+      breadcrumbs.push({ label: "Apparatus" });
+    } else if (paths[1] === "new") {
+      breadcrumbs.push({ label: "New" });
+    } else if (paths[1]) {
+      breadcrumbs.push({
+        label: "Detail",
+        href: paths[2] === "edit" ? `/assets/${paths[1]}` : undefined,
+      });
+      if (paths[2] === "edit") {
+        breadcrumbs.push({ label: "Edit" });
+      }
     }
   } else {
     paths.forEach((path, index) => {

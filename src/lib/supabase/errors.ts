@@ -18,6 +18,16 @@ export function isMissingShiftExchangeTable(error: PostgrestError | null) {
   );
 }
 
+export function isMissingAssetsTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("assets") ||
+    error.message.includes("asset_inspections") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
 export function supabaseErrorMessage(error: PostgrestError) {
   return error.message || `Database error (${error.code})`;
 }
