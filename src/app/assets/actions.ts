@@ -180,7 +180,7 @@ async function syncUnitAssignmentHistory(
 export async function createAsset(input: AssetFormInput) {
   const profile = await requireRole(["admin"]);
   if (input.kind === "ppe" && !input.name?.trim()) throw new Error("Name is required.");
-  if (input.kind === "ppe" && !input.station?.trim()) throw new Error("Station is required.");
+  if (input.kind === "ppe" && !input.station?.trim()) throw new Error("Location is required.");
   if (input.kind === "ppe" && !input.ppe_category) throw new Error("PPE category is required.");
   if (input.kind === "apparatus" && !input.build_number?.trim()) {
     throw new Error("Build number is required.");
@@ -234,7 +234,7 @@ export async function createAsset(input: AssetFormInput) {
 export async function updateAsset(id: string, input: AssetFormInput) {
   const profile = await requireRole(["admin"]);
   if (input.kind === "ppe" && !input.name?.trim()) throw new Error("Name is required.");
-  if (input.kind === "ppe" && !input.station?.trim()) throw new Error("Station is required.");
+  if (input.kind === "ppe" && !input.station?.trim()) throw new Error("Location is required.");
   if (input.kind === "ppe" && !input.ppe_category) throw new Error("PPE category is required.");
   if (input.kind === "apparatus" && !input.build_number?.trim()) {
     throw new Error("Build number is required.");

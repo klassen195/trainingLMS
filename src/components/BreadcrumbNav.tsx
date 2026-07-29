@@ -60,10 +60,15 @@ export function BreadcrumbNav() {
     } else if (paths[1]) {
       breadcrumbs.push({
         label: "Detail",
-        href: paths[2] === "edit" ? `/assets/${paths[1]}` : undefined,
+        href:
+          paths[2] === "edit" || paths[2] === "maintenance" || paths[2] === "vehicle-check"
+            ? `/assets/${paths[1]}`
+            : undefined,
       });
       if (paths[2] === "edit") {
         breadcrumbs.push({ label: "Edit" });
+      } else if (paths[2] === "maintenance") {
+        breadcrumbs.push({ label: "Request maintenance" });
       }
     }
   } else {

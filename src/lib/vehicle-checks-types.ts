@@ -140,7 +140,8 @@ export function groupTemplateItemsBySection(
   let currentItems: VehicleCheckTemplateItem[] = [];
 
   function flush() {
-    if (currentItems.length > 0) {
+    // Keep named sections even when empty so users can add custom lines.
+    if (currentItems.length > 0 || currentTitle !== null) {
       groups.push({ sectionTitle: currentTitle, items: currentItems });
       currentItems = [];
     }

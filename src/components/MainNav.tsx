@@ -73,6 +73,7 @@ export function MainNav({ profile }: { profile: Profile | null }) {
   const loggedInNavItems = [
     ...authNavItems,
     ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
+    ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];
 
   const allNavItems = [...publicNavItems, ...(profile ? loggedInNavItems : [])];
@@ -132,17 +133,6 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                     <p className="text-xs leading-none text-muted-foreground capitalize">{profile.role}</p>
                   </div>
                 </DropdownMenuLabel>
-                {showAdmin ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin">
-                        <Shield className="mr-2 h-4 w-4" />
-                        Admin
-                      </Link>
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/account">
@@ -204,18 +194,6 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                     <span className="text-center text-xs font-medium leading-tight">{item.label}</span>
                   </Link>
                 ))}
-                {showAdmin ? (
-                  <Link
-                    href="/admin"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex flex-col items-center justify-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-md border bg-background">
-                      <Shield className="h-5 w-5" />
-                    </span>
-                    <span className="text-center text-xs font-medium leading-tight">Admin</span>
-                  </Link>
-                ) : null}
                 {profile ? (
                   <Link
                     href="/account"

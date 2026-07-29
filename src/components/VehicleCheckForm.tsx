@@ -349,7 +349,27 @@ export function VehicleCheckForm({
             setError(null);
             startTransition(async () => {
               try {
-                await submitVehicleCheck({
+                const responsePayload = [
+                  ...visibleTemplateItems.map((item) => ({
+                    templateItemId: item.id,
+                    result: itemState[item.id]?.result ?? null,
+                    levelValue: itemState[item.id]?.levelValue ?? null,
+                    textValue: itemState[item.id]?.textValue ?? "",
+                    notes: itemState[item.id]?.notes ?? "",
+                  })),
+                  ...adhocItems.map((item) => ({
+                    templateItemId: item.id,
+                    adhocLabel: item.label,
+                    adhocSectionTitle: item.sectionTitle,
+                    adhocFieldType: item.fieldType,
+                    result: itemState[item.id]?.result ?? null,
+                    levelValue: itemState[item.id]?.levelValue ?? null,
+                    textValue: itemState[item.id]?.textValue ?? "",
+                    notes: itemState[item.id]?.notes ?? "",
+                  })),
+                ];
+
+                const { checkId } = await submitVehicleCheck({
                   assetId,
                   templateId,
                   includesDaily: usesDailyWeekly ? includesDaily : false,
@@ -359,29 +379,36 @@ export function VehicleCheckForm({
                   swapDestinationAssetId: usesDailyWeekly
                     ? null
                     : swapDestinationAssetId || null,
-                  responses: [
-                    ...visibleTemplateItems.map((item) => ({
-                      templateItemId: item.id,
-                      result: itemState[item.id]?.result ?? null,
-                      levelValue: itemState[item.id]?.levelValue ?? null,
-                      textValue: itemState[item.id]?.textValue ?? "",
-                      notes: itemState[item.id]?.notes ?? "",
-                    })),
-                    ...adhocItems.map((item) => ({
-                      templateItemId: item.id,
-                      adhocLabel: item.label,
-                      adhocSectionTitle: item.sectionTitle,
-                      adhocFieldType: item.fieldType,
-                      result: itemState[item.id]?.result ?? null,
-                      levelValue: itemState[item.id]?.levelValue ?? null,
-                      textValue: itemState[item.id]?.textValue ?? "",
-                      notes: itemState[item.id]?.notes ?? "",
-                    })),
-                  ],
+                  responses: responsePayload,
                 });
+
+                const hasPassFailFail =
+                  visibleTemplateItems.some(
+                    (item) =>
+                      item.field_type === "pass_fail" &&
+                      itemState[item.id]?.result === "fail"
+                  ) ||
+                  adhocItems.some(
+                    (item) =>
+                      item.fieldType === "pass_fail" &&
+                      itemState[item.id]?.result === "fail"
+                  );
+
                 setNotes("");
                 setAdhocItems([]);
                 setItemState(emptyState(templateItems));
+
+                if (hasPassFailFail) {
+                  const startMaintenance = window.confirm(
+                    "One or more checklist items failed. Submit a maintenance request?"
+                  );
+                  if (startMaintenance) {
+                    router.push(`/assets/${assetId}/maintenance/new?checkId=${checkId}`);
+                    router.refresh();
+                    return;
+                  }
+                }
+
                 router.push(`/assets/${assetId}`);
                 router.refresh();
               } catch (err) {

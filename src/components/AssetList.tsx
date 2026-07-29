@@ -27,7 +27,7 @@ function isExpired(date: string | null | undefined) {
 function formatCheckTime(value: string | null | undefined) {
   if (!value) return null;
   try {
-    return new Date(value).toLocaleString();
+    return new Date(value).toLocaleDateString();
   } catch {
     return value;
   }

@@ -3,13 +3,13 @@
 import { useState, useTransition } from "react";
 import { createAsset, updateAsset, type AssetFormInput } from "@/app/assets/actions";
 import {
-  ASSET_STATIONS,
   type ApparatusType,
   type Asset,
   type AssetKind,
   type AssetStatus,
   type PpeCategory,
 } from "@/lib/assets-types";
+import type { Location } from "@/lib/locations-types";
 import type { VehicleCheckTemplate } from "@/lib/vehicle-checks-types";
 import {
   apparatusTypeLabel,
@@ -38,6 +38,7 @@ export function AssetForm({
   kind,
   asset,
   profiles,
+  locations,
   checkTemplates = [],
   assignedCheckTemplateIds = [],
 }: {
@@ -45,6 +46,7 @@ export function AssetForm({
   kind: AssetKind;
   asset?: Asset;
   profiles: ProfileOption[];
+  locations: Pick<Location, "id" | "name">[];
   checkTemplates?: Pick<
     VehicleCheckTemplate,
     "id" | "name" | "apparatus_type" | "is_type_default"
@@ -53,7 +55,9 @@ export function AssetForm({
 }) {
   const [name, setName] = useState(asset?.name ?? "");
   const [status, setStatus] = useState<AssetStatus>(asset?.status ?? "in_service");
-  const [station, setStation] = useState(asset?.station ?? (kind === "ppe" ? ASSET_STATIONS[0] : ""));
+  const [station, setStation] = useState(
+    asset?.station ?? (kind === "ppe" ? (locations[0]?.name ?? "") : "")
+  );
   const [manufacturer, setManufacturer] = useState(asset?.manufacturer ?? "");
   const [model, setModel] = useState(asset?.model ?? "");
   const [serialNumber, setSerialNumber] = useState(asset?.serial_number ?? "");
@@ -166,7 +170,7 @@ export function AssetForm({
           </Select>
         </div>
         <div className="space-y-2">
-          <FieldLabel htmlFor="station">Station</FieldLabel>
+          <FieldLabel htmlFor="station">Location</FieldLabel>
           <Select
             id="station"
             value={station}
@@ -174,11 +178,14 @@ export function AssetForm({
             onChange={(e) => setStation(e.target.value)}
           >
             {kind === "apparatus" ? <option value="">Unassigned</option> : null}
-            {ASSET_STATIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {locations.map((location) => (
+              <option key={location.id} value={location.name}>
+                {location.name}
               </option>
             ))}
+            {station && !locations.some((location) => location.name === station) ? (
+              <option value={station}>{station} (inactive)</option>
+            ) : null}
           </Select>
         </div>
       </div>

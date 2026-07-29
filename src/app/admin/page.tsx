@@ -24,22 +24,54 @@ export default async function AdminPage() {
           <Shield className="h-8 w-8 text-primary" />
           <h1 className="text-4xl font-bold">Admin</h1>
         </div>
-        <p className="text-lg text-muted-foreground">Manage users, roles, and department checklists.</p>
+        <p className="text-lg text-muted-foreground">
+          Manage users, locations, roles, and department checklists.
+        </p>
       </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="text-lg">Vehicle checks</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">
-            Edit Daily and Weekly apparatus checklist templates.
-          </p>
-          <Button asChild>
-            <Link href="/admin/vehicle-checks">Manage templates</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="mb-8 grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Locations</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Manage stations and other sites for asset assignment.
+            </p>
+            <Button asChild>
+              <Link href="/admin/locations">Manage locations</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Vehicle checks</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Edit Daily and Weekly apparatus checklist templates.
+            </p>
+            <Button asChild>
+              <Link href="/admin/vehicle-checks">Manage templates</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Maintenance requests</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Review and resolve apparatus maintenance requests.
+            </p>
+            <Button asChild>
+              <Link href="/admin/maintenance">Manage requests</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="mb-4">
         <h2 className="text-2xl font-bold">User profiles</h2>

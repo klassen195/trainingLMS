@@ -5,6 +5,11 @@ import type {
   PpeCategory,
 } from "@/lib/assets-types";
 import type {
+  MaintenanceRequestStatus,
+  MaintenanceRequestType,
+  MaintenanceServiceStatus,
+} from "@/lib/maintenance-types";
+import type {
   VehicleCheckFieldType,
   VehicleCheckItemResult,
   VehicleCheckLevel,
@@ -97,6 +102,22 @@ const vehicleCheckLevelLabels: Record<VehicleCheckLevel, string> = {
   empty: "Empty",
 };
 
+const maintenanceRequestTypeLabels: Record<MaintenanceRequestType, string> = {
+  major: "Major",
+  minor: "Minor",
+  scheduled: "Scheduled",
+};
+
+const maintenanceServiceStatusLabels: Record<MaintenanceServiceStatus, string> = {
+  in_service: "Remaining in service",
+  out_of_service: "Out of service",
+};
+
+const maintenanceRequestStatusLabels: Record<MaintenanceRequestStatus, string> = {
+  open: "Open",
+  resolved: "Resolved",
+};
+
 export function tagLabel(tag: ProgramTag) {
   return tagLabels[tag];
 }
@@ -177,6 +198,27 @@ export function vehicleCheckLevelLabel(level: VehicleCheckLevel) {
   return vehicleCheckLevelLabels[level];
 }
 
+export function maintenanceRequestTypeLabel(type: MaintenanceRequestType) {
+  return maintenanceRequestTypeLabels[type];
+}
+
+export function maintenanceServiceStatusLabel(status: MaintenanceServiceStatus) {
+  return maintenanceServiceStatusLabels[status];
+}
+
+export function maintenanceRequestStatusLabel(status: MaintenanceRequestStatus) {
+  return maintenanceRequestStatusLabels[status];
+}
+
+export function maintenanceRequestStatusBadgeClass(status: MaintenanceRequestStatus) {
+  switch (status) {
+    case "open":
+      return "border-transparent bg-amber-100 text-amber-900";
+    case "resolved":
+      return "border-transparent bg-slate-200 text-slate-700";
+  }
+}
+
 export const assetStatuses = Object.keys(assetStatusLabels) as AssetStatus[];
 export const ppeCategories = Object.keys(ppeCategoryLabels) as PpeCategory[];
 export const apparatusTypes = Object.keys(apparatusTypeLabels) as ApparatusType[];
@@ -188,6 +230,12 @@ export const vehicleChecklistKinds = Object.keys(
 export const vehicleCheckFieldTypes = Object.keys(
   vehicleCheckFieldTypeLabels
 ) as VehicleCheckFieldType[];
+export const maintenanceRequestTypes = Object.keys(
+  maintenanceRequestTypeLabels
+) as MaintenanceRequestType[];
+export const maintenanceServiceStatuses = Object.keys(
+  maintenanceServiceStatusLabels
+) as MaintenanceServiceStatus[];
 
 export function fieldTypesForChecklistKind(kind: VehicleChecklistKind): VehicleCheckFieldType[] {
   if (kind === "swap") {

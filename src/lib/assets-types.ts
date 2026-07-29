@@ -86,16 +86,6 @@ export type ApparatusUnitAssignmentWithActor = ApparatusUnitAssignment & {
   actor?: { id: string; display_name: string | null; email: string | null } | null;
 };
 
-export const ASSET_STATIONS = [
-  "Station 1",
-  "Station 2",
-  "Station 3",
-  "Station 4",
-  "Station 5",
-] as const;
-
-export type AssetStation = (typeof ASSET_STATIONS)[number];
-
 export const ASSET_SELECT =
   "id, created_at, updated_at, created_by, kind, name, status, station, manufacturer, model, serial_number, notes, assigned_to, ppe_category, size, manufactured_on, expires_on, unit_number, apparatus_type, year, build_number";
 

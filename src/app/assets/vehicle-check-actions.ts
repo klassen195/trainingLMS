@@ -724,6 +724,8 @@ export async function submitVehicleCheck(input: SubmitVehicleCheckInput) {
     revalidateVehicleCheckAssets(swapDestinationAssetId);
     revalidatePath(`/assets/${swapDestinationAssetId}/vehicle-checks/${check!.id}`);
   }
+
+  return { checkId: check!.id as string };
 }
 
 export async function resolveVehicleCheckResponse(input: {

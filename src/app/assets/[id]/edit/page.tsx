@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Package } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { ASSET_SELECT, assetDisplayLabel, type Asset } from "@/lib/assets-types";
+import { listLocations } from "@/lib/locations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import { AssetForm } from "@/components/AssetForm";
@@ -37,6 +38,27 @@ export default async function EditAssetPage({
     .order("display_name", { ascending: true });
 
   if (profilesError) throw profilesError;
+
+  const { rows: activeLocations, error: locationsError } = await listLocations(supabase, {
+    activeOnly: true,
+  });
+  if (locationsError) throw locationsError;
+
+  const locations =
+    row.station && !activeLocations.some((location) => location.name === row.station)
+      ? [
+          ...activeLocations,
+          {
+            id: `inactive-${row.station}`,
+            created_at: "",
+            updated_at: "",
+            name: row.station,
+            sort_order: 9999,
+            is_active: false,
+            notes: "",
+          },
+        ]
+      : activeLocations;
 
   const { data: checkTemplates, error: templatesError } = await supabase
     .from("vehicle_check_templates")
@@ -78,6 +100,7 @@ export default async function EditAssetPage({
             kind={row.kind}
             asset={row}
             profiles={profiles ?? []}
+            locations={locations}
             checkTemplates={checkTemplates ?? []}
             assignedCheckTemplateIds={(assignedRows ?? []).map((row) => row.template_id)}
           />

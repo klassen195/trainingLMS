@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Plus, Truck } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
-import { ASSET_STATIONS } from "@/lib/assets-types";
 import { fetchAssetsWithLatestInspection } from "@/lib/assets";
+import { listLocations } from "@/lib/locations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import { AssetList } from "@/components/AssetList";
@@ -19,12 +19,18 @@ export default async function AssetsApparatusPage({
   const profile = await requireUserProfile();
   const isAdmin = profile.role === "admin";
   const { station: stationParam } = await searchParams;
+
+  const supabase = await createSupabaseServerClient();
+  const { rows: locations, error: locationsError } = await listLocations(supabase, {
+    activeOnly: true,
+  });
+  if (locationsError) throw locationsError;
+
   const station =
-    stationParam && ASSET_STATIONS.includes(stationParam as (typeof ASSET_STATIONS)[number])
+    stationParam && locations.some((location) => location.name === stationParam)
       ? stationParam
       : undefined;
 
-  const supabase = await createSupabaseServerClient();
   const { rows, error } = await fetchAssetsWithLatestInspection(supabase, "apparatus", {
     station,
   });
@@ -41,7 +47,7 @@ export default async function AssetsApparatusPage({
             <h1 className="text-4xl font-bold">Apparatus</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Unit roster, status, and latest vehicle checks by station.
+            Unit roster, status, and latest vehicle checks by location.
           </p>
         </div>
         {isAdmin ? (
@@ -66,20 +72,20 @@ export default async function AssetsApparatusPage({
               : "border-input hover:bg-accent"
           )}
         >
-          All stations
+          All locations
         </Link>
-        {ASSET_STATIONS.map((s) => (
+        {locations.map((location) => (
           <Link
-            key={s}
-            href={`/assets/apparatus?station=${encodeURIComponent(s)}`}
+            key={location.id}
+            href={`/assets/apparatus?station=${encodeURIComponent(location.name)}`}
             className={cn(
               "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-              station === s
+              station === location.name
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-input hover:bg-accent"
             )}
           >
-            {s}
+            {location.name}
           </Link>
         ))}
       </div>

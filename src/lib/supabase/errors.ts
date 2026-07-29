@@ -40,6 +40,24 @@ export function isMissingVehicleChecksTable(error: PostgrestError | null) {
   );
 }
 
+export function isMissingLocationsTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("locations") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
+export function isMissingMaintenanceRequestsTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("maintenance_requests") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
 export function supabaseErrorMessage(error: PostgrestError) {
   return error.message || `Database error (${error.code})`;
 }

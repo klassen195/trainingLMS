@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import type { AssetKind } from "@/lib/assets-types";
+import { listLocations } from "@/lib/locations";
 import { AssetForm } from "@/components/AssetForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { Button } from "@/components/ui/Button";
@@ -27,6 +28,11 @@ export default async function NewAssetPage({
 
   if (isMissingAssetsTable(error)) return <AssetsDatabaseSetup />;
   if (error) throw error;
+
+  const { rows: locations, error: locationsError } = await listLocations(supabase, {
+    activeOnly: true,
+  });
+  if (locationsError) throw locationsError;
 
   const { data: checkTemplates, error: templatesError } =
     kind === "apparatus"
@@ -75,6 +81,7 @@ export default async function NewAssetPage({
             mode="create"
             kind={kind}
             profiles={profiles ?? []}
+            locations={locations}
             checkTemplates={checkTemplates ?? []}
           />
         </CardContent>

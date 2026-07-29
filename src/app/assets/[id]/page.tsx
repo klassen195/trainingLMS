@@ -25,6 +25,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   isMissingAssetsTable,
+  isMissingMaintenanceRequestsTable,
   isMissingVehicleChecksTable,
 } from "@/lib/supabase/errors";
 import {
@@ -37,11 +38,17 @@ import { asSingleProfile } from "@/lib/assets";
 import { AssetInspectionForm } from "@/components/AssetInspectionForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { DeleteAssetButton } from "@/components/DeleteAssetButton";
+import { MaintenanceRequestHistory } from "@/components/MaintenanceRequestHistory";
 import { VehicleCheckHistory } from "@/components/VehicleCheckHistory";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
+import {
+  MAINTENANCE_PHOTO_BUCKET,
+  MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT,
+  type MaintenanceRequestWithRequester,
+} from "@/lib/maintenance-types";
 
 function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
@@ -111,6 +118,7 @@ export default async function AssetDetailPage({
   let latestWeeklyAt: string | null = null;
   let resolvedChecklists: ResolvedVehicleCheckTemplate[] = [];
   let unitAssignments: ApparatusUnitAssignmentWithActor[] = [];
+  let maintenanceRequests: MaintenanceRequestWithRequester[] = [];
 
   if (row.kind === "ppe") {
     const { data: inspections, error: inspectionError } = await supabase
@@ -263,6 +271,42 @@ export default async function AssetDetailPage({
           ),
         };
       });
+    }
+
+    const { data: maintenanceRows, error: maintenanceError } = await supabase
+      .from("maintenance_requests")
+      .select(MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT)
+      .eq("asset_id", id)
+      .order("requested_at", { ascending: false });
+
+    if (maintenanceError && !isMissingMaintenanceRequestsTable(maintenanceError)) {
+      throw maintenanceError;
+    } else if (!maintenanceError) {
+      maintenanceRequests = await Promise.all(
+        ((maintenanceRows ?? []) as Record<string, unknown>[]).map(async (item) => {
+          const { requester, ...rest } = item;
+          const rowRequest: MaintenanceRequestWithRequester = {
+            ...(rest as Omit<MaintenanceRequestWithRequester, "requester" | "photo_url">),
+            requester: asSingleProfile(
+              requester as
+                | { id: string; display_name: string | null; email: string | null }
+                | { id: string; display_name: string | null; email: string | null }[]
+                | null
+                | undefined
+            ),
+            photo_url: null,
+          };
+
+          if (rowRequest.photo_storage_path) {
+            const { data: signed } = await supabase.storage
+              .from(MAINTENANCE_PHOTO_BUCKET)
+              .createSignedUrl(rowRequest.photo_storage_path, 3600);
+            rowRequest.photo_url = signed?.signedUrl ?? null;
+          }
+
+          return rowRequest;
+        })
+      );
     }
   }
 
@@ -498,6 +542,7 @@ export default async function AssetDetailPage({
           ) : (
             <>
               <VehicleCheckHistory assetId={row.id} checks={vehicleChecks} />
+              <MaintenanceRequestHistory requests={maintenanceRequests} />
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Unit assignment history</CardTitle>
@@ -576,6 +621,9 @@ export default async function AssetDetailPage({
                   </Button>
                 ))
               )}
+              <Button variant="outline" asChild className="w-full">
+                <Link href={`/assets/${row.id}/maintenance/new`}>Request maintenance</Link>
+              </Button>
             </CardContent>
           </Card>
         )}
