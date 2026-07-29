@@ -41,7 +41,7 @@ export default async function AssetsPage() {
             <h1 className="text-4xl font-bold">Assets</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Track PPE and apparatus, including inspection history and due dates.
+            Track PPE and apparatus, including PPE inspections and apparatus vehicle checks.
           </p>
         </div>
         {isAdmin ? (
@@ -83,7 +83,9 @@ export default async function AssetsPage() {
               <Truck className="h-5 w-5" />
               <CardTitle>Apparatus</CardTitle>
             </div>
-            <CardDescription>Engines, ladders, ambulances, and other units.</CardDescription>
+            <CardDescription>
+              Engines, ladders, ambulances, and other units with daily/weekly vehicle checks.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">

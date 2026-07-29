@@ -28,6 +28,15 @@ export default async function NewAssetPage({
   if (isMissingAssetsTable(error)) return <AssetsDatabaseSetup />;
   if (error) throw error;
 
+  const { data: checkTemplates, error: templatesError } =
+    kind === "apparatus"
+      ? await supabase
+          .from("vehicle_check_templates")
+          .select("id, name, apparatus_type, is_type_default")
+          .order("name", { ascending: true })
+      : { data: [], error: null };
+  if (templatesError) throw templatesError;
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -62,7 +71,12 @@ export default async function NewAssetPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <AssetForm mode="create" kind={kind} profiles={profiles ?? []} />
+          <AssetForm
+            mode="create"
+            kind={kind}
+            profiles={profiles ?? []}
+            checkTemplates={checkTemplates ?? []}
+          />
         </CardContent>
       </Card>
     </div>

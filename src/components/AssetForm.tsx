@@ -10,6 +10,7 @@ import {
   type AssetStatus,
   type PpeCategory,
 } from "@/lib/assets-types";
+import type { VehicleCheckTemplate } from "@/lib/vehicle-checks-types";
 import {
   apparatusTypeLabel,
   apparatusTypes,
@@ -37,11 +38,16 @@ export function AssetForm({
   kind,
   asset,
   profiles,
+  checkTemplates = [],
 }: {
   mode: "create" | "edit";
   kind: AssetKind;
   asset?: Asset;
   profiles: ProfileOption[];
+  checkTemplates?: Pick<
+    VehicleCheckTemplate,
+    "id" | "name" | "apparatus_type" | "is_type_default"
+  >[];
 }) {
   const [name, setName] = useState(asset?.name ?? "");
   const [status, setStatus] = useState<AssetStatus>(asset?.status ?? "in_service");
@@ -60,6 +66,10 @@ export function AssetForm({
     asset?.apparatus_type ?? "engine"
   );
   const [year, setYear] = useState(asset?.year?.toString() ?? "");
+  const [buildNumber, setBuildNumber] = useState(asset?.build_number ?? "");
+  const [vehicleCheckTemplateId, setVehicleCheckTemplateId] = useState(
+    asset?.vehicle_check_template_id ?? ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -81,6 +91,8 @@ export function AssetForm({
       unit_number: unitNumber,
       apparatus_type: kind === "apparatus" ? apparatusType : null,
       year: year ? Number(year) : null,
+      build_number: buildNumber,
+      vehicle_check_template_id: kind === "apparatus" ? vehicleCheckTemplateId || null : null,
     };
   }
 
@@ -219,6 +231,19 @@ export function AssetForm({
               </Select>
             </div>
             <div className="space-y-2">
+              <FieldLabel htmlFor="year">Year</FieldLabel>
+              <Input
+                id="year"
+                type="number"
+                min={1900}
+                max={2100}
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
               <FieldLabel htmlFor="unit_number">Unit number</FieldLabel>
               <Input
                 id="unit_number"
@@ -227,17 +252,38 @@ export function AssetForm({
                 placeholder="e.g. E1"
               />
             </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="build_number">Build number</FieldLabel>
+              <Input
+                id="build_number"
+                value={buildNumber}
+                onChange={(e) => setBuildNumber(e.target.value)}
+                placeholder="e.g. 0V95"
+              />
+            </div>
           </div>
           <div className="space-y-2">
-            <FieldLabel htmlFor="year">Year</FieldLabel>
-            <Input
-              id="year"
-              type="number"
-              min={1900}
-              max={2100}
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-            />
+            <FieldLabel htmlFor="vehicle_check_template_id">Checklist template</FieldLabel>
+            <Select
+              id="vehicle_check_template_id"
+              value={vehicleCheckTemplateId}
+              onChange={(e) => setVehicleCheckTemplateId(e.target.value)}
+            >
+              <option value="">Type default</option>
+              {checkTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                  {template.apparatus_type
+                    ? ` (${apparatusTypeLabel(template.apparatus_type)})`
+                    : ""}
+                  {template.is_type_default ? " · type default" : ""}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Leave as Type default to use the checklist marked default for this apparatus type.
+              Pick a named template to override for this unit only.
+            </p>
           </div>
         </>
       )}

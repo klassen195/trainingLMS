@@ -1,9 +1,12 @@
 import { Shield } from "lucide-react";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import type { Profile } from "@/lib/training-lms-types";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { AdminUserManager } from "./ui";
 
 export default async function AdminPage() {
@@ -21,8 +24,22 @@ export default async function AdminPage() {
           <Shield className="h-8 w-8 text-primary" />
           <h1 className="text-4xl font-bold">Admin</h1>
         </div>
-        <p className="text-lg text-muted-foreground">Manage users and roles.</p>
+        <p className="text-lg text-muted-foreground">Manage users, roles, and department checklists.</p>
       </div>
+
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-lg">Vehicle checks</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            Edit Daily and Weekly apparatus checklist templates.
+          </p>
+          <Button asChild>
+            <Link href="/admin/vehicle-checks">Manage templates</Link>
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="mb-4">
         <h2 className="text-2xl font-bold">User profiles</h2>

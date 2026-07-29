@@ -6,11 +6,19 @@ import {
   type AssetListRow,
   type AssetWithAssignee,
 } from "@/lib/assets-types";
+import { isMissingVehicleChecksTable } from "@/lib/supabase/errors";
 
 type LatestInspection = {
   asset_id: string;
   inspected_at: string;
   next_due_on: string | null;
+};
+
+type VehicleCheckSummary = {
+  asset_id: string;
+  checked_at: string;
+  includes_daily: boolean;
+  includes_weekly: boolean;
 };
 
 type ProfileRef = { id: string; display_name: string | null; email: string | null };
@@ -55,6 +63,48 @@ export async function fetchAssetsWithLatestInspection(
   if (list.length === 0) return { rows: [], error: null };
 
   const ids = list.map((a) => a.id);
+
+  if (kind === "apparatus") {
+    const { data: checks, error: checksError } = await supabase
+      .from("vehicle_checks")
+      .select("asset_id, checked_at, includes_daily, includes_weekly")
+      .in("asset_id", ids)
+      .order("checked_at", { ascending: false });
+
+    if (checksError) {
+      if (isMissingVehicleChecksTable(checksError)) {
+        return {
+          rows: list.map((asset) => ({
+            ...asset,
+            latest_daily_checked_at: null,
+            latest_weekly_checked_at: null,
+          })),
+          error: null,
+        };
+      }
+      return { rows: [], error: checksError };
+    }
+
+    const latestDaily = new Map<string, string>();
+    const latestWeekly = new Map<string, string>();
+    for (const row of (checks ?? []) as VehicleCheckSummary[]) {
+      if (row.includes_daily && !latestDaily.has(row.asset_id)) {
+        latestDaily.set(row.asset_id, row.checked_at);
+      }
+      if (row.includes_weekly && !latestWeekly.has(row.asset_id)) {
+        latestWeekly.set(row.asset_id, row.checked_at);
+      }
+    }
+
+    const rows: AssetListRow[] = list.map((asset) => ({
+      ...asset,
+      latest_daily_checked_at: latestDaily.get(asset.id) ?? null,
+      latest_weekly_checked_at: latestWeekly.get(asset.id) ?? null,
+    }));
+
+    return { rows, error: null };
+  }
+
   const { data: inspections, error: inspectionError } = await supabase
     .from("asset_inspections")
     .select("asset_id, inspected_at, next_due_on")

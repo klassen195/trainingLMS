@@ -12,7 +12,14 @@ export type PpeCategory =
   | "scba_facepiece"
   | "other";
 
-export type ApparatusType = "engine" | "ladder" | "ambulance" | "rescue" | "boat" | "other";
+export type ApparatusType =
+  | "engine"
+  | "ladder"
+  | "ambulance"
+  | "rescue"
+  | "tender"
+  | "boat"
+  | "other";
 
 export type InspectionResult = "pass" | "fail" | "needs_attention";
 
@@ -37,6 +44,8 @@ export type Asset = {
   unit_number: string | null;
   apparatus_type: ApparatusType | null;
   year: number | null;
+  build_number: string | null;
+  vehicle_check_template_id: string | null;
 };
 
 export type AssetInspection = {
@@ -60,6 +69,8 @@ export type AssetInspectionWithInspector = AssetInspection & {
 export type AssetListRow = AssetWithAssignee & {
   latest_next_due_on?: string | null;
   latest_inspected_at?: string | null;
+  latest_daily_checked_at?: string | null;
+  latest_weekly_checked_at?: string | null;
 };
 
 export const ASSET_STATIONS = [
@@ -73,7 +84,7 @@ export const ASSET_STATIONS = [
 export type AssetStation = (typeof ASSET_STATIONS)[number];
 
 export const ASSET_SELECT =
-  "id, created_at, updated_at, created_by, kind, name, status, station, manufacturer, model, serial_number, notes, assigned_to, ppe_category, size, manufactured_on, expires_on, unit_number, apparatus_type, year";
+  "id, created_at, updated_at, created_by, kind, name, status, station, manufacturer, model, serial_number, notes, assigned_to, ppe_category, size, manufactured_on, expires_on, unit_number, apparatus_type, year, build_number, vehicle_check_template_id";
 
 export const ASSET_WITH_ASSIGNEE_SELECT = `${ASSET_SELECT}, assignee:profiles!assigned_to(id, display_name, email)`;
 

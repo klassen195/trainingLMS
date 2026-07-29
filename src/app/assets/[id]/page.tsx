@@ -9,6 +9,7 @@ import {
   type AssetWithAssignee,
 } from "@/lib/assets-types";
 import { asSingleProfile } from "@/lib/assets";
+import { resolveVehicleCheckTemplate } from "@/lib/vehicle-checks";
 import {
   apparatusTypeLabel,
   assetStatusLabel,
@@ -16,10 +17,20 @@ import {
   ppeCategoryLabel,
 } from "@/lib/labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isMissingAssetsTable } from "@/lib/supabase/errors";
+import {
+  isMissingAssetsTable,
+  isMissingVehicleChecksTable,
+} from "@/lib/supabase/errors";
+import {
+  VEHICLE_CHECK_RESPONSE_SELECT,
+  VEHICLE_CHECK_WITH_CHECKER_SELECT,
+  type VehicleCheckResponse,
+  type VehicleCheckWithDetails,
+} from "@/lib/vehicle-checks-types";
 import { AssetInspectionForm } from "@/components/AssetInspectionForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { DeleteAssetButton } from "@/components/DeleteAssetButton";
+import { VehicleCheckHistory } from "@/components/VehicleCheckHistory";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -36,7 +47,8 @@ function formatDate(value: string | null | undefined) {
   return value.slice(0, 10);
 }
 
-function formatTimestamp(value: string) {
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) return "—";
   try {
     return new Date(value).toLocaleString();
   } catch {
@@ -83,17 +95,27 @@ export default async function AssetDetailPage({
     ),
   };
 
-  const { data: inspections, error: inspectionError } = await supabase
-    .from("asset_inspections")
-    .select(INSPECTION_WITH_INSPECTOR_SELECT)
-    .eq("asset_id", id)
-    .order("inspected_at", { ascending: false });
+  const listHref = row.kind === "ppe" ? "/assets/ppe" : "/assets/apparatus";
 
-  if (isMissingAssetsTable(inspectionError)) return <AssetsDatabaseSetup />;
-  if (inspectionError) throw inspectionError;
+  let inspectionHistory: AssetInspectionWithInspector[] = [];
+  let latestNextDue: string | null = null;
+  let vehicleChecks: VehicleCheckWithDetails[] = [];
+  let templateItems: VehicleCheckTemplateItem[] = [];
+  let latestDailyAt: string | null = null;
+  let latestWeeklyAt: string | null = null;
+  let resolvedTemplateLabel: string | null = null;
 
-  const history: AssetInspectionWithInspector[] = ((inspections ?? []) as Record<string, unknown>[]).map(
-    (item) => {
+  if (row.kind === "ppe") {
+    const { data: inspections, error: inspectionError } = await supabase
+      .from("asset_inspections")
+      .select(INSPECTION_WITH_INSPECTOR_SELECT)
+      .eq("asset_id", id)
+      .order("inspected_at", { ascending: false });
+
+    if (isMissingAssetsTable(inspectionError)) return <AssetsDatabaseSetup />;
+    if (inspectionError) throw inspectionError;
+
+    inspectionHistory = ((inspections ?? []) as Record<string, unknown>[]).map((item) => {
       const { inspector, ...rest } = item;
       return {
         ...(rest as Omit<AssetInspectionWithInspector, "inspector">),
@@ -105,10 +127,108 @@ export default async function AssetDetailPage({
             | undefined
         ),
       };
+    });
+    latestNextDue = inspectionHistory[0]?.next_due_on ?? null;
+  } else {
+    const checksResult = await supabase
+      .from("vehicle_checks")
+      .select(VEHICLE_CHECK_WITH_CHECKER_SELECT)
+      .eq("asset_id", id)
+      .order("checked_at", { ascending: false });
+
+    if (isMissingVehicleChecksTable(checksResult.error)) {
+      return (
+        <div className="container mx-auto max-w-3xl px-4 py-8">
+          <h1 className="mb-2 text-3xl font-bold">{row.name}</h1>
+          <p className="text-muted-foreground">
+            Vehicle checks are not set up yet. Run the vehicle check migrations in Supabase.
+          </p>
+          <Button variant="outline" asChild className="mt-4">
+            <Link href={listHref}>Back</Link>
+          </Button>
+        </div>
+      );
     }
-  );
-  const latestNextDue = history[0]?.next_due_on ?? null;
-  const listHref = row.kind === "ppe" ? "/assets/ppe" : "/assets/apparatus";
+    if (checksResult.error) throw checksResult.error;
+
+    const resolved = await resolveVehicleCheckTemplate(supabase, {
+      apparatus_type: row.apparatus_type,
+      vehicle_check_template_id: row.vehicle_check_template_id,
+    });
+
+    if (resolved) {
+      resolvedTemplateLabel = `${resolved.template.name} (${
+        resolved.source === "override" ? "unit override" : "type default"
+      })`;
+      const { data: items, error: itemsError } = await supabase
+        .from("vehicle_check_template_items")
+        .select(VEHICLE_CHECK_TEMPLATE_ITEM_SELECT)
+        .eq("template_id", resolved.template.id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+      if (isMissingVehicleChecksTable(itemsError)) {
+        return (
+          <div className="container mx-auto max-w-3xl px-4 py-8">
+            <h1 className="mb-2 text-3xl font-bold">{row.name}</h1>
+            <p className="text-muted-foreground">
+              Vehicle checks are not set up yet. Run the vehicle check migrations in Supabase.
+            </p>
+            <Button variant="outline" asChild className="mt-4">
+              <Link href={listHref}>Back</Link>
+            </Button>
+          </div>
+        );
+      }
+      if (itemsError) throw itemsError;
+      templateItems = (items ?? []) as VehicleCheckTemplateItem[];
+    }
+
+    const checkRows = ((checksResult.data ?? []) as Record<string, unknown>[]).map((item) => {
+      const { checker, ...rest } = item;
+      return {
+        ...(rest as Omit<VehicleCheckWithDetails, "checker" | "responses">),
+        checker: asSingleProfile(
+          checker as
+            | { id: string; display_name: string | null; email: string | null }
+            | { id: string; display_name: string | null; email: string | null }[]
+            | null
+            | undefined
+        ),
+        responses: [] as VehicleCheckResponse[],
+      };
+    });
+
+    const checkIds = checkRows.map((c) => c.id);
+    if (checkIds.length > 0) {
+      const { data: responses, error: responsesError } = await supabase
+        .from("vehicle_check_responses")
+        .select(VEHICLE_CHECK_RESPONSE_SELECT)
+        .in("vehicle_check_id", checkIds)
+        .order("sort_order", { ascending: true });
+
+      if (responsesError) throw responsesError;
+
+      const byCheck = new Map<string, VehicleCheckResponse[]>();
+      for (const response of (responses ?? []) as VehicleCheckResponse[]) {
+        const list = byCheck.get(response.vehicle_check_id) ?? [];
+        list.push(response);
+        byCheck.set(response.vehicle_check_id, list);
+      }
+
+      vehicleChecks = checkRows.map((check) => ({
+        ...check,
+        responses: byCheck.get(check.id) ?? [],
+      }));
+    } else {
+      vehicleChecks = checkRows;
+    }
+
+    for (const check of vehicleChecks) {
+      if (check.includes_daily && !latestDailyAt) latestDailyAt = check.checked_at;
+      if (check.includes_weekly && !latestWeeklyAt) latestWeeklyAt = check.checked_at;
+      if (latestDailyAt && latestWeeklyAt) break;
+    }
+  }
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -127,7 +247,7 @@ export default async function AssetDetailPage({
             {row.kind === "apparatus" && row.apparatus_type ? (
               <Badge variant="outline">{apparatusTypeLabel(row.apparatus_type)}</Badge>
             ) : null}
-            {isPast(latestNextDue) ? (
+            {row.kind === "ppe" && isPast(latestNextDue) ? (
               <Badge variant="destructive">Inspection overdue</Badge>
             ) : null}
             {row.kind === "ppe" && isPast(row.expires_on) ? (
@@ -189,6 +309,19 @@ export default async function AssetDetailPage({
                         {formatDate(row.expires_on)}
                       </dd>
                     </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Next inspection due
+                      </dt>
+                      <dd
+                        className={cn(
+                          "text-sm",
+                          isPast(latestNextDue) && "font-medium text-destructive"
+                        )}
+                      >
+                        {formatDate(latestNextDue)}
+                      </dd>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -199,8 +332,32 @@ export default async function AssetDetailPage({
                       <dd className="text-sm">{row.unit_number || "—"}</dd>
                     </div>
                     <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Build number
+                      </dt>
+                      <dd className="text-sm">{row.build_number || "—"}</dd>
+                    </div>
+                    <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">Year</dt>
                       <dd className="text-sm">{row.year ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Last daily check
+                      </dt>
+                      <dd className="text-sm">{formatTimestamp(latestDailyAt)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Last weekly check
+                      </dt>
+                      <dd className="text-sm">{formatTimestamp(latestWeeklyAt)}</dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Checklist template
+                      </dt>
+                      <dd className="text-sm">{resolvedTemplateLabel ?? "No checklist assigned"}</dd>
                     </div>
                   </>
                 )}
@@ -220,19 +377,6 @@ export default async function AssetDetailPage({
                   </dt>
                   <dd className="text-sm">{row.serial_number || "—"}</dd>
                 </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Next inspection due
-                  </dt>
-                  <dd
-                    className={cn(
-                      "text-sm",
-                      isPast(latestNextDue) && "font-medium text-destructive"
-                    )}
-                  >
-                    {formatDate(latestNextDue)}
-                  </dd>
-                </div>
               </dl>
               {row.notes ? (
                 <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">{row.notes}</p>
@@ -240,67 +384,89 @@ export default async function AssetDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Inspection history</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {history.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No inspections logged yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b text-muted-foreground">
-                        <th className="px-2 py-2 font-medium">Date</th>
-                        <th className="px-2 py-2 font-medium">Result</th>
-                        <th className="px-2 py-2 font-medium">Next due</th>
-                        <th className="px-2 py-2 font-medium">By</th>
-                        <th className="px-2 py-2 font-medium">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map((item) => (
-                        <tr key={item.id} className="border-b last:border-0">
-                          <td className="px-2 py-2 align-top whitespace-nowrap">
-                            {formatTimestamp(item.inspected_at)}
-                          </td>
-                          <td className="px-2 py-2 align-top">
-                            <Badge
-                              variant={
-                                item.result === "pass"
-                                  ? "secondary"
-                                  : item.result === "fail"
-                                    ? "destructive"
-                                    : "outline"
-                              }
-                            >
-                              {inspectionResultLabel(item.result)}
-                            </Badge>
-                          </td>
-                          <td
-                            className={cn(
-                              "px-2 py-2 align-top whitespace-nowrap",
-                              isPast(item.next_due_on) && "text-destructive"
-                            )}
-                          >
-                            {formatDate(item.next_due_on)}
-                          </td>
-                          <td className="px-2 py-2 align-top">{formatPerson(item.inspector)}</td>
-                          <td className="px-2 py-2 align-top text-muted-foreground">
-                            {item.notes || "—"}
-                          </td>
+          {row.kind === "ppe" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Inspection history</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {inspectionHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No inspections logged yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[520px] text-left text-sm">
+                      <thead>
+                        <tr className="border-b text-muted-foreground">
+                          <th className="px-2 py-2 font-medium">Date</th>
+                          <th className="px-2 py-2 font-medium">Result</th>
+                          <th className="px-2 py-2 font-medium">Next due</th>
+                          <th className="px-2 py-2 font-medium">By</th>
+                          <th className="px-2 py-2 font-medium">Notes</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </thead>
+                      <tbody>
+                        {inspectionHistory.map((item) => (
+                          <tr key={item.id} className="border-b last:border-0">
+                            <td className="px-2 py-2 align-top whitespace-nowrap">
+                              {formatTimestamp(item.inspected_at)}
+                            </td>
+                            <td className="px-2 py-2 align-top">
+                              <Badge
+                                variant={
+                                  item.result === "pass"
+                                    ? "secondary"
+                                    : item.result === "fail"
+                                      ? "destructive"
+                                      : "outline"
+                                }
+                              >
+                                {inspectionResultLabel(item.result)}
+                              </Badge>
+                            </td>
+                            <td
+                              className={cn(
+                                "px-2 py-2 align-top whitespace-nowrap",
+                                isPast(item.next_due_on) && "text-destructive"
+                              )}
+                            >
+                              {formatDate(item.next_due_on)}
+                            </td>
+                            <td className="px-2 py-2 align-top">{formatPerson(item.inspector)}</td>
+                            <td className="px-2 py-2 align-top text-muted-foreground">
+                              {item.notes || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <VehicleCheckHistory checks={vehicleChecks} />
+          )}
         </div>
 
-        {isAdmin ? <AssetInspectionForm assetId={row.id} /> : null}
+        {row.kind === "ppe"
+          ? isAdmin
+            ? <AssetInspectionForm assetId={row.id} />
+            : null
+          : templateItems.length === 0
+            ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Start vehicle check</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      No checklist assigned for this unit. An admin can set a type default template
+                      or assign a named template override on Edit.
+                    </p>
+                  </CardContent>
+                </Card>
+              )
+            : <VehicleCheckForm assetId={row.id} templateItems={templateItems} />}
       </div>
     </div>
   );

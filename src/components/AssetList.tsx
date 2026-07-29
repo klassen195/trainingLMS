@@ -22,6 +22,15 @@ function isExpired(date: string | null | undefined) {
   return isOverdue(date);
 }
 
+function formatCheckTime(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
 function assigneeName(asset: AssetListRow) {
   return asset.assignee?.display_name || asset.assignee?.email || "Unassigned";
 }
@@ -48,8 +57,10 @@ export function AssetList({
   return (
     <div className="space-y-3">
       {rows.map((asset) => {
-        const overdueInspection = isOverdue(asset.latest_next_due_on);
+        const overdueInspection = kind === "ppe" && isOverdue(asset.latest_next_due_on);
         const expired = kind === "ppe" && isExpired(asset.expires_on);
+        const lastDaily = formatCheckTime(asset.latest_daily_checked_at);
+        const lastWeekly = formatCheckTime(asset.latest_weekly_checked_at);
 
         return (
           <Card key={asset.id}>
@@ -80,21 +91,31 @@ export function AssetList({
                   ) : (
                     <>
                       {asset.unit_number ? <>Unit {asset.unit_number}</> : "No unit number"}
+                      {asset.build_number ? <> · Build {asset.build_number}</> : null}
                       {asset.year ? <> · {asset.year}</> : null}
                     </>
                   )}
                 </p>
-                {asset.latest_next_due_on ? (
-                  <p
-                    className={cn(
-                      "text-sm",
-                      overdueInspection ? "font-medium text-destructive" : "text-muted-foreground"
-                    )}
-                  >
-                    Next inspection due {asset.latest_next_due_on}
-                  </p>
+                {kind === "ppe" ? (
+                  asset.latest_next_due_on ? (
+                    <p
+                      className={cn(
+                        "text-sm",
+                        overdueInspection ? "font-medium text-destructive" : "text-muted-foreground"
+                      )}
+                    >
+                      Next inspection due {asset.latest_next_due_on}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No inspections logged</p>
+                  )
+                ) : lastDaily || lastWeekly ? (
+                  <div className="space-y-0.5 text-sm text-muted-foreground">
+                    <p>Last daily check: {lastDaily ?? "—"}</p>
+                    <p>Last weekly check: {lastWeekly ?? "—"}</p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No inspections logged</p>
+                  <p className="text-sm text-muted-foreground">No vehicle checks logged</p>
                 )}
               </div>
               <Button variant="outline" asChild>

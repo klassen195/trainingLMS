@@ -41,7 +41,7 @@ export default async function AssetsApparatusPage({
             <h1 className="text-4xl font-bold">Apparatus</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Unit roster, status, and inspection due dates by station.
+            Unit roster, status, and latest vehicle checks by station.
           </p>
         </div>
         {isAdmin ? (

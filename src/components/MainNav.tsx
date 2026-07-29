@@ -77,35 +77,46 @@ export function MainNav({ profile }: { profile: Profile | null }) {
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+      <div className="container relative mx-auto flex h-20 items-center px-4">
+        <Link href="/" className="relative z-10 flex shrink-0 items-center gap-3 hover:opacity-80 transition-opacity">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
             FD
           </div>
-          <span className="hidden sm:inline text-xl font-bold">TrainingLMS</span>
+          <span className="hidden lg:inline text-xl font-bold">TrainingLMS</span>
         </Link>
 
-        <div className="relative hidden md:flex items-center gap-2">
-          {allNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "inline-flex h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-                isActive(item.href) && "bg-accent text-accent-foreground"
-              )}
-            >
-              <item.icon className="mr-2 h-4 w-4" />
-              {item.label}
-            </Link>
-          ))}
+        <div className="absolute inset-x-0 hidden justify-center pointer-events-none md:flex">
+          <div className="pointer-events-auto flex items-center gap-1">
+            {allNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex w-[4.5rem] flex-col items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                  isActive(item.href) && "bg-accent text-accent-foreground"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-md border bg-background",
+                    isActive(item.href) && "border-primary bg-primary text-primary-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                </span>
+                <span className="text-center text-[10px] font-medium leading-tight">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
 
+        <div className="relative z-10 ml-auto hidden items-center gap-2 md:flex">
           {profile ? (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>{initials}</AvatarFallback>
+                <Button variant="ghost" className="relative h-10 w-10 rounded-md">
+                  <Avatar className="h-10 w-10 rounded-md">
+                    <AvatarFallback className="rounded-md">{initials}</AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
@@ -151,15 +162,15 @@ export function MainNav({ profile }: { profile: Profile | null }) {
           )}
         </div>
 
-        <div className="flex md:hidden items-center gap-2">
+        <div className="relative z-10 ml-auto flex items-center gap-2 md:hidden">
           {profile ? (
-            <Avatar className="h-8 w-8">
-              <AvatarFallback>{initials}</AvatarFallback>
+            <Avatar className="h-8 w-8 rounded-md">
+              <AvatarFallback className="rounded-md">{initials}</AvatarFallback>
             </Avatar>
           ) : null}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="rounded-md">
                 <Menu className="h-6 w-6" />
                 <span className="sr-only">Toggle menu</span>
               </Button>
@@ -169,66 +180,76 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                 <SheetTitle>Navigation</SheetTitle>
                 <SheetDescription>TrainingLMS menu</SheetDescription>
               </SheetHeader>
-              <div className="mt-8 flex flex-col gap-2">
+              <div className="mt-8 grid grid-cols-3 gap-3 px-1">
                 {allNavItems.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors hover:bg-accent",
-                      isActive(item.href) && "bg-accent"
+                      "flex flex-col items-center justify-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                      isActive(item.href) && "bg-accent text-accent-foreground"
                     )}
                   >
-                    <item.icon className="h-5 w-5" />
-                    {item.label}
+                    <span
+                      className={cn(
+                        "flex h-11 w-11 items-center justify-center rounded-md border bg-background",
+                        isActive(item.href) && "border-primary bg-primary text-primary-foreground"
+                      )}
+                    >
+                      <item.icon className="h-5 w-5" />
+                    </span>
+                    <span className="text-center text-xs font-medium leading-tight">{item.label}</span>
                   </Link>
                 ))}
                 {showAdmin ? (
                   <Link
                     href="/admin"
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors hover:bg-accent"
+                    className="flex flex-col items-center justify-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
-                    <Shield className="h-5 w-5" />
-                    Admin
+                    <span className="flex h-11 w-11 items-center justify-center rounded-md border bg-background">
+                      <Shield className="h-5 w-5" />
+                    </span>
+                    <span className="text-center text-xs font-medium leading-tight">Admin</span>
                   </Link>
                 ) : null}
                 {profile ? (
                   <Link
                     href="/account"
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors hover:bg-accent"
+                    className="flex flex-col items-center justify-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
-                    <UserRound className="h-5 w-5" />
-                    Account
+                    <span className="flex h-11 w-11 items-center justify-center rounded-md border bg-background">
+                      <UserRound className="h-5 w-5" />
+                    </span>
+                    <span className="text-center text-xs font-medium leading-tight">Account</span>
                   </Link>
                 ) : null}
-                {profile ? (
-                  <>
-                    <div className="my-2 border-t" />
-                    <div className="flex items-center gap-3 px-4 py-2">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback>{initials}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{displayName}</span>
-                        <span className="text-xs text-muted-foreground capitalize">{profile.role}</span>
-                      </div>
-                    </div>
-                    <Button variant="outline" className="mx-4" disabled={pending} onClick={handleSignOut}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sign out
-                    </Button>
-                  </>
-                ) : (
-                  <Button asChild className="mx-4">
-                    <Link href="/login" onClick={() => setMobileOpen(false)}>
-                      Sign in
-                    </Link>
-                  </Button>
-                )}
               </div>
+              {profile ? (
+                <div className="mt-6 space-y-3 border-t pt-4">
+                  <div className="flex items-center gap-3 px-1">
+                    <Avatar className="h-10 w-10 rounded-md">
+                      <AvatarFallback className="rounded-md">{initials}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{displayName}</span>
+                      <span className="text-xs text-muted-foreground capitalize">{profile.role}</span>
+                    </div>
+                  </div>
+                  <Button variant="outline" className="w-full" disabled={pending} onClick={handleSignOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </Button>
+                </div>
+              ) : (
+                <Button asChild className="mt-6 w-full">
+                  <Link href="/login" onClick={() => setMobileOpen(false)}>
+                    Sign in
+                  </Link>
+                </Button>
+              )}
             </SheetContent>
           </Sheet>
         </div>

@@ -54,6 +54,8 @@ export type AssetFormInput = {
   unit_number?: string;
   apparatus_type?: ApparatusType | null;
   year?: number | null;
+  build_number?: string;
+  vehicle_check_template_id?: string | null;
 };
 
 function buildAssetRow(input: AssetFormInput, createdBy?: string) {
@@ -74,6 +76,11 @@ function buildAssetRow(input: AssetFormInput, createdBy?: string) {
     unit_number: input.kind === "apparatus" ? emptyToNull(input.unit_number) : null,
     apparatus_type: input.kind === "apparatus" ? input.apparatus_type ?? null : null,
     year: input.kind === "apparatus" ? input.year ?? null : null,
+    build_number: input.kind === "apparatus" ? emptyToNull(input.build_number) : null,
+    vehicle_check_template_id:
+      input.kind === "apparatus"
+        ? emptyToNull(input.vehicle_check_template_id ?? undefined)
+        : null,
   };
 
   if (createdBy) {
