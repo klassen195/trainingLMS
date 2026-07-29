@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Package } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { ASSET_SELECT, type Asset } from "@/lib/assets-types";
+import { ASSET_SELECT, assetDisplayLabel, type Asset } from "@/lib/assets-types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import { AssetForm } from "@/components/AssetForm";
@@ -44,6 +44,13 @@ export default async function EditAssetPage({
     .order("name", { ascending: true });
   if (templatesError) throw templatesError;
 
+  const { data: assignedRows, error: assignedError } = await supabase
+    .from("asset_vehicle_check_templates")
+    .select("template_id")
+    .eq("asset_id", row.id)
+    .order("sort_order", { ascending: true });
+  if (assignedError) throw assignedError;
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -52,7 +59,7 @@ export default async function EditAssetPage({
             <Package className="h-8 w-8 text-primary" />
             <h1 className="text-4xl font-bold">Edit asset</h1>
           </div>
-          <p className="text-lg text-muted-foreground">{row.name}</p>
+          <p className="text-lg text-muted-foreground">{assetDisplayLabel(row)}</p>
         </div>
         <Button variant="outline" asChild>
           <Link href={`/assets/${row.id}`}>Cancel</Link>
@@ -72,6 +79,7 @@ export default async function EditAssetPage({
             asset={row}
             profiles={profiles ?? []}
             checkTemplates={checkTemplates ?? []}
+            assignedCheckTemplateIds={(assignedRows ?? []).map((row) => row.template_id)}
           />
         </CardContent>
       </Card>

@@ -20,7 +20,7 @@ import {
   ppeCategoryLabel,
 } from "@/lib/labels";
 import { Button } from "@/components/ui/Button";
-import { FieldError, FieldLabel } from "@/components/ui/Field";
+import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 
 export type ProfileOption = {
@@ -39,6 +39,7 @@ export function AssetForm({
   asset,
   profiles,
   checkTemplates = [],
+  assignedCheckTemplateIds = [],
 }: {
   mode: "create" | "edit";
   kind: AssetKind;
@@ -48,10 +49,11 @@ export function AssetForm({
     VehicleCheckTemplate,
     "id" | "name" | "apparatus_type" | "is_type_default"
   >[];
+  assignedCheckTemplateIds?: string[];
 }) {
   const [name, setName] = useState(asset?.name ?? "");
   const [status, setStatus] = useState<AssetStatus>(asset?.status ?? "in_service");
-  const [station, setStation] = useState(asset?.station ?? ASSET_STATIONS[0]);
+  const [station, setStation] = useState(asset?.station ?? (kind === "ppe" ? ASSET_STATIONS[0] : ""));
   const [manufacturer, setManufacturer] = useState(asset?.manufacturer ?? "");
   const [model, setModel] = useState(asset?.model ?? "");
   const [serialNumber, setSerialNumber] = useState(asset?.serial_number ?? "");
@@ -62,13 +64,13 @@ export function AssetForm({
   const [manufacturedOn, setManufacturedOn] = useState(asset?.manufactured_on ?? "");
   const [expiresOn, setExpiresOn] = useState(asset?.expires_on ?? "");
   const [unitNumber, setUnitNumber] = useState(asset?.unit_number ?? "");
-  const [apparatusType, setApparatusType] = useState<ApparatusType>(
-    asset?.apparatus_type ?? "engine"
+  const [apparatusType, setApparatusType] = useState<ApparatusType | "">(
+    asset?.apparatus_type ?? ""
   );
   const [year, setYear] = useState(asset?.year?.toString() ?? "");
   const [buildNumber, setBuildNumber] = useState(asset?.build_number ?? "");
-  const [vehicleCheckTemplateId, setVehicleCheckTemplateId] = useState(
-    asset?.vehicle_check_template_id ?? ""
+  const [vehicleCheckTemplateIds, setVehicleCheckTemplateIds] = useState<string[]>(
+    assignedCheckTemplateIds
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -76,7 +78,7 @@ export function AssetForm({
   function buildInput(): AssetFormInput {
     return {
       kind,
-      name,
+      name: kind === "ppe" ? name : undefined,
       status,
       station,
       manufacturer,
@@ -89,11 +91,17 @@ export function AssetForm({
       manufactured_on: manufacturedOn || null,
       expires_on: expiresOn || null,
       unit_number: unitNumber,
-      apparatus_type: kind === "apparatus" ? apparatusType : null,
+      apparatus_type: kind === "apparatus" && apparatusType ? apparatusType : null,
       year: year ? Number(year) : null,
       build_number: buildNumber,
-      vehicle_check_template_id: kind === "apparatus" ? vehicleCheckTemplateId || null : null,
+      vehicle_check_template_ids: kind === "apparatus" ? vehicleCheckTemplateIds : [],
     };
+  }
+
+  function toggleTemplate(id: string) {
+    setVehicleCheckTemplateIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
   }
 
   return (
@@ -123,10 +131,24 @@ export function AssetForm({
         });
       }}
     >
-      <div className="space-y-2">
-        <FieldLabel htmlFor="name">Name</FieldLabel>
-        <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
+      {kind === "ppe" ? (
+        <div className="space-y-2">
+          <FieldLabel htmlFor="name">Name</FieldLabel>
+          <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <FieldLabel htmlFor="build_number">Build number</FieldLabel>
+          <Input
+            id="build_number"
+            required
+            value={buildNumber}
+            onChange={(e) => setBuildNumber(e.target.value)}
+            placeholder="e.g. 0V95"
+          />
+          <FieldHint>Required. This identifies the apparatus chassis.</FieldHint>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -145,7 +167,13 @@ export function AssetForm({
         </div>
         <div className="space-y-2">
           <FieldLabel htmlFor="station">Station</FieldLabel>
-          <Select id="station" value={station} onChange={(e) => setStation(e.target.value)}>
+          <Select
+            id="station"
+            value={station}
+            required={kind === "ppe"}
+            onChange={(e) => setStation(e.target.value)}
+          >
+            {kind === "apparatus" ? <option value="">Unassigned</option> : null}
             {ASSET_STATIONS.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -215,14 +243,28 @@ export function AssetForm({
         </>
       ) : (
         <>
+          <div className="space-y-2">
+            <FieldLabel htmlFor="unit_number">Unit number</FieldLabel>
+            <Input
+              id="unit_number"
+              value={unitNumber}
+              onChange={(e) => setUnitNumber(e.target.value)}
+              placeholder="e.g. E1"
+            />
+            <FieldHint>
+              Optional call sign. Moving a unit here clears it from any other build and records
+              assignment history.
+            </FieldHint>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <FieldLabel htmlFor="apparatus_type">Apparatus type</FieldLabel>
               <Select
                 id="apparatus_type"
                 value={apparatusType}
-                onChange={(e) => setApparatusType(e.target.value as ApparatusType)}
+                onChange={(e) => setApparatusType(e.target.value as ApparatusType | "")}
               >
+                <option value="">Unspecified</option>
                 {apparatusTypes.map((t) => (
                   <option key={t} value={t}>
                     {apparatusTypeLabel(t)}
@@ -242,47 +284,34 @@ export function AssetForm({
               />
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <FieldLabel htmlFor="unit_number">Unit number</FieldLabel>
-              <Input
-                id="unit_number"
-                value={unitNumber}
-                onChange={(e) => setUnitNumber(e.target.value)}
-                placeholder="e.g. E1"
-              />
-            </div>
-            <div className="space-y-2">
-              <FieldLabel htmlFor="build_number">Build number</FieldLabel>
-              <Input
-                id="build_number"
-                value={buildNumber}
-                onChange={(e) => setBuildNumber(e.target.value)}
-                placeholder="e.g. 0V95"
-              />
-            </div>
-          </div>
           <div className="space-y-2">
-            <FieldLabel htmlFor="vehicle_check_template_id">Checklist template</FieldLabel>
-            <Select
-              id="vehicle_check_template_id"
-              value={vehicleCheckTemplateId}
-              onChange={(e) => setVehicleCheckTemplateId(e.target.value)}
-            >
-              <option value="">Type default</option>
-              {checkTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                  {template.apparatus_type
-                    ? ` (${apparatusTypeLabel(template.apparatus_type)})`
-                    : ""}
-                  {template.is_type_default ? " · type default" : ""}
-                </option>
-              ))}
-            </Select>
+            <FieldLabel>Checklist templates</FieldLabel>
+            {checkTemplates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No templates yet.</p>
+            ) : (
+              <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-3">
+                {checkTemplates.map((template) => (
+                  <label key={template.id} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={vehicleCheckTemplateIds.includes(template.id)}
+                      onChange={() => toggleTemplate(template.id)}
+                    />
+                    <span>
+                      {template.name}
+                      {template.apparatus_type
+                        ? ` (${apparatusTypeLabel(template.apparatus_type)})`
+                        : ""}
+                      {template.is_type_default ? " · type default" : ""}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              Leave as Type default to use the checklist marked default for this apparatus type.
-              Pick a named template to override for this unit only.
+              Leave none selected to inherit all type-default templates for this apparatus type.
+              Selecting any list replaces those defaults for this build only.
             </p>
           </div>
         </>

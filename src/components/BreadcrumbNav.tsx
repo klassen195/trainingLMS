@@ -11,6 +11,7 @@ import {
   ClipboardList,
   ArrowLeftRight,
   Package,
+  ClipboardPen,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -99,6 +100,12 @@ export function BreadcrumbNav() {
           label: "EMS QI",
           href: isLast ? undefined : "/ems-qi",
           icon: <ClipboardList className="h-4 w-4" />,
+        });
+      } else if (path === "document-training") {
+        breadcrumbs.push({
+          label: "Document Training",
+          href: isLast ? undefined : "/document-training",
+          icon: <ClipboardPen className="h-4 w-4" />,
         });
       } else if (!isLast || paths[index - 1] !== "programs") {
         breadcrumbs.push({

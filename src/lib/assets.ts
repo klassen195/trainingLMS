@@ -47,7 +47,7 @@ export async function fetchAssetsWithLatestInspection(
     .from("assets")
     .select(ASSET_WITH_ASSIGNEE_SELECT)
     .eq("kind", kind)
-    .order("name", { ascending: true });
+    .order(kind === "apparatus" ? "build_number" : "name", { ascending: true });
 
   if (options?.station) {
     query = query.eq("station", options.station);

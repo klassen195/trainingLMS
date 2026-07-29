@@ -1,6 +1,8 @@
 import type { AssetListRow } from "@/lib/assets-types";
+import { assetDisplayLabel } from "@/lib/assets-types";
 import {
   apparatusTypeLabel,
+  assetStatusBadgeClass,
   assetStatusLabel,
   ppeCategoryLabel,
 } from "@/lib/labels";
@@ -67,20 +69,32 @@ export function AssetList({
             <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
               <div className="min-w-0 space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{assetStatusLabel(asset.status)}</Badge>
+                  <Badge className={assetStatusBadgeClass(asset.status)}>
+                    {assetStatusLabel(asset.status)}
+                  </Badge>
                   {kind === "ppe" && asset.ppe_category ? (
                     <Badge variant="outline">{ppeCategoryLabel(asset.ppe_category)}</Badge>
                   ) : null}
                   {kind === "apparatus" && asset.apparatus_type ? (
                     <Badge variant="outline">{apparatusTypeLabel(asset.apparatus_type)}</Badge>
                   ) : null}
-                  <Badge variant="outline">{asset.station}</Badge>
+                  {asset.station ? <Badge variant="outline">{asset.station}</Badge> : null}
+                  {kind === "apparatus" && asset.unit_number && asset.build_number ? (
+                    <Badge variant="outline">{asset.build_number}</Badge>
+                  ) : null}
                   {overdueInspection ? (
                     <Badge variant="destructive">Inspection overdue</Badge>
                   ) : null}
                   {expired ? <Badge variant="destructive">Expired</Badge> : null}
                 </div>
-                <CardTitle className="truncate">{asset.name}</CardTitle>
+                <CardTitle className="truncate">
+                  <Link
+                    href={`/assets/${asset.id}`}
+                    className="focus-visible:outline-none"
+                  >
+                    {assetDisplayLabel(asset)}
+                  </Link>
+                </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   {kind === "ppe" ? (
                     <>
@@ -90,8 +104,9 @@ export function AssetList({
                     </>
                   ) : (
                     <>
-                      {asset.unit_number ? <>Unit {asset.unit_number}</> : "No unit number"}
-                      {asset.build_number ? <> · Build {asset.build_number}</> : null}
+                      {asset.unit_number
+                        ? <>{asset.build_number || "—"}</>
+                        : "No unit assigned"}
                       {asset.year ? <> · {asset.year}</> : null}
                     </>
                   )}

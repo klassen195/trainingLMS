@@ -4,7 +4,13 @@ import { useTransition } from "react";
 import { deleteAsset } from "@/app/assets/actions";
 import { Button } from "@/components/ui/Button";
 
-export function DeleteAssetButton({ assetId, name }: { assetId: string; name: string }) {
+export function DeleteAssetButton({
+  assetId,
+  label,
+}: {
+  assetId: string;
+  label: string;
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -14,7 +20,7 @@ export function DeleteAssetButton({ assetId, name }: { assetId: string; name: st
       disabled={pending}
       className="border-destructive text-destructive hover:bg-destructive/10"
       onClick={() => {
-        if (!window.confirm(`Delete “${name}”? This cannot be undone.`)) return;
+        if (!window.confirm(`Delete “${label}”? This cannot be undone.`)) return;
         startTransition(async () => {
           try {
             await deleteAsset(assetId);

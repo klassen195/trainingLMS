@@ -1,14 +1,23 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   createVehicleCheckTemplate,
   deleteVehicleCheckTemplate,
   updateVehicleCheckTemplate,
 } from "@/app/assets/vehicle-check-actions";
 import type { ApparatusType } from "@/lib/assets-types";
-import type { VehicleCheckTemplate } from "@/lib/vehicle-checks-types";
-import { apparatusTypeLabel, apparatusTypes } from "@/lib/labels";
+import type {
+  VehicleChecklistKind,
+  VehicleCheckTemplate,
+} from "@/lib/vehicle-checks-types";
+import {
+  apparatusTypeLabel,
+  apparatusTypes,
+  vehicleChecklistKindLabel,
+  vehicleChecklistKinds,
+} from "@/lib/labels";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
@@ -17,6 +26,7 @@ export function CreateVehicleCheckTemplateForm() {
   const [name, setName] = useState("");
   const [apparatusType, setApparatusType] = useState<"" | ApparatusType>("");
   const [isTypeDefault, setIsTypeDefault] = useState(false);
+  const [checklistKind, setChecklistKind] = useState<VehicleChecklistKind>("check");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -32,6 +42,7 @@ export function CreateVehicleCheckTemplateForm() {
               name,
               apparatusType: apparatusType || null,
               isTypeDefault,
+              checklistKind,
             });
           } catch (err) {
             if (
@@ -58,6 +69,24 @@ export function CreateVehicleCheckTemplateForm() {
           placeholder="e.g. Engine checklist"
           onChange={(e) => setName(e.target.value)}
         />
+      </div>
+      <div className="space-y-2">
+        <FieldLabel htmlFor="new-template-kind">Checklist type</FieldLabel>
+        <Select
+          id="new-template-kind"
+          value={checklistKind}
+          disabled={pending}
+          onChange={(e) => setChecklistKind(e.target.value as VehicleChecklistKind)}
+        >
+          {vehicleChecklistKinds.map((kind) => (
+            <option key={kind} value={kind}>
+              {vehicleChecklistKindLabel(kind)}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Check uses Pass/Fail with Daily/Weekly. Swap uses Moved / Not moved / N/A.
+        </p>
       </div>
       <div className="space-y-2">
         <FieldLabel htmlFor="new-template-type">Apparatus type</FieldLabel>
@@ -101,11 +130,15 @@ export function VehicleCheckTemplateSettings({
 }: {
   template: VehicleCheckTemplate;
 }) {
+  const router = useRouter();
   const [name, setName] = useState(template.name);
   const [apparatusType, setApparatusType] = useState<"" | ApparatusType>(
     template.apparatus_type ?? ""
   );
   const [isTypeDefault, setIsTypeDefault] = useState(template.is_type_default);
+  const [checklistKind, setChecklistKind] = useState<VehicleChecklistKind>(
+    template.checklist_kind
+  );
   const [notes, setNotes] = useState(template.notes);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -124,8 +157,10 @@ export function VehicleCheckTemplateSettings({
                 name,
                 apparatusType: apparatusType || null,
                 isTypeDefault,
+                checklistKind,
                 notes,
               });
+              router.refresh();
             } catch (err) {
               setError(err instanceof Error ? err.message : "Failed to save template");
             }
@@ -142,6 +177,25 @@ export function VehicleCheckTemplateSettings({
             disabled={pending}
             onChange={(e) => setName(e.target.value)}
           />
+        </div>
+        <div className="space-y-2">
+          <FieldLabel htmlFor="template-kind">Checklist type</FieldLabel>
+          <Select
+            id="template-kind"
+            value={checklistKind}
+            disabled={pending}
+            onChange={(e) => setChecklistKind(e.target.value as VehicleChecklistKind)}
+          >
+            {vehicleChecklistKinds.map((kind) => (
+              <option key={kind} value={kind}>
+                {vehicleChecklistKindLabel(kind)}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Check uses Pass/Fail with Daily/Weekly. Swap uses Moved / Not moved / N/A.
+            Changing type converts matching item response types.
+          </p>
         </div>
         <div className="space-y-2">
           <FieldLabel htmlFor="template-type">Apparatus type</FieldLabel>

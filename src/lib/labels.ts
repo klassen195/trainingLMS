@@ -8,6 +8,7 @@ import type {
   VehicleCheckFieldType,
   VehicleCheckItemResult,
   VehicleCheckLevel,
+  VehicleChecklistKind,
   VehicleCheckType,
 } from "@/lib/vehicle-checks-types";
 import type { ProgramTag, UserRole } from "@/lib/training-lms-types";
@@ -70,13 +71,22 @@ const vehicleCheckTypeLabels: Record<VehicleCheckType, string> = {
 
 const vehicleCheckFieldTypeLabels: Record<VehicleCheckFieldType, string> = {
   pass_fail: "Pass / Fail",
+  moved_status: "Moved / Not moved",
   level: "Level",
   short_answer: "Short answer",
+};
+
+const vehicleChecklistKindLabels: Record<VehicleChecklistKind, string> = {
+  check: "Check",
+  swap: "Swap",
 };
 
 const vehicleCheckItemResultLabels: Record<VehicleCheckItemResult, string> = {
   pass: "Pass",
   fail: "Fail",
+  moved: "Moved",
+  not_moved: "Not moved",
+  not_applicable: "N/A",
 };
 
 const vehicleCheckLevelLabels: Record<VehicleCheckLevel, string> = {
@@ -122,6 +132,19 @@ export function assetStatusLabel(status: AssetStatus) {
   return assetStatusLabels[status];
 }
 
+export function assetStatusBadgeClass(status: AssetStatus) {
+  switch (status) {
+    case "in_service":
+      return "border-transparent bg-emerald-100 text-emerald-800";
+    case "out_of_service":
+      return "border-transparent bg-red-100 text-red-800";
+    case "reserve":
+      return "border-transparent bg-amber-100 text-amber-900";
+    case "retired":
+      return "border-transparent bg-slate-200 text-slate-700";
+  }
+}
+
 export function ppeCategoryLabel(category: PpeCategory) {
   return ppeCategoryLabels[category];
 }
@@ -142,6 +165,10 @@ export function vehicleCheckFieldTypeLabel(type: VehicleCheckFieldType) {
   return vehicleCheckFieldTypeLabels[type];
 }
 
+export function vehicleChecklistKindLabel(kind: VehicleChecklistKind) {
+  return vehicleChecklistKindLabels[kind];
+}
+
 export function vehicleCheckItemResultLabel(result: VehicleCheckItemResult) {
   return vehicleCheckItemResultLabels[result];
 }
@@ -155,9 +182,23 @@ export const ppeCategories = Object.keys(ppeCategoryLabels) as PpeCategory[];
 export const apparatusTypes = Object.keys(apparatusTypeLabels) as ApparatusType[];
 export const inspectionResults = Object.keys(inspectionResultLabels) as InspectionResult[];
 export const vehicleCheckTypes = Object.keys(vehicleCheckTypeLabels) as VehicleCheckType[];
+export const vehicleChecklistKinds = Object.keys(
+  vehicleChecklistKindLabels
+) as VehicleChecklistKind[];
 export const vehicleCheckFieldTypes = Object.keys(
   vehicleCheckFieldTypeLabels
 ) as VehicleCheckFieldType[];
+
+export function fieldTypesForChecklistKind(kind: VehicleChecklistKind): VehicleCheckFieldType[] {
+  if (kind === "swap") {
+    return ["moved_status", "level", "short_answer"];
+  }
+  return ["pass_fail", "level", "short_answer"];
+}
+
+export function defaultFieldTypeForChecklistKind(kind: VehicleChecklistKind): VehicleCheckFieldType {
+  return kind === "swap" ? "moved_status" : "pass_fail";
+}
 export const vehicleCheckItemResults = Object.keys(
   vehicleCheckItemResultLabels
 ) as VehicleCheckItemResult[];

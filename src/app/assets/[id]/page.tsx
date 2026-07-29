@@ -5,13 +5,19 @@ import { requireUserProfile } from "@/lib/auth";
 import {
   ASSET_WITH_ASSIGNEE_SELECT,
   INSPECTION_WITH_INSPECTOR_SELECT,
+  UNIT_ASSIGNMENT_WITH_ACTOR_SELECT,
+  assetDisplayLabel,
+  type ApparatusUnitAssignmentWithActor,
   type AssetInspectionWithInspector,
   type AssetWithAssignee,
 } from "@/lib/assets-types";
-import { asSingleProfile } from "@/lib/assets";
-import { resolveVehicleCheckTemplate } from "@/lib/vehicle-checks";
+import {
+  resolveVehicleCheckTemplates,
+  type ResolvedVehicleCheckTemplate,
+} from "@/lib/vehicle-checks";
 import {
   apparatusTypeLabel,
+  assetStatusBadgeClass,
   assetStatusLabel,
   inspectionResultLabel,
   ppeCategoryLabel,
@@ -27,6 +33,7 @@ import {
   type VehicleCheckResponse,
   type VehicleCheckWithDetails,
 } from "@/lib/vehicle-checks-types";
+import { asSingleProfile } from "@/lib/assets";
 import { AssetInspectionForm } from "@/components/AssetInspectionForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { DeleteAssetButton } from "@/components/DeleteAssetButton";
@@ -100,10 +107,10 @@ export default async function AssetDetailPage({
   let inspectionHistory: AssetInspectionWithInspector[] = [];
   let latestNextDue: string | null = null;
   let vehicleChecks: VehicleCheckWithDetails[] = [];
-  let templateItems: VehicleCheckTemplateItem[] = [];
   let latestDailyAt: string | null = null;
   let latestWeeklyAt: string | null = null;
-  let resolvedTemplateLabel: string | null = null;
+  let resolvedChecklists: ResolvedVehicleCheckTemplate[] = [];
+  let unitAssignments: ApparatusUnitAssignmentWithActor[] = [];
 
   if (row.kind === "ppe") {
     const { data: inspections, error: inspectionError } = await supabase
@@ -133,13 +140,13 @@ export default async function AssetDetailPage({
     const checksResult = await supabase
       .from("vehicle_checks")
       .select(VEHICLE_CHECK_WITH_CHECKER_SELECT)
-      .eq("asset_id", id)
+      .or(`asset_id.eq.${id},swap_destination_asset_id.eq.${id}`)
       .order("checked_at", { ascending: false });
 
     if (isMissingVehicleChecksTable(checksResult.error)) {
       return (
         <div className="container mx-auto max-w-3xl px-4 py-8">
-          <h1 className="mb-2 text-3xl font-bold">{row.name}</h1>
+          <h1 className="mb-2 text-3xl font-bold">{assetDisplayLabel(row)}</h1>
           <p className="text-muted-foreground">
             Vehicle checks are not set up yet. Run the vehicle check migrations in Supabase.
           </p>
@@ -151,42 +158,19 @@ export default async function AssetDetailPage({
     }
     if (checksResult.error) throw checksResult.error;
 
-    const resolved = await resolveVehicleCheckTemplate(supabase, {
+    const resolved = await resolveVehicleCheckTemplates(supabase, {
+      id: row.id,
       apparatus_type: row.apparatus_type,
-      vehicle_check_template_id: row.vehicle_check_template_id,
     });
-
-    if (resolved) {
-      resolvedTemplateLabel = `${resolved.template.name} (${
-        resolved.source === "override" ? "unit override" : "type default"
-      })`;
-      const { data: items, error: itemsError } = await supabase
-        .from("vehicle_check_template_items")
-        .select(VEHICLE_CHECK_TEMPLATE_ITEM_SELECT)
-        .eq("template_id", resolved.template.id)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-      if (isMissingVehicleChecksTable(itemsError)) {
-        return (
-          <div className="container mx-auto max-w-3xl px-4 py-8">
-            <h1 className="mb-2 text-3xl font-bold">{row.name}</h1>
-            <p className="text-muted-foreground">
-              Vehicle checks are not set up yet. Run the vehicle check migrations in Supabase.
-            </p>
-            <Button variant="outline" asChild className="mt-4">
-              <Link href={listHref}>Back</Link>
-            </Button>
-          </div>
-        );
-      }
-      if (itemsError) throw itemsError;
-      templateItems = (items ?? []) as VehicleCheckTemplateItem[];
-    }
+    resolvedChecklists = resolved;
 
     const checkRows = ((checksResult.data ?? []) as Record<string, unknown>[]).map((item) => {
-      const { checker, ...rest } = item;
+      const { checker, template, swap_source, swap_destination, ...rest } = item;
       return {
-        ...(rest as Omit<VehicleCheckWithDetails, "checker" | "responses">),
+        ...(rest as Omit<
+          VehicleCheckWithDetails,
+          "checker" | "template" | "swap_source" | "swap_destination" | "responses"
+        >),
         checker: asSingleProfile(
           checker as
             | { id: string; display_name: string | null; email: string | null }
@@ -194,6 +178,29 @@ export default async function AssetDetailPage({
             | null
             | undefined
         ),
+        template: (Array.isArray(template)
+          ? template[0] ?? null
+          : template ?? null) as {
+          id: string;
+          name: string;
+          checklist_kind?: "check" | "swap";
+        } | null,
+        swap_source: (Array.isArray(swap_source)
+          ? swap_source[0] ?? null
+          : swap_source ?? null) as {
+          id: string;
+          name: string | null;
+          unit_number: string | null;
+          build_number: string | null;
+        } | null,
+        swap_destination: (Array.isArray(swap_destination)
+          ? swap_destination[0] ?? null
+          : swap_destination ?? null) as {
+          id: string;
+          name: string | null;
+          unit_number: string | null;
+          build_number: string | null;
+        } | null,
         responses: [] as VehicleCheckResponse[],
       };
     });
@@ -224,9 +231,38 @@ export default async function AssetDetailPage({
     }
 
     for (const check of vehicleChecks) {
+      // Incoming swaps on this unit shouldn't drive daily/weekly "last checked" stamps.
+      if (check.asset_id !== row.id) continue;
       if (check.includes_daily && !latestDailyAt) latestDailyAt = check.checked_at;
       if (check.includes_weekly && !latestWeeklyAt) latestWeeklyAt = check.checked_at;
       if (latestDailyAt && latestWeeklyAt) break;
+    }
+
+    const { data: assignments, error: assignmentsError } = await supabase
+      .from("apparatus_unit_assignments")
+      .select(UNIT_ASSIGNMENT_WITH_ACTOR_SELECT)
+      .eq("asset_id", id)
+      .order("assigned_at", { ascending: false });
+
+    if (assignmentsError && !isMissingAssetsTable(assignmentsError)) {
+      // Table may not exist until migration is applied; ignore missing-table soft fail via message
+      if (!assignmentsError.message.includes("apparatus_unit_assignments")) {
+        throw assignmentsError;
+      }
+    } else if (!assignmentsError) {
+      unitAssignments = ((assignments ?? []) as Record<string, unknown>[]).map((item) => {
+        const { actor, ...rest } = item;
+        return {
+          ...(rest as Omit<ApparatusUnitAssignmentWithActor, "actor">),
+          actor: asSingleProfile(
+            actor as
+              | { id: string; display_name: string | null; email: string | null }
+              | { id: string; display_name: string | null; email: string | null }[]
+              | null
+              | undefined
+          ),
+        };
+      });
     }
   }
 
@@ -236,16 +272,21 @@ export default async function AssetDetailPage({
         <div>
           <div className="mb-2 flex items-center gap-3">
             <Package className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold">{row.name}</h1>
+            <h1 className="text-4xl font-bold">{assetDisplayLabel(row)}</h1>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{assetStatusLabel(row.status)}</Badge>
-            <Badge variant="outline">{row.station}</Badge>
+            <Badge className={assetStatusBadgeClass(row.status)}>
+              {assetStatusLabel(row.status)}
+            </Badge>
+            {row.station ? <Badge variant="outline">{row.station}</Badge> : null}
             {row.kind === "ppe" && row.ppe_category ? (
               <Badge variant="outline">{ppeCategoryLabel(row.ppe_category)}</Badge>
             ) : null}
             {row.kind === "apparatus" && row.apparatus_type ? (
               <Badge variant="outline">{apparatusTypeLabel(row.apparatus_type)}</Badge>
+            ) : null}
+            {row.kind === "apparatus" && row.unit_number && row.build_number ? (
+              <Badge variant="outline">{row.build_number}</Badge>
             ) : null}
             {row.kind === "ppe" && isPast(latestNextDue) ? (
               <Badge variant="destructive">Inspection overdue</Badge>
@@ -264,7 +305,7 @@ export default async function AssetDetailPage({
               <Button variant="outline" asChild>
                 <Link href={`/assets/${row.id}/edit`}>Edit</Link>
               </Button>
-              <DeleteAssetButton assetId={row.id} name={row.name} />
+              <DeleteAssetButton assetId={row.id} label={assetDisplayLabel(row)} />
             </>
           ) : null}
         </div>
@@ -327,15 +368,15 @@ export default async function AssetDetailPage({
                   <>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Unit number
-                      </dt>
-                      <dd className="text-sm">{row.unit_number || "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                         Build number
                       </dt>
                       <dd className="text-sm">{row.build_number || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Current unit
+                      </dt>
+                      <dd className="text-sm">{row.unit_number || "—"}</dd>
                     </div>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">Year</dt>
@@ -355,9 +396,20 @@ export default async function AssetDetailPage({
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Checklist template
+                        Checklists
                       </dt>
-                      <dd className="text-sm">{resolvedTemplateLabel ?? "No checklist assigned"}</dd>
+                      <dd className="text-sm">
+                        {resolvedChecklists.length === 0
+                          ? "No checklist assigned"
+                          : resolvedChecklists
+                              .map(
+                                (item) =>
+                                  `${item.template.name} (${
+                                    item.source === "unit" ? "build list" : "type default"
+                                  })`
+                              )
+                              .join(", ")}
+                      </dd>
                     </div>
                   </>
                 )}
@@ -444,29 +496,89 @@ export default async function AssetDetailPage({
               </CardContent>
             </Card>
           ) : (
-            <VehicleCheckHistory checks={vehicleChecks} />
+            <>
+              <VehicleCheckHistory assetId={row.id} checks={vehicleChecks} />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Unit assignment history</CardTitle>
+                  <p className="text-sm font-normal text-muted-foreground">
+                    Call signs that have been assigned to this apparatus. An open row means that
+                    unit is still on this build.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {unitAssignments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No unit numbers have been assigned to this apparatus yet.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[320px] text-left text-sm">
+                        <thead>
+                          <tr className="border-b text-muted-foreground">
+                            <th className="px-2 py-2 font-medium">Unit</th>
+                            <th className="px-2 py-2 font-medium">From</th>
+                            <th className="px-2 py-2 font-medium">To</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unitAssignments.map((item) => (
+                            <tr key={item.id} className="border-b last:border-0">
+                              <td className="px-2 py-2 align-top font-medium">{item.unit_number}</td>
+                              <td className="px-2 py-2 align-top whitespace-nowrap">
+                                {formatDate(item.assigned_at)}
+                              </td>
+                              <td className="px-2 py-2 align-top whitespace-nowrap">
+                                {item.unassigned_at ? (
+                                  formatDate(item.unassigned_at)
+                                ) : (
+                                  <Badge variant="secondary">Still assigned</Badge>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
           )}
         </div>
 
-        {row.kind === "ppe"
-          ? isAdmin
-            ? <AssetInspectionForm assetId={row.id} />
-            : null
-          : templateItems.length === 0
-            ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Start vehicle check</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      No checklist assigned for this unit. An admin can set a type default template
-                      or assign a named template override on Edit.
-                    </p>
-                  </CardContent>
-                </Card>
-              )
-            : <VehicleCheckForm assetId={row.id} templateItems={templateItems} />}
+        {row.kind === "ppe" ? (
+          isAdmin ? (
+            <AssetInspectionForm assetId={row.id} />
+          ) : null
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Vehicle checks</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {resolvedChecklists.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No checklist assigned for this build. An admin can set type defaults or assign
+                  named templates on Edit.
+                </p>
+              ) : (
+                resolvedChecklists.map((item) => (
+                  <Button
+                    key={item.template.id}
+                    variant="primary"
+                    asChild
+                    className="w-full bg-[#C11B2B] text-white"
+                  >
+                    <Link href={`/assets/${row.id}/vehicle-check/${item.template.id}`}>
+                      {item.template.name}
+                    </Link>
+                  </Button>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

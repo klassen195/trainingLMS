@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
-import { ASSET_SELECT, type Asset } from "@/lib/assets-types";
-import { resolveVehicleCheckTemplate } from "@/lib/vehicle-checks";
+import { ASSET_SELECT, assetDisplayLabel, type Asset } from "@/lib/assets-types";
+import { resolveVehicleCheckTemplateForUnit } from "@/lib/vehicle-checks";
 import {
   VEHICLE_CHECK_TEMPLATE_ITEM_SELECT,
   type VehicleCheckTemplateItem,
@@ -23,10 +23,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 export default async function VehicleCheckPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; templateId: string }>;
 }) {
   await requireUserProfile();
-  const { id } = await params;
+  const { id, templateId } = await params;
   const supabase = await createSupabaseServerClient();
 
   const { data: asset, error } = await supabase
@@ -44,21 +44,21 @@ export default async function VehicleCheckPage({
     redirect(`/assets/${row.id}`);
   }
 
-  const resolved = await resolveVehicleCheckTemplate(supabase, {
-    apparatus_type: row.apparatus_type,
-    vehicle_check_template_id: row.vehicle_check_template_id,
-  });
+  const resolved = await resolveVehicleCheckTemplateForUnit(
+    supabase,
+    { id: row.id, apparatus_type: row.apparatus_type },
+    templateId
+  );
 
   if (!resolved) {
     return (
       <div className="container mx-auto max-w-3xl px-4 py-8">
-        <h1 className="mb-2 text-3xl font-bold">Vehicle check</h1>
+        <h1 className="mb-2 text-3xl font-bold">Checklist</h1>
         <p className="text-muted-foreground">
-          No checklist assigned for this unit. An admin can set a type default template or assign a
-          named template override on Edit.
+          This checklist is not assigned to this unit.
         </p>
         <Button variant="outline" asChild className="mt-4">
-          <Link href={`/assets/${row.id}`}>Back to {row.name}</Link>
+          <Link href={`/assets/${row.id}`}>Back to {assetDisplayLabel(row)}</Link>
         </Button>
       </div>
     );
@@ -74,7 +74,7 @@ export default async function VehicleCheckPage({
   if (isMissingVehicleChecksTable(itemsError)) {
     return (
       <div className="container mx-auto max-w-3xl px-4 py-8">
-        <h1 className="mb-2 text-3xl font-bold">Vehicle check</h1>
+        <h1 className="mb-2 text-3xl font-bold">Checklist</h1>
         <p className="text-muted-foreground">
           Vehicle checks are not set up yet. Run the vehicle check migrations in Supabase.
         </p>
@@ -87,8 +87,30 @@ export default async function VehicleCheckPage({
   if (itemsError) throw itemsError;
 
   const templateItems = (items ?? []) as VehicleCheckTemplateItem[];
-  const sourceLabel =
-    resolved.source === "override" ? "unit override" : "type default";
+
+  let swapDestinations: Array<{
+    id: string;
+    name: string | null;
+    unit_number: string | null;
+    build_number: string | null;
+  }> = [];
+
+  if (resolved.template.checklist_kind === "swap") {
+    let peerQuery = supabase
+      .from("assets")
+      .select("id, name, unit_number, build_number")
+      .eq("kind", "apparatus")
+      .neq("id", row.id)
+      .order("build_number", { ascending: true });
+
+    if (row.apparatus_type) {
+      peerQuery = peerQuery.eq("apparatus_type", row.apparatus_type);
+    }
+
+    const { data: peers, error: peersError } = await peerQuery;
+    if (peersError) throw peersError;
+    swapDestinations = peers ?? [];
+  }
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
@@ -96,17 +118,19 @@ export default async function VehicleCheckPage({
         <div>
           <div className="mb-2 flex items-center gap-3">
             <ClipboardCheck className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold">Vehicle check</h1>
+            <h1 className="text-4xl font-bold">{resolved.template.name}</h1>
           </div>
-          <p className="text-lg text-muted-foreground">{row.name}</p>
+          <p className="text-lg text-muted-foreground">{assetDisplayLabel(row)}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {row.unit_number ? <Badge variant="outline">{row.unit_number}</Badge> : null}
+            {row.unit_number && row.build_number ? (
+              <Badge variant="outline">{row.build_number}</Badge>
+            ) : null}
             {row.apparatus_type ? (
               <Badge variant="outline">{apparatusTypeLabel(row.apparatus_type)}</Badge>
             ) : null}
-            <Badge variant="secondary">
-              {resolved.template.name} ({sourceLabel})
-            </Badge>
+            {resolved.template.checklist_kind === "swap" ? (
+              <Badge variant="outline">Swap</Badge>
+            ) : null}
           </div>
         </div>
         <Button variant="outline" asChild>
@@ -126,7 +150,14 @@ export default async function VehicleCheckPage({
           </CardContent>
         </Card>
       ) : (
-        <VehicleCheckForm assetId={row.id} templateItems={templateItems} />
+        <VehicleCheckForm
+          assetId={row.id}
+          templateId={resolved.template.id}
+          templateName={resolved.template.name}
+          usesDailyWeekly={resolved.template.checklist_kind === "check"}
+          templateItems={templateItems}
+          swapDestinations={swapDestinations}
+        />
       )}
     </div>
   );

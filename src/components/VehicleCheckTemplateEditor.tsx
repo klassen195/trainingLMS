@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -19,13 +19,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, GripVertical, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
   createVehicleCheckTemplateItem,
   createVehicleCheckTemplateSection,
   deleteVehicleCheckTemplateItem,
   reorderVehicleCheckTemplateItems,
   setVehicleCheckTemplateItemActive,
+  setVehicleCheckTemplateItemMandatory,
   updateVehicleCheckTemplateItem,
 } from "@/app/assets/vehicle-check-actions";
 import type {
@@ -34,8 +35,9 @@ import type {
   VehicleCheckType,
 } from "@/lib/vehicle-checks-types";
 import {
+  defaultFieldTypeForChecklistKind,
+  fieldTypesForChecklistKind,
   vehicleCheckFieldTypeLabel,
-  vehicleCheckFieldTypes,
   vehicleCheckTypeLabel,
   vehicleCheckTypes,
 } from "@/lib/labels";
@@ -46,16 +48,64 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Input, Select } from "@/components/ui/Input";
 
+function visibleTemplateRows(
+  items: VehicleCheckTemplateItem[],
+  collapsedSectionIds: Record<string, boolean>
+): VehicleCheckTemplateItem[] {
+  const visible: VehicleCheckTemplateItem[] = [];
+  let hideItems = false;
+  for (const item of items) {
+    if (item.row_kind === "section") {
+      hideItems = Boolean(collapsedSectionIds[item.id]);
+      visible.push(item);
+      continue;
+    }
+    if (!hideItems) visible.push(item);
+  }
+  return visible;
+}
+
+function applyVisibleReorder(
+  full: VehicleCheckTemplateItem[],
+  reorderedVisible: VehicleCheckTemplateItem[]
+): VehicleCheckTemplateItem[] {
+  const visibleIds = new Set(reorderedVisible.map((item) => item.id));
+  const queue = [...reorderedVisible];
+  return full.map((item) => {
+    if (!visibleIds.has(item.id)) return item;
+    return queue.shift()!;
+  });
+}
+
+function sectionItemCount(items: VehicleCheckTemplateItem[], sectionId: string): number {
+  const start = items.findIndex((item) => item.id === sectionId);
+  if (start === -1) return 0;
+  let count = 0;
+  for (let i = start + 1; i < items.length; i += 1) {
+    if (items[i].row_kind === "section") break;
+    count += 1;
+  }
+  return count;
+}
+
 function SortableTemplateRow({
   item,
+  checklistIsCheck,
+  collapsed,
+  itemCount,
   pending,
   startTransition,
   onError,
+  onToggleCollapse,
 }: {
   item: VehicleCheckTemplateItem;
+  checklistIsCheck: boolean;
+  collapsed?: boolean;
+  itemCount?: number;
   pending: boolean;
   startTransition: (action: () => void) => void;
   onError: (message: string | null) => void;
+  onToggleCollapse?: () => void;
 }) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -93,6 +143,21 @@ function SortableTemplateRow({
 
       {isSection ? (
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="flex shrink-0 items-center text-muted-foreground hover:text-foreground"
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand section" : "Collapse section"}
+            disabled={pending}
+            onClick={onToggleCollapse}
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform",
+                collapsed && "-rotate-90"
+              )}
+            />
+          </button>
           <Badge className="bg-emerald-700 text-white hover:bg-emerald-700">Section</Badge>
           <Input
             defaultValue={item.label}
@@ -115,6 +180,9 @@ function SortableTemplateRow({
               });
             }}
           />
+          {typeof itemCount === "number" ? (
+            <span className="text-xs text-muted-foreground">{itemCount} items</span>
+          ) : null}
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
@@ -133,7 +201,7 @@ function SortableTemplateRow({
                       id: item.id,
                       label: nextLabel,
                       helpText: item.help_text,
-                      checkType: item.check_type ?? "daily",
+                      checkType: checklistIsCheck ? (item.check_type ?? "daily") : null,
                       fieldType: item.field_type ?? "pass_fail",
                     });
                     router.refresh();
@@ -158,7 +226,7 @@ function SortableTemplateRow({
                       id: item.id,
                       label: item.label,
                       helpText: nextHelp,
-                      checkType: item.check_type ?? "daily",
+                      checkType: checklistIsCheck ? (item.check_type ?? "daily") : null,
                       fieldType: item.field_type ?? "pass_fail",
                     });
                     router.refresh();
@@ -169,38 +237,43 @@ function SortableTemplateRow({
               }}
             />
           </div>
+          {checklistIsCheck ? (
+            <Select
+              value={item.check_type ?? "daily"}
+              disabled={pending}
+              className="w-[8.5rem]"
+              onChange={(event) => {
+                const checkType = event.target.value as VehicleCheckType;
+                if (checkType === item.check_type) return;
+                startTransition(async () => {
+                  onError(null);
+                  try {
+                    await updateVehicleCheckTemplateItem({
+                      id: item.id,
+                      label: item.label,
+                      helpText: item.help_text,
+                      checkType,
+                      fieldType: item.field_type ?? "pass_fail",
+                    });
+                    router.refresh();
+                  } catch (err) {
+                    onError(err instanceof Error ? err.message : "Failed to update type");
+                  }
+                });
+              }}
+            >
+              {vehicleCheckTypes.map((type) => (
+                <option key={type} value={type}>
+                  {vehicleCheckTypeLabel(type)}
+                </option>
+              ))}
+            </Select>
+          ) : null}
           <Select
-            value={item.check_type ?? "daily"}
-            disabled={pending}
-            className="w-[8.5rem]"
-            onChange={(event) => {
-              const checkType = event.target.value as VehicleCheckType;
-              if (checkType === item.check_type) return;
-              startTransition(async () => {
-                onError(null);
-                try {
-                  await updateVehicleCheckTemplateItem({
-                    id: item.id,
-                    label: item.label,
-                    helpText: item.help_text,
-                    checkType,
-                    fieldType: item.field_type ?? "pass_fail",
-                  });
-                  router.refresh();
-                } catch (err) {
-                  onError(err instanceof Error ? err.message : "Failed to update type");
-                }
-              });
-            }}
-          >
-            {vehicleCheckTypes.map((type) => (
-              <option key={type} value={type}>
-                {vehicleCheckTypeLabel(type)}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={item.field_type ?? "pass_fail"}
+            value={
+              item.field_type ??
+              (checklistIsCheck ? "pass_fail" : "moved_status")
+            }
             disabled={pending}
             className="w-[9.5rem]"
             onChange={(event) => {
@@ -213,7 +286,7 @@ function SortableTemplateRow({
                     id: item.id,
                     label: item.label,
                     helpText: item.help_text,
-                    checkType: item.check_type ?? "daily",
+                    checkType: checklistIsCheck ? (item.check_type ?? "daily") : null,
                     fieldType,
                   });
                   router.refresh();
@@ -223,7 +296,7 @@ function SortableTemplateRow({
               });
             }}
           >
-            {vehicleCheckFieldTypes.map((type) => (
+            {fieldTypesForChecklistKind(checklistIsCheck ? "check" : "swap").map((type) => (
               <option key={type} value={type}>
                 {vehicleCheckFieldTypeLabel(type)}
               </option>
@@ -234,7 +307,34 @@ function SortableTemplateRow({
 
       {!item.is_active ? <Badge variant="outline">Inactive</Badge> : null}
 
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        {!isSection ? (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={item.is_mandatory}
+              disabled={pending}
+              onChange={(event) =>
+                startTransition(async () => {
+                  onError(null);
+                  try {
+                    await setVehicleCheckTemplateItemMandatory({
+                      id: item.id,
+                      isMandatory: event.target.checked,
+                    });
+                    router.refresh();
+                  } catch (err) {
+                    onError(
+                      err instanceof Error ? err.message : "Failed to update mandatory setting"
+                    );
+                  }
+                })
+              }
+            />
+            Mandatory
+          </label>
+        ) : null}
+        <div className="flex flex-wrap gap-1">
         <Button
           type="button"
           size="sm"
@@ -283,6 +383,7 @@ function SortableTemplateRow({
         >
           <Trash2 className="h-4 w-4" />
         </Button>
+        </div>
       </div>
     </li>
   );
@@ -290,9 +391,11 @@ function SortableTemplateRow({
 
 export function VehicleCheckTemplateEditor({
   templateId,
+  checklistIsCheck,
   items,
 }: {
   templateId: string;
+  checklistIsCheck: boolean;
   items: VehicleCheckTemplateItem[];
 }) {
   const router = useRouter();
@@ -304,13 +407,26 @@ export function VehicleCheckTemplateEditor({
   const [newItemLabel, setNewItemLabel] = useState("");
   const [newItemHelpText, setNewItemHelpText] = useState("");
   const [newItemType, setNewItemType] = useState<VehicleCheckType>("daily");
-  const [newItemFieldType, setNewItemFieldType] = useState<VehicleCheckFieldType>("pass_fail");
+  const [newItemFieldType, setNewItemFieldType] = useState<VehicleCheckFieldType>(
+    defaultFieldTypeForChecklistKind(checklistIsCheck ? "check" : "swap")
+  );
+  const [newItemMandatory, setNewItemMandatory] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     setOrderedItems([...items].sort((a, b) => a.sort_order - b.sort_order));
   }, [items]);
+
+  useEffect(() => {
+    setNewItemFieldType(defaultFieldTypeForChecklistKind(checklistIsCheck ? "check" : "swap"));
+  }, [checklistIsCheck]);
+
+  const visibleItems = useMemo(
+    () => visibleTemplateRows(orderedItems, collapsedSections),
+    [orderedItems, collapsedSections]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -321,11 +437,12 @@ export function VehicleCheckTemplateEditor({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = orderedItems.findIndex((item) => item.id === active.id);
-    const newIndex = orderedItems.findIndex((item) => item.id === over.id);
+    const oldIndex = visibleItems.findIndex((item) => item.id === active.id);
+    const newIndex = visibleItems.findIndex((item) => item.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const next = arrayMove(orderedItems, oldIndex, newIndex);
+    const nextVisible = arrayMove(visibleItems, oldIndex, newIndex);
+    const next = applyVisibleReorder(orderedItems, nextVisible);
     setOrderedItems(next);
 
     startTransition(async () => {
@@ -341,6 +458,10 @@ export function VehicleCheckTemplateEditor({
         setError(err instanceof Error ? err.message : "Failed to reorder");
       }
     });
+  }
+
+  function toggleSectionCollapsed(sectionId: string) {
+    setCollapsedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
   }
 
   return (
@@ -370,17 +491,33 @@ export function VehicleCheckTemplateEditor({
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext
-                  items={orderedItems.map((item) => item.id)}
+                  items={visibleItems.map((item) => item.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   <ul className="space-y-3">
-                    {orderedItems.map((item) => (
+                    {visibleItems.map((item) => (
                       <SortableTemplateRow
                         key={item.id}
                         item={item}
+                        checklistIsCheck={checklistIsCheck}
+                        collapsed={
+                          item.row_kind === "section"
+                            ? Boolean(collapsedSections[item.id])
+                            : undefined
+                        }
+                        itemCount={
+                          item.row_kind === "section"
+                            ? sectionItemCount(orderedItems, item.id)
+                            : undefined
+                        }
                         pending={pending}
                         startTransition={startTransition}
                         onError={setError}
+                        onToggleCollapse={
+                          item.row_kind === "section"
+                            ? () => toggleSectionCollapsed(item.id)
+                            : undefined
+                        }
                       />
                     ))}
                   </ul>
@@ -485,21 +622,23 @@ export function VehicleCheckTemplateEditor({
                 onChange={(event) => setNewItemHelpText(event.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <FieldLabel htmlFor="new-item-type">Frequency</FieldLabel>
-              <Select
-                id="new-item-type"
-                value={newItemType}
-                disabled={pending}
-                onChange={(event) => setNewItemType(event.target.value as VehicleCheckType)}
-              >
-                {vehicleCheckTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {vehicleCheckTypeLabel(type)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {checklistIsCheck ? (
+              <div className="space-y-2">
+                <FieldLabel htmlFor="new-item-type">Frequency</FieldLabel>
+                <Select
+                  id="new-item-type"
+                  value={newItemType}
+                  disabled={pending}
+                  onChange={(event) => setNewItemType(event.target.value as VehicleCheckType)}
+                >
+                  {vehicleCheckTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {vehicleCheckTypeLabel(type)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <FieldLabel htmlFor="new-item-field-type">Response type</FieldLabel>
               <Select
@@ -510,13 +649,22 @@ export function VehicleCheckTemplateEditor({
                   setNewItemFieldType(event.target.value as VehicleCheckFieldType)
                 }
               >
-                {vehicleCheckFieldTypes.map((type) => (
+                {fieldTypesForChecklistKind(checklistIsCheck ? "check" : "swap").map((type) => (
                   <option key={type} value={type}>
                     {vehicleCheckFieldTypeLabel(type)}
                   </option>
                 ))}
               </Select>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={newItemMandatory}
+                disabled={pending}
+                onChange={(event) => setNewItemMandatory(event.target.checked)}
+              />
+              Mandatory
+            </label>
             <Button
               type="button"
               className="w-full"
@@ -527,13 +675,15 @@ export function VehicleCheckTemplateEditor({
                   try {
                     await createVehicleCheckTemplateItem({
                       templateId,
-                      checkType: newItemType,
+                      checkType: checklistIsCheck ? newItemType : null,
                       fieldType: newItemFieldType,
                       label: newItemLabel.trim(),
                       helpText: newItemHelpText,
+                      isMandatory: newItemMandatory,
                     });
                     setNewItemLabel("");
                     setNewItemHelpText("");
+                    setNewItemMandatory(false);
                     router.refresh();
                   } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to add item");

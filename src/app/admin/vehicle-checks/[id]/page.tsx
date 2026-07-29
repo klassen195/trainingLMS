@@ -67,6 +67,11 @@ export default async function AdminVehicleCheckTemplatePage({
               <Badge variant="outline">Any type</Badge>
             )}
             {row.is_type_default ? <Badge variant="secondary">Type default</Badge> : null}
+            {row.checklist_kind === "swap" ? (
+              <Badge variant="outline">Swap</Badge>
+            ) : (
+              <Badge variant="outline">Check</Badge>
+            )}
           </div>
           <p className="text-lg text-muted-foreground">
             Edit sections and checklist items for this named template.
@@ -83,6 +88,7 @@ export default async function AdminVehicleCheckTemplatePage({
 
       <VehicleCheckTemplateEditor
         templateId={row.id}
+        checklistIsCheck={row.checklist_kind === "check"}
         items={(items ?? []) as VehicleCheckTemplateItem[]}
       />
     </div>

@@ -42,23 +42,42 @@ export default async function AdminVehicleChecksPage() {
   const unitCounts = new Map<string, number>();
   const { data: assets, error: assetsError } = await supabase
     .from("assets")
-    .select("apparatus_type, vehicle_check_template_id")
+    .select("id, apparatus_type")
     .eq("kind", "apparatus");
   if (assetsError) throw assetsError;
 
-  const typeDefaultByType = new Map<string, string>();
+  const { data: assignments, error: assignmentsError } = await supabase
+    .from("asset_vehicle_check_templates")
+    .select("asset_id, template_id");
+  if (assignmentsError) throw assignmentsError;
+
+  const assignmentsByAsset = new Map<string, string[]>();
+  for (const row of assignments ?? []) {
+    const list = assignmentsByAsset.get(row.asset_id) ?? [];
+    list.push(row.template_id);
+    assignmentsByAsset.set(row.asset_id, list);
+  }
+
+  const typeDefaults = new Map<string, string[]>();
   for (const template of templates) {
     if (template.is_type_default && template.apparatus_type) {
-      typeDefaultByType.set(template.apparatus_type, template.id);
+      const list = typeDefaults.get(template.apparatus_type) ?? [];
+      list.push(template.id);
+      typeDefaults.set(template.apparatus_type, list);
     }
   }
 
-  for (const row of assets ?? []) {
-    const resolvedId =
-      row.vehicle_check_template_id ??
-      (row.apparatus_type ? typeDefaultByType.get(row.apparatus_type) ?? null : null);
-    if (!resolvedId) continue;
-    unitCounts.set(resolvedId, (unitCounts.get(resolvedId) ?? 0) + 1);
+  for (const asset of assets ?? []) {
+    const explicit = assignmentsByAsset.get(asset.id);
+    const resolvedIds =
+      explicit && explicit.length > 0
+        ? explicit
+        : asset.apparatus_type
+          ? typeDefaults.get(asset.apparatus_type) ?? []
+          : [];
+    for (const templateId of resolvedIds) {
+      unitCounts.set(templateId, (unitCounts.get(templateId) ?? 0) + 1);
+    }
   }
 
   return (
@@ -70,7 +89,7 @@ export default async function AdminVehicleChecksPage() {
             <h1 className="text-4xl font-bold">Vehicle check templates</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Create named checklists, set type defaults, and override per unit on apparatus.
+            Create named checklists, set type defaults, and assign multiple checklists per unit.
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -100,6 +119,11 @@ export default async function AdminVehicleChecksPage() {
                       {template.is_type_default ? (
                         <Badge variant="secondary">Type default</Badge>
                       ) : null}
+                      {template.checklist_kind === "swap" ? (
+                        <Badge variant="outline">Swap</Badge>
+                      ) : (
+                        <Badge variant="outline">Check</Badge>
+                      )}
                       <Badge variant="outline">
                         {unitCounts.get(template.id) ?? 0} unit
                         {(unitCounts.get(template.id) ?? 0) === 1 ? "" : "s"}

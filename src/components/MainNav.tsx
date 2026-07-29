@@ -13,6 +13,7 @@ import {
   UserRound,
   ArrowLeftRight,
   Package,
+  ClipboardPen,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -46,6 +47,7 @@ const authNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/programs", label: "Programs", icon: GraduationCap },
   { href: "/assets", label: "Assets", icon: Package },
+  { href: "/document-training", label: "Document Training", icon: ClipboardPen },
 ];
 
 export function MainNav({ profile }: { profile: Profile | null }) {
@@ -82,7 +84,7 @@ export function MainNav({ profile }: { profile: Profile | null }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
             FD
           </div>
-          <span className="hidden lg:inline text-xl font-bold">TrainingLMS</span>
+          <span className="hidden lg:inline text-xl font-bold">Anchor Point</span>
         </Link>
 
         <div className="absolute inset-x-0 hidden justify-center pointer-events-none md:flex">

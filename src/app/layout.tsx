@@ -30,7 +30,7 @@ export default function RootLayout({
         <main className="min-h-[calc(100vh-5rem)] flex-1">{children}</main>
         <footer className="mt-auto border-t bg-muted/50 py-8">
           <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-            <p>TrainingLMS · Fire Department Training</p>
+            <p>© {new Date().getFullYear()} Anchor Point</p>
           </div>
         </footer>
       </body>
