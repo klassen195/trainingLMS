@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable, isMissingLocationsTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { LOCATION_SELECT, type Location } from "@/lib/locations-types";
@@ -27,7 +27,7 @@ export type LocationFormInput = {
 };
 
 export async function createLocation(input: LocationFormInput) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_locations");
   const name = emptyToNull(input.name);
   if (!name) throw new Error("Name is required.");
 
@@ -67,7 +67,7 @@ export async function createLocation(input: LocationFormInput) {
 }
 
 export async function updateLocation(id: string, input: LocationFormInput) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_locations");
   const name = emptyToNull(input.name);
   if (!name) throw new Error("Name is required.");
 
@@ -120,7 +120,7 @@ export async function updateLocation(id: string, input: LocationFormInput) {
 }
 
 export async function deleteLocation(id: string) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_locations");
   const supabase = await createSupabaseServerClient();
 
   const { data: existing, error: existingError } = await supabase
@@ -159,7 +159,7 @@ export async function deleteLocation(id: string) {
 }
 
 export async function reorderLocations(input: { locationIds: string[] }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_locations");
   if (input.locationIds.length === 0) return;
 
   const supabase = await createSupabaseServerClient();

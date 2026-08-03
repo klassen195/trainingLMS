@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Package } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { ASSET_SELECT, assetDisplayLabel, type Asset } from "@/lib/assets-types";
 import { listLocations } from "@/lib/locations";
+import { listEquipmentCategories } from "@/lib/equipment-categories";
+import { listEquipmentSubcategories } from "@/lib/equipment-subcategories";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import { AssetForm } from "@/components/AssetForm";
@@ -16,7 +18,7 @@ export default async function EditAssetPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_assets");
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
@@ -60,6 +62,32 @@ export default async function EditAssetPage({
         ]
       : activeLocations;
 
+  const { rows: allCategories, error: categoriesError } =
+    row.kind === "ppe"
+      ? await listEquipmentCategories(supabase)
+      : { rows: [], error: null };
+  if (categoriesError) throw categoriesError;
+
+  const equipmentCategories =
+    row.kind === "ppe"
+      ? allCategories.filter(
+          (c) => c.is_active || c.id === row.equipment_category_id
+        )
+      : [];
+
+  const { rows: allSubcategories, error: subcategoriesError } =
+    row.kind === "ppe"
+      ? await listEquipmentSubcategories(supabase)
+      : { rows: [], error: null };
+  if (subcategoriesError) throw subcategoriesError;
+
+  const equipmentSubcategories =
+    row.kind === "ppe"
+      ? allSubcategories.filter(
+          (s) => s.is_active || s.id === row.equipment_subcategory_id
+        )
+      : [];
+
   const { data: checkTemplates, error: templatesError } = await supabase
     .from("vehicle_check_templates")
     .select("id, name, apparatus_type, is_type_default")
@@ -72,6 +100,16 @@ export default async function EditAssetPage({
     .eq("asset_id", row.id)
     .order("sort_order", { ascending: true });
   if (assignedError) throw assignedError;
+
+  const { data: apparatusOptions, error: apparatusError } =
+    row.kind === "ppe"
+      ? await supabase
+          .from("assets")
+          .select("id, name, unit_number, build_number")
+          .eq("kind", "apparatus")
+          .order("unit_number", { ascending: true, nullsFirst: false })
+      : { data: [], error: null };
+  if (apparatusError) throw apparatusError;
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
@@ -91,7 +129,7 @@ export default async function EditAssetPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">
-            {row.kind === "ppe" ? "PPE details" : "Apparatus details"}
+            {row.kind === "ppe" ? "Equipment details" : "Apparatus details"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -101,6 +139,9 @@ export default async function EditAssetPage({
             asset={row}
             profiles={profiles ?? []}
             locations={locations}
+            apparatusOptions={apparatusOptions ?? []}
+            equipmentCategories={equipmentCategories}
+            equipmentSubcategories={equipmentSubcategories}
             checkTemplates={checkTemplates ?? []}
             assignedCheckTemplateIds={(assignedRows ?? []).map((row) => row.template_id)}
           />

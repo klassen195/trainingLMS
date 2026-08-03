@@ -12,6 +12,8 @@ import {
   ArrowLeftRight,
   Package,
   ClipboardPen,
+  Users,
+  Siren,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -52,7 +54,7 @@ export function BreadcrumbNav() {
       icon: <Package className="h-4 w-4" />,
     });
     if (paths[1] === "ppe") {
-      breadcrumbs.push({ label: "PPE" });
+      breadcrumbs.push({ label: "Equipment" });
     } else if (paths[1] === "apparatus") {
       breadcrumbs.push({ label: "Apparatus" });
     } else if (paths[1] === "new") {
@@ -70,6 +72,34 @@ export function BreadcrumbNav() {
       } else if (paths[2] === "maintenance") {
         breadcrumbs.push({ label: "Request maintenance" });
       }
+    }
+  } else if (paths[0] === "personnel") {
+    breadcrumbs.push({
+      label: "Personnel",
+      href: paths.length === 1 ? undefined : "/personnel",
+      icon: <Users className="h-4 w-4" />,
+    });
+    if (paths[1] === "new") {
+      breadcrumbs.push({ label: "Invite" });
+    } else if (paths[1]) {
+      breadcrumbs.push({
+        label: "Detail",
+        href: paths[2] === "edit" ? `/personnel/${paths[1]}` : undefined,
+      });
+      if (paths[2] === "edit") {
+        breadcrumbs.push({ label: "Edit" });
+      }
+    }
+  } else if (paths[0] === "incidents") {
+    breadcrumbs.push({
+      label: "Incidents",
+      href: paths.length === 1 ? undefined : "/incidents",
+      icon: <Siren className="h-4 w-4" />,
+    });
+    if (paths[1] === "new") {
+      breadcrumbs.push({ label: "New" });
+    } else if (paths[1]) {
+      breadcrumbs.push({ label: "Board" });
     }
   } else {
     paths.forEach((path, index) => {

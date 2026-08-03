@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { createAsset, updateAsset, type AssetFormInput } from "@/app/assets/actions";
 import {
+  apparatusOptionLabel,
   type ApparatusType,
   type Asset,
   type AssetKind,
   type AssetStatus,
-  type PpeCategory,
+  type EquipmentAssignmentType,
 } from "@/lib/assets-types";
+import type { EquipmentCategory } from "@/lib/equipment-categories-types";
+import type { EquipmentSubcategory } from "@/lib/equipment-subcategories-types";
 import type { Location } from "@/lib/locations-types";
 import type { VehicleCheckTemplate } from "@/lib/vehicle-checks-types";
 import {
@@ -16,8 +19,6 @@ import {
   apparatusTypes,
   assetStatusLabel,
   assetStatuses,
-  ppeCategories,
-  ppeCategoryLabel,
 } from "@/lib/labels";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
@@ -29,8 +30,21 @@ export type ProfileOption = {
   email: string | null;
 };
 
+export type ApparatusOption = {
+  id: string;
+  name: string | null;
+  unit_number: string | null;
+  build_number: string | null;
+};
+
 function profileLabel(p: ProfileOption) {
   return p.display_name || p.email || p.id.slice(0, 8);
+}
+
+function initialAssignmentType(asset?: Asset): EquipmentAssignmentType | "" {
+  if (asset?.assignment_type) return asset.assignment_type;
+  if (asset?.assigned_to) return "person";
+  return "";
 }
 
 export function AssetForm({
@@ -39,6 +53,9 @@ export function AssetForm({
   asset,
   profiles,
   locations,
+  apparatusOptions = [],
+  equipmentCategories = [],
+  equipmentSubcategories = [],
   checkTemplates = [],
   assignedCheckTemplateIds = [],
 }: {
@@ -47,6 +64,12 @@ export function AssetForm({
   asset?: Asset;
   profiles: ProfileOption[];
   locations: Pick<Location, "id" | "name">[];
+  apparatusOptions?: ApparatusOption[];
+  equipmentCategories?: Pick<EquipmentCategory, "id" | "name" | "is_active">[];
+  equipmentSubcategories?: Pick<
+    EquipmentSubcategory,
+    "id" | "name" | "is_active" | "equipment_category_id"
+  >[];
   checkTemplates?: Pick<
     VehicleCheckTemplate,
     "id" | "name" | "apparatus_type" | "is_type_default"
@@ -55,15 +78,30 @@ export function AssetForm({
 }) {
   const [name, setName] = useState(asset?.name ?? "");
   const [status, setStatus] = useState<AssetStatus>(asset?.status ?? "in_service");
-  const [station, setStation] = useState(
-    asset?.station ?? (kind === "ppe" ? (locations[0]?.name ?? "") : "")
-  );
+  const [station, setStation] = useState(asset?.station ?? "");
   const [manufacturer, setManufacturer] = useState(asset?.manufacturer ?? "");
   const [model, setModel] = useState(asset?.model ?? "");
   const [serialNumber, setSerialNumber] = useState(asset?.serial_number ?? "");
   const [notes, setNotes] = useState(asset?.notes ?? "");
+  const [assignmentType, setAssignmentType] = useState<EquipmentAssignmentType | "">(
+    initialAssignmentType(asset)
+  );
   const [assignedTo, setAssignedTo] = useState(asset?.assigned_to ?? "");
-  const [ppeCategory, setPpeCategory] = useState<PpeCategory>(asset?.ppe_category ?? "turnout_coat");
+  const [assignedStation, setAssignedStation] = useState(asset?.assigned_station ?? "");
+  const [assignedApparatusId, setAssignedApparatusId] = useState(
+    asset?.assigned_apparatus_id ?? ""
+  );
+  const [equipmentCategoryId, setEquipmentCategoryId] = useState(
+    asset?.equipment_category_id ?? equipmentCategories.find((c) => c.is_active)?.id ?? ""
+  );
+  const [equipmentSubcategoryId, setEquipmentSubcategoryId] = useState(
+    asset?.equipment_subcategory_id ?? ""
+  );
+  const [description, setDescription] = useState(asset?.description ?? "");
+  const [purchaseCost, setPurchaseCost] = useState(
+    asset?.purchase_cost != null ? String(asset.purchase_cost) : ""
+  );
+  const [inServiceOn, setInServiceOn] = useState(asset?.in_service_on ?? "");
   const [size, setSize] = useState(asset?.size ?? "");
   const [manufacturedOn, setManufacturedOn] = useState(asset?.manufactured_on ?? "");
   const [expiresOn, setExpiresOn] = useState(asset?.expires_on ?? "");
@@ -79,18 +117,61 @@ export function AssetForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const categoryOptions = equipmentCategories.filter(
+    (c) => c.is_active || c.id === equipmentCategoryId
+  );
+
+  const subcategoryOptions = useMemo(
+    () =>
+      equipmentSubcategories.filter(
+        (s) =>
+          s.equipment_category_id === equipmentCategoryId &&
+          (s.is_active || s.id === equipmentSubcategoryId)
+      ),
+    [equipmentCategoryId, equipmentSubcategoryId, equipmentSubcategories]
+  );
+
+  useEffect(() => {
+    if (
+      equipmentSubcategoryId &&
+      !subcategoryOptions.some((s) => s.id === equipmentSubcategoryId)
+    ) {
+      setEquipmentSubcategoryId("");
+    }
+  }, [equipmentSubcategoryId, subcategoryOptions]);
+
+  function onAssignmentTypeChange(next: EquipmentAssignmentType | "") {
+    setAssignmentType(next);
+    if (next !== "person") setAssignedTo("");
+    if (next !== "station") setAssignedStation("");
+    if (next !== "apparatus") setAssignedApparatusId("");
+  }
+
   function buildInput(): AssetFormInput {
+    const costTrimmed = purchaseCost.trim();
+    const parsedCost =
+      kind === "ppe" && costTrimmed !== "" ? Number(costTrimmed) : null;
+
     return {
       kind,
       name: kind === "ppe" ? name : undefined,
       status,
-      station,
+      station: kind === "apparatus" ? station : "",
       manufacturer,
       model,
       serial_number: serialNumber,
       notes,
-      assigned_to: assignedTo || null,
-      ppe_category: kind === "ppe" ? ppeCategory : null,
+      assignment_type: kind === "ppe" ? assignmentType || null : null,
+      assigned_to: kind === "ppe" && assignmentType === "person" ? assignedTo || null : null,
+      assigned_station:
+        kind === "ppe" && assignmentType === "station" ? assignedStation || null : null,
+      assigned_apparatus_id:
+        kind === "ppe" && assignmentType === "apparatus" ? assignedApparatusId || null : null,
+      equipment_category_id: kind === "ppe" ? equipmentCategoryId || null : null,
+      equipment_subcategory_id: kind === "ppe" ? equipmentSubcategoryId || null : null,
+      description: kind === "ppe" ? description : null,
+      purchase_cost: kind === "ppe" ? parsedCost : null,
+      in_service_on: kind === "ppe" ? inServiceOn || null : null,
       size,
       manufactured_on: manufacturedOn || null,
       expires_on: expiresOn || null,
@@ -137,8 +218,14 @@ export function AssetForm({
     >
       {kind === "ppe" ? (
         <div className="space-y-2">
-          <FieldLabel htmlFor="name">Name</FieldLabel>
-          <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
+          <FieldLabel htmlFor="name">Equipment ID</FieldLabel>
+          <Input
+            id="name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Department serial / tag"
+          />
         </div>
       ) : (
         <div className="space-y-2">
@@ -154,7 +241,7 @@ export function AssetForm({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={kind === "apparatus" ? "grid gap-4 sm:grid-cols-2" : undefined}>
         <div className="space-y-2">
           <FieldLabel htmlFor="status">Status</FieldLabel>
           <Select
@@ -169,67 +256,107 @@ export function AssetForm({
             ))}
           </Select>
         </div>
-        <div className="space-y-2">
-          <FieldLabel htmlFor="station">Location</FieldLabel>
-          <Select
-            id="station"
-            value={station}
-            required={kind === "ppe"}
-            onChange={(e) => setStation(e.target.value)}
-          >
-            {kind === "apparatus" ? <option value="">Unassigned</option> : null}
-            {locations.map((location) => (
-              <option key={location.id} value={location.name}>
-                {location.name}
-              </option>
-            ))}
-            {station && !locations.some((location) => location.name === station) ? (
-              <option value={station}>{station} (inactive)</option>
-            ) : null}
-          </Select>
-        </div>
+        {kind === "apparatus" ? (
+          <div className="space-y-2">
+            <FieldLabel htmlFor="station">Location</FieldLabel>
+            <Select
+              id="station"
+              value={station}
+              onChange={(e) => setStation(e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.name}>
+                  {location.name}
+                </option>
+              ))}
+              {station && !locations.some((location) => location.name === station) ? (
+                <option value={station}>{station} (inactive)</option>
+              ) : null}
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       {kind === "ppe" ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <FieldLabel htmlFor="ppe_category">PPE category</FieldLabel>
+              <FieldLabel htmlFor="equipment_category_id">Category</FieldLabel>
               <Select
-                id="ppe_category"
-                value={ppeCategory}
-                onChange={(e) => setPpeCategory(e.target.value as PpeCategory)}
+                id="equipment_category_id"
+                required
+                value={equipmentCategoryId}
+                onChange={(e) => {
+                  setEquipmentCategoryId(e.target.value);
+                  setEquipmentSubcategoryId("");
+                }}
               >
-                {ppeCategories.map((c) => (
-                  <option key={c} value={c}>
-                    {ppeCategoryLabel(c)}
+                <option value="" disabled>
+                  Select category
+                </option>
+                {categoryOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {!c.is_active ? " (inactive)" : ""}
                   </option>
                 ))}
               </Select>
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="size">Size</FieldLabel>
-              <Input id="size" value={size} onChange={(e) => setSize(e.target.value)} />
+              <FieldLabel htmlFor="equipment_subcategory_id">Subcategory</FieldLabel>
+              <Select
+                id="equipment_subcategory_id"
+                value={equipmentSubcategoryId}
+                disabled={!equipmentCategoryId}
+                onChange={(e) => setEquipmentSubcategoryId(e.target.value)}
+              >
+                <option value="">None</option>
+                {subcategoryOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {!s.is_active ? " (inactive)" : ""}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
+
           <div className="space-y-2">
-            <FieldLabel htmlFor="assigned_to">Assigned to</FieldLabel>
-            <Select
-              id="assigned_to"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {profileLabel(p)}
-                </option>
-              ))}
-            </Select>
+            <FieldLabel htmlFor="description">Description</FieldLabel>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <FieldLabel htmlFor="serial_number">Serial number</FieldLabel>
+              <Input
+                id="serial_number"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="model">Model number</FieldLabel>
+              <Input id="model" value={model} onChange={(e) => setModel(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="manufacturer">Manufacturer</FieldLabel>
+              <Input
+                id="manufacturer"
+                value={manufacturer}
+                onChange={(e) => setManufacturer(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <FieldLabel htmlFor="manufactured_on">Manufactured</FieldLabel>
+              <FieldLabel htmlFor="manufactured_on">Manufacture date</FieldLabel>
               <Input
                 id="manufactured_on"
                 type="date"
@@ -238,7 +365,7 @@ export function AssetForm({
               />
             </div>
             <div className="space-y-2">
-              <FieldLabel htmlFor="expires_on">Expires</FieldLabel>
+              <FieldLabel htmlFor="expires_on">Replacement date</FieldLabel>
               <Input
                 id="expires_on"
                 type="date"
@@ -247,6 +374,111 @@ export function AssetForm({
               />
             </div>
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <FieldLabel htmlFor="size">Size</FieldLabel>
+              <Input id="size" value={size} onChange={(e) => setSize(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="purchase_cost">Purchase cost</FieldLabel>
+              <Input
+                id="purchase_cost"
+                type="number"
+                min={0}
+                step="0.01"
+                value={purchaseCost}
+                onChange={(e) => setPurchaseCost(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="in_service_on">In service date</FieldLabel>
+              <Input
+                id="in_service_on"
+                type="date"
+                value={inServiceOn}
+                onChange={(e) => setInServiceOn(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <FieldLabel htmlFor="assignment_type">Assigned to</FieldLabel>
+            <Select
+              id="assignment_type"
+              value={assignmentType}
+              onChange={(e) =>
+                onAssignmentTypeChange(e.target.value as EquipmentAssignmentType | "")
+              }
+            >
+              <option value="">Unassigned</option>
+              <option value="person">Individual</option>
+              <option value="station">Station</option>
+              <option value="apparatus">Apparatus</option>
+            </Select>
+          </div>
+
+          {assignmentType === "person" ? (
+            <div className="space-y-2">
+              <FieldLabel htmlFor="assigned_to">Individual</FieldLabel>
+              <Select
+                id="assigned_to"
+                required
+                value={assignedTo}
+                onChange={(e) => setAssignedTo(e.target.value)}
+              >
+                <option value="">Select person</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {profileLabel(p)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+
+          {assignmentType === "station" ? (
+            <div className="space-y-2">
+              <FieldLabel htmlFor="assigned_station">Station</FieldLabel>
+              <Select
+                id="assigned_station"
+                required
+                value={assignedStation}
+                onChange={(e) => setAssignedStation(e.target.value)}
+              >
+                <option value="">Select station</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.name}>
+                    {location.name}
+                  </option>
+                ))}
+                {assignedStation &&
+                !locations.some((location) => location.name === assignedStation) ? (
+                  <option value={assignedStation}>{assignedStation} (inactive)</option>
+                ) : null}
+              </Select>
+            </div>
+          ) : null}
+
+          {assignmentType === "apparatus" ? (
+            <div className="space-y-2">
+              <FieldLabel htmlFor="assigned_apparatus_id">Apparatus</FieldLabel>
+              <Select
+                id="assigned_apparatus_id"
+                required
+                value={assignedApparatusId}
+                onChange={(e) => setAssignedApparatusId(e.target.value)}
+              >
+                <option value="">Select apparatus</option>
+                {apparatusOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {apparatusOptionLabel(option)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
         </>
       ) : (
         <>
@@ -291,6 +523,28 @@ export function AssetForm({
               />
             </div>
           </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <FieldLabel htmlFor="manufacturer">Manufacturer</FieldLabel>
+              <Input
+                id="manufacturer"
+                value={manufacturer}
+                onChange={(e) => setManufacturer(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="model">Model</FieldLabel>
+              <Input id="model" value={model} onChange={(e) => setModel(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <FieldLabel htmlFor="serial_number">Serial number</FieldLabel>
+              <Input
+                id="serial_number"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="space-y-2">
             <FieldLabel>Checklist templates</FieldLabel>
             {checkTemplates.length === 0 ? (
@@ -323,29 +577,6 @@ export function AssetForm({
           </div>
         </>
       )}
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-2">
-          <FieldLabel htmlFor="manufacturer">Manufacturer</FieldLabel>
-          <Input
-            id="manufacturer"
-            value={manufacturer}
-            onChange={(e) => setManufacturer(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <FieldLabel htmlFor="model">Model</FieldLabel>
-          <Input id="model" value={model} onChange={(e) => setModel(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <FieldLabel htmlFor="serial_number">Serial number</FieldLabel>
-          <Input
-            id="serial_number"
-            value={serialNumber}
-            onChange={(e) => setSerialNumber(e.target.value)}
-          />
-        </div>
-      </div>
 
       <div className="space-y-2">
         <FieldLabel htmlFor="notes">Notes</FieldLabel>

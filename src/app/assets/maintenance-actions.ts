@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { requireRole, requireUserProfile } from "@/lib/auth";
+import { requireUserProfile } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import {
   buildMaintenancePhotoStoragePath,
   type MaintenanceRequestType,
@@ -192,7 +193,7 @@ export async function resolveMaintenanceRequest(input: {
   requestId: string;
   resolvedNote?: string;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("resolve_maintenance");
   const supabase = await createSupabaseServerClient();
 
   const { data: existing, error: fetchError } = await supabase

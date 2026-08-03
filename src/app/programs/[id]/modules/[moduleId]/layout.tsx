@@ -1,4 +1,5 @@
 import { requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { getModulePageContext } from "@/lib/module-page-data";
 import { ModuleBreadcrumbNav } from "@/components/ModuleBreadcrumbNav";
 import { ModuleEnrollmentPanel } from "@/components/ModuleEnrollmentPanel";
@@ -13,6 +14,7 @@ export default async function ModuleLayout({
   params: Promise<{ id: string; moduleId: string }>;
 }) {
   const profile = await requireUserProfile();
+  const caps = await getProfileCapabilities(profile);
   const { id, moduleId } = await params;
   const ctx = await getModulePageContext(id, moduleId, profile);
 
@@ -38,7 +40,13 @@ export default async function ModuleLayout({
             />
           </aside>
           <div className="min-w-0 flex-1">
-            {!ctx.enrolled ? (
+            {!caps.self_enroll ? (
+              !ctx.enrolled ? (
+                <div className="mb-6 rounded-lg border p-4 text-sm text-muted-foreground">
+                  You need to be enrolled in this module by an instructor or admin to track progress.
+                </div>
+              ) : null
+            ) : !ctx.enrolled ? (
               <ModuleEnrollmentPanel programId={id} moduleId={moduleId} />
             ) : (
               <ModuleUnenrollmentPanel programId={id} moduleId={moduleId} />

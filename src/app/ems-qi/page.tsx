@@ -1,9 +1,9 @@
 import { ClipboardList } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { EmsQiReviewForm } from "@/components/EmsQiReviewForm";
 
 export default async function EmsQiPage() {
-  await requireRole(["instructor", "admin"]);
+  await requireCapability("ems_qi");
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-10">

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { isAdmin, requireCaptainOrAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { programModulesFromRows } from "@/lib/program-modules";
 import {
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/Button";
 import type { Module } from "@/lib/training-lms-types";
 
 export default async function EditProgramPage({ params }: { params: Promise<{ id: string }> }) {
-  const profile = await requireRole(["instructor", "admin"]);
+  const profile = await requireCaptainOrAdmin();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
@@ -24,7 +24,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
     .maybeSingle();
   if (!program) notFound();
   const typedProgram = mapProgramRow(program as ProgramQueryRow);
-  if (profile.role === "instructor" && typedProgram.created_by !== profile.id) notFound();
+  if (!isAdmin(profile) && typedProgram.created_by !== profile.id) notFound();
 
   const { data: programModuleRows } = await supabase
     .from("program_modules")
@@ -39,7 +39,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   const linkableModules = ((allModules ?? []) as Module[]).filter((moduleItem) => !linkedModuleIds.has(moduleItem.id));
   const editableModuleIds = new Set(
     modules
-      .filter((moduleItem) => profile.role === "admin" || moduleItem.created_by === profile.id)
+      .filter((moduleItem) => isAdmin(profile) || moduleItem.created_by === profile.id)
       .map((moduleItem) => moduleItem.id)
   );
 

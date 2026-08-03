@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { Package, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import type { AssetKind } from "@/lib/assets-types";
 import { listLocations } from "@/lib/locations";
+import { listEquipmentCategories } from "@/lib/equipment-categories";
+import { listEquipmentSubcategories } from "@/lib/equipment-subcategories";
 import { AssetForm } from "@/components/AssetForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { Button } from "@/components/ui/Button";
@@ -15,7 +17,7 @@ export default async function NewAssetPage({
 }: {
   searchParams: Promise<{ kind?: string }>;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_assets");
   const { kind: kindParam } = await searchParams;
   const kind: AssetKind =
     kindParam === "apparatus" || kindParam === "ppe" ? kindParam : "ppe";
@@ -34,6 +36,18 @@ export default async function NewAssetPage({
   });
   if (locationsError) throw locationsError;
 
+  const { rows: equipmentCategories, error: categoriesError } =
+    kind === "ppe"
+      ? await listEquipmentCategories(supabase, { activeOnly: true })
+      : { rows: [], error: null };
+  if (categoriesError) throw categoriesError;
+
+  const { rows: equipmentSubcategories, error: subcategoriesError } =
+    kind === "ppe"
+      ? await listEquipmentSubcategories(supabase, { activeOnly: true })
+      : { rows: [], error: null };
+  if (subcategoriesError) throw subcategoriesError;
+
   const { data: checkTemplates, error: templatesError } =
     kind === "apparatus"
       ? await supabase
@@ -42,6 +56,16 @@ export default async function NewAssetPage({
           .order("name", { ascending: true })
       : { data: [], error: null };
   if (templatesError) throw templatesError;
+
+  const { data: apparatusOptions, error: apparatusError } =
+    kind === "ppe"
+      ? await supabase
+          .from("assets")
+          .select("id, name, unit_number, build_number")
+          .eq("kind", "apparatus")
+          .order("unit_number", { ascending: true, nullsFirst: false })
+      : { data: [], error: null };
+  if (apparatusError) throw apparatusError;
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
@@ -52,7 +76,7 @@ export default async function NewAssetPage({
             <h1 className="text-4xl font-bold">New asset</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Add {kind === "ppe" ? "PPE" : "apparatus"} to the inventory.
+            Add {kind === "ppe" ? "equipment" : "apparatus"} to the inventory.
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -62,7 +86,7 @@ export default async function NewAssetPage({
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Button variant={kind === "ppe" ? "primary" : "outline"} asChild>
-          <Link href="/assets/new?kind=ppe">PPE</Link>
+          <Link href="/assets/new?kind=ppe">Equipment</Link>
         </Button>
         <Button variant={kind === "apparatus" ? "primary" : "outline"} asChild>
           <Link href="/assets/new?kind=apparatus">Apparatus</Link>
@@ -73,7 +97,7 @@ export default async function NewAssetPage({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Plus className="h-4 w-4" />
-            {kind === "ppe" ? "PPE details" : "Apparatus details"}
+            {kind === "ppe" ? "Equipment details" : "Apparatus details"}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -82,6 +106,9 @@ export default async function NewAssetPage({
             kind={kind}
             profiles={profiles ?? []}
             locations={locations}
+            apparatusOptions={apparatusOptions ?? []}
+            equipmentCategories={equipmentCategories}
+            equipmentSubcategories={equipmentSubcategories}
             checkTemplates={checkTemplates ?? []}
           />
         </CardContent>

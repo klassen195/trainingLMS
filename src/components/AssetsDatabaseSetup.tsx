@@ -21,7 +21,12 @@ export function AssetsDatabaseSetup() {
               Paste the full contents of{" "}
               <code className="rounded bg-muted px-1">
                 supabase/migrations/20260720130000_assets_inventory.sql
+              </code>{" "}
+              (and if needed{" "}
+              <code className="rounded bg-muted px-1">
+                20260730400000_equipment_fields.sql
               </code>
+              )
             </li>
             <li>
               Click <strong className="text-foreground">Run</strong>

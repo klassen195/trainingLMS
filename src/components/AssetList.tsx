@@ -1,5 +1,5 @@
 import type { AssetListRow } from "@/lib/assets-types";
-import { assetDisplayLabel } from "@/lib/assets-types";
+import { assetDisplayLabel, equipmentAssignmentLabel } from "@/lib/assets-types";
 import {
   apparatusTypeLabel,
   assetStatusBadgeClass,
@@ -31,10 +31,6 @@ function formatCheckTime(value: string | null | undefined) {
   } catch {
     return value;
   }
-}
-
-function assigneeName(asset: AssetListRow) {
-  return asset.assignee?.display_name || asset.assignee?.email || "Unassigned";
 }
 
 export function AssetList({
@@ -72,13 +68,17 @@ export function AssetList({
                   <Badge className={assetStatusBadgeClass(asset.status)}>
                     {assetStatusLabel(asset.status)}
                   </Badge>
-                  {kind === "ppe" && asset.ppe_category ? (
+                  {kind === "ppe" && asset.equipment_category?.name ? (
+                    <Badge variant="outline">{asset.equipment_category.name}</Badge>
+                  ) : kind === "ppe" && asset.ppe_category ? (
                     <Badge variant="outline">{ppeCategoryLabel(asset.ppe_category)}</Badge>
                   ) : null}
                   {kind === "apparatus" && asset.apparatus_type ? (
                     <Badge variant="outline">{apparatusTypeLabel(asset.apparatus_type)}</Badge>
                   ) : null}
-                  {asset.station ? <Badge variant="outline">{asset.station}</Badge> : null}
+                  {kind === "apparatus" && asset.station ? (
+                    <Badge variant="outline">{asset.station}</Badge>
+                  ) : null}
                   {kind === "apparatus" && asset.unit_number && asset.build_number ? (
                     <Badge variant="outline">{asset.build_number}</Badge>
                   ) : null}
@@ -98,7 +98,7 @@ export function AssetList({
                 <p className="text-sm text-muted-foreground">
                   {kind === "ppe" ? (
                     <>
-                      {isAdmin ? <>Assigned to {assigneeName(asset)} · </> : null}
+                      {isAdmin ? <>Assigned to {equipmentAssignmentLabel(asset)} · </> : null}
                       {asset.size ? <>Size {asset.size} · </> : null}
                       {asset.expires_on ? <>Expires {asset.expires_on}</> : "No expiration set"}
                     </>

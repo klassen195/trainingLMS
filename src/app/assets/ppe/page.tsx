@@ -1,60 +1,67 @@
 import Link from "next/link";
 import { HardHat, Plus } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { fetchAssetsWithLatestInspection } from "@/lib/assets";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
-import { AssetList } from "@/components/AssetList";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { AssetsSectionNav } from "@/components/AssetsSectionNav";
+import { EquipmentTable } from "@/components/EquipmentTable";
 import { Button } from "@/components/ui/Button";
 
 export default async function AssetsPpePage() {
   const profile = await requireUserProfile();
-  const isAdmin = profile.role === "admin";
+  const caps = await getProfileCapabilities(profile);
+  const canManage = caps.manage_assets;
+  const viewAll = caps.view_all_ppe || canManage;
   const supabase = await createSupabaseServerClient();
 
   const { rows, error } = await fetchAssetsWithLatestInspection(supabase, "ppe", {
-    assignedTo: isAdmin ? undefined : profile.id,
+    assignedTo: viewAll ? undefined : profile.id,
   });
 
   if (isMissingAssetsTable(error)) return <AssetsDatabaseSetup />;
   if (error) throw error;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div className="container mx-auto px-4 py-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="mb-2 flex items-center gap-3">
-            <HardHat className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold">{isAdmin ? "PPE inventory" : "My PPE"}</h1>
+          <div className="mb-1 flex items-center gap-2">
+            <HardHat className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold">{viewAll ? "Equipment inventory" : "My equipment"}</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
-            {isAdmin
-              ? "All personal protective equipment across the department."
-              : "PPE assigned to you, with expiration and inspection due dates."}
+          <p className="text-sm text-muted-foreground">
+            {viewAll
+              ? "Department equipment inventory."
+              : "Equipment assigned to you."}
           </p>
         </div>
-        {isAdmin ? (
-          <Button asChild>
-            <Link href="/assets/new?kind=ppe">
-              <Plus className="mr-2 h-4 w-4" />
-              Add PPE
-            </Link>
-          </Button>
+        {canManage ? (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild size="sm">
+              <Link href="/assets/ppe/import">Import</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href="/assets/new?kind=ppe">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add equipment
+              </Link>
+            </Button>
+          </div>
         ) : null}
       </div>
 
-      <AssetsSectionNav />
+      <AssetsSectionNav showApparatus={caps.view_apparatus || canManage} />
 
-      <AssetList
+      <EquipmentTable
         rows={rows}
-        kind="ppe"
-        isAdmin={isAdmin}
+        showAssignee={viewAll}
         emptyMessage={
-          isAdmin
-            ? "No PPE recorded yet. Add the first item."
-            : "No PPE is assigned to you yet."
+          viewAll
+            ? "No equipment recorded yet. Add the first item."
+            : "No equipment is assigned to you yet."
         }
       />
     </div>

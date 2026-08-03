@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingVehicleChecksTable } from "@/lib/supabase/errors";
 import {
@@ -21,7 +21,7 @@ export default async function AdminVehicleCheckTemplatePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 

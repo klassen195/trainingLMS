@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingVehicleChecksTable } from "@/lib/supabase/errors";
 import {
@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { apparatusTypeLabel } from "@/lib/labels";
 
 export default async function AdminVehicleChecksPage() {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase

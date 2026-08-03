@@ -22,6 +22,15 @@ type VehicleCheckSummary = {
 };
 
 type ProfileRef = { id: string; display_name: string | null; email: string | null };
+type CategoryRef = { id: string; name: string };
+type SubcategoryRef = { id: string; name: string; equipment_category_id: string };
+type ApparatusRef = {
+  id: string;
+  name: string | null;
+  unit_number: string | null;
+  build_number: string | null;
+  kind: AssetKind;
+};
 
 export function asSingleProfile(
   value: ProfileRef | ProfileRef[] | null | undefined
@@ -30,11 +39,44 @@ export function asSingleProfile(
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-function normalizeAssetRow(raw: Record<string, unknown>): AssetWithAssignee {
-  const { assignee, ...rest } = raw;
+function asSingleCategory(
+  value: CategoryRef | CategoryRef[] | null | undefined
+): CategoryRef | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function asSingleSubcategory(
+  value: SubcategoryRef | SubcategoryRef[] | null | undefined
+): SubcategoryRef | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function asSingleApparatus(
+  value: ApparatusRef | ApparatusRef[] | null | undefined
+): ApparatusRef | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+export function normalizeAssetRow(raw: Record<string, unknown>): AssetWithAssignee {
+  const { assignee, assigned_apparatus, equipment_category, equipment_subcategory, ...rest } = raw;
   return {
-    ...(rest as Omit<AssetWithAssignee, "assignee">),
+    ...(rest as Omit<
+      AssetWithAssignee,
+      "assignee" | "assigned_apparatus" | "equipment_category" | "equipment_subcategory"
+    >),
     assignee: asSingleProfile(assignee as ProfileRef | ProfileRef[] | null | undefined),
+    assigned_apparatus: asSingleApparatus(
+      assigned_apparatus as ApparatusRef | ApparatusRef[] | null | undefined
+    ),
+    equipment_category: asSingleCategory(
+      equipment_category as CategoryRef | CategoryRef[] | null | undefined
+    ),
+    equipment_subcategory: asSingleSubcategory(
+      equipment_subcategory as SubcategoryRef | SubcategoryRef[] | null | undefined
+    ),
   };
 }
 

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { ClipboardList } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { loadQuestionBank, loadQuizConfig } from "@/lib/quiz-data";
@@ -12,7 +12,7 @@ export default async function QuizConfigPage({
 }: {
   params: Promise<{ resourceId: string }>;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_quiz_banks");
   const { resourceId } = await params;
   const supabase = await createSupabaseServerClient();
 

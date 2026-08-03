@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { hasRole } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { programModulesFromRows } from "@/lib/program-modules";
 import { getYouTubeEmbedUrl, parseYouTubeVideoId } from "@/lib/module-resources";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -120,6 +121,8 @@ export const getModulePageContext = cache(async (
   const prevModule = moduleIndex > 0 ? modules[moduleIndex - 1] : null;
   const nextModule = moduleIndex < modules.length - 1 ? modules[moduleIndex + 1] : null;
 
+  const caps = await getProfileCapabilities(profile);
+
   return {
     profile,
     program: program as Pick<Program, "id" | "title" | "created_by">,
@@ -129,8 +132,8 @@ export const getModulePageContext = cache(async (
     prevModuleId: prevModule?.id ?? null,
     nextModuleId: nextModule?.id ?? null,
     canEdit:
-      hasRole(profile, ["admin"]) ||
-      (hasRole(profile, ["instructor"]) && program.created_by === profile.id),
+      isAdmin(profile) ||
+      (caps.author_training && program.created_by === profile.id),
     enrolled,
     completed,
     completedResourceIds,

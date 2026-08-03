@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingLocationsTable } from "@/lib/supabase/errors";
 import { LOCATION_SELECT, type Location } from "@/lib/locations-types";
@@ -8,7 +8,7 @@ import { LocationsAdmin } from "@/components/LocationsAdmin";
 import { Button } from "@/components/ui/Button";
 
 export default async function AdminLocationsPage() {
-  await requireRole(["admin"]);
+  await requireCapability("manage_locations");
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase

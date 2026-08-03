@@ -9,6 +9,7 @@ import { programTags } from "@/lib/labels";
 import type { ProgramStatus, ProgramTag, UserRole } from "@/lib/training-lms-types";
 import { buildModuleResourceStoragePath, normalizeWebsiteUrl, parseYouTubeVideoId } from "@/lib/module-resources";
 import { scorePercent, shuffleArray } from "@/lib/quiz";
+import { assertCapability } from "@/lib/capability-access";
 import type { ModuleResourceType } from "@/lib/training-lms-types";
 
 function throwIfDbError(error: import("@supabase/supabase-js").PostgrestError | null) {
@@ -34,10 +35,20 @@ async function requireAuthUserId() {
 
 async function requireAdminUser() {
   const { supabase, userId } = await requireAuthUserId();
-  const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", userId)
+    .single();
   throwIfDbError(error);
-  if (profile?.role !== "admin") throw new Error("Admin access required");
+  if (!profile?.is_admin) throw new Error("Admin access required");
   return { supabase, userId };
+}
+
+async function requireQuizBankManager() {
+  const profile = await assertCapability("manage_quiz_banks");
+  const supabase = await createSupabaseServerClient();
+  return { supabase, userId: profile.id };
 }
 
 function revalidateModuleViews(programId: string, moduleId: string) {
@@ -213,6 +224,7 @@ export async function setAccountPassword(input: { password: string; confirmPassw
 }
 
 export async function enrollInModule(input: { programId: string; moduleId: string }) {
+  await assertCapability("self_enroll");
   const { supabase, userId } = await requireAuthUserId();
   const { error } = await supabase.from("module_enrollments").upsert(
     {
@@ -230,6 +242,7 @@ export async function enrollInModule(input: { programId: string; moduleId: strin
 }
 
 export async function enrollInProgram(input: { programId: string }) {
+  await assertCapability("self_enroll");
   const { supabase, userId } = await requireAuthUserId();
 
   const { data: programModuleRows, error: moduleError } = await supabase
@@ -755,8 +768,30 @@ export async function deleteModuleResource(input: {
   revalidateModuleViews(input.programId, input.moduleId);
 }
 
+export async function updateUserAccess(input: {
+  userId: string;
+  role: UserRole;
+  isAdmin: boolean;
+}) {
+  const { supabase, userId } = await requireAdminUser();
+
+  if (input.userId === userId && !input.isAdmin) {
+    throw new Error("You cannot remove your own system admin access.");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ role: input.role, is_admin: input.isAdmin })
+    .eq("id", input.userId);
+  throwIfDbError(error);
+  revalidatePath("/admin");
+  revalidatePath("/personnel");
+  revalidatePath(`/personnel/${input.userId}`);
+}
+
+/** @deprecated Prefer updateUserAccess */
 export async function updateUserRole(input: { userId: string; role: UserRole }) {
-  const { supabase } = await requireAuthUserId();
+  const { supabase } = await requireAdminUser();
   const { error } = await supabase.from("profiles").update({ role: input.role }).eq("id", input.userId);
   throwIfDbError(error);
   revalidatePath("/admin");
@@ -767,7 +802,7 @@ export async function updateUserProfile(input: {
   displayName: string;
   rank: string | null;
 }) {
-  const { supabase } = await requireAuthUserId();
+  const { supabase } = await requireAdminUser();
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -777,6 +812,8 @@ export async function updateUserProfile(input: {
     .eq("id", input.userId);
   throwIfDbError(error);
   revalidatePath("/admin");
+  revalidatePath("/personnel");
+  revalidatePath(`/personnel/${input.userId}`);
 }
 
 export async function createQuestionBankItem(input: {
@@ -786,7 +823,7 @@ export async function createQuestionBankItem(input: {
   topic: string;
   options: { text: string; isCorrect: boolean }[];
 }) {
-  const { supabase, userId } = await requireAdminUser();
+  const { supabase, userId } = await requireQuizBankManager();
   if (input.options.filter((o) => o.isCorrect).length !== 1) {
     throw new Error("Each question must have exactly one correct answer.");
   }
@@ -826,7 +863,7 @@ export async function updateQuestionBankItem(input: {
   topic: string;
   options: { id?: string; text: string; isCorrect: boolean }[];
 }) {
-  const { supabase } = await requireAdminUser();
+  const { supabase } = await requireQuizBankManager();
   if (input.options.filter((o) => o.isCorrect).length !== 1) {
     throw new Error("Each question must have exactly one correct answer.");
   }
@@ -863,7 +900,7 @@ export async function updateQuestionBankItem(input: {
 }
 
 export async function deleteQuestionBankItem(input: { resourceId: string; questionId: string }) {
-  const { supabase } = await requireAdminUser();
+  const { supabase } = await requireQuizBankManager();
   const { error } = await supabase
     .from("question_bank_items")
     .delete()
@@ -1093,7 +1130,7 @@ export async function updateQuizSettings(input: {
   questionsPerAttempt: number;
   passPercent: number;
 }) {
-  const { supabase } = await requireAdminUser();
+  const { supabase } = await requireQuizBankManager();
   const { error } = await supabase
     .from("quiz_settings")
     .update({

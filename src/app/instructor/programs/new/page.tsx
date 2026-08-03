@@ -1,8 +1,8 @@
-import { requireRole } from "@/lib/auth";
+import { requireCaptainOrAdmin } from "@/lib/auth";
 import { NewProgramForm } from "./ui";
 
 export default async function NewProgramPage() {
-  await requireRole(["instructor", "admin"]);
+  await requireCaptainOrAdmin();
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">

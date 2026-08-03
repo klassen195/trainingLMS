@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { requireRole, requireUserProfile } from "@/lib/auth";
+import { requireUserProfile } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import type { ApparatusType } from "@/lib/assets-types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -72,7 +73,7 @@ export async function createVehicleCheckTemplate(input: {
   checklistKind?: VehicleChecklistKind;
   notes?: string;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const name = input.name.trim();
   if (!name) throw new Error("Template name is required.");
 
@@ -110,7 +111,7 @@ export async function updateVehicleCheckTemplate(input: {
   checklistKind?: VehicleChecklistKind;
   notes?: string;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const name = input.name.trim();
   if (!name) throw new Error("Template name is required.");
 
@@ -183,7 +184,7 @@ export async function updateVehicleCheckTemplate(input: {
 }
 
 export async function deleteVehicleCheckTemplate(id: string) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const supabase = await createSupabaseServerClient();
 
   const { data: template, error: fetchError } = await supabase
@@ -216,7 +217,7 @@ export async function createVehicleCheckTemplateSection(input: {
   templateId: string;
   label: string;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const label = input.label.trim();
   if (!label) throw new Error("Section title is required.");
 
@@ -246,7 +247,7 @@ export async function createVehicleCheckTemplateItem(input: {
   helpText?: string;
   isMandatory?: boolean;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const label = input.label.trim();
   if (!label) throw new Error("Label is required.");
 
@@ -295,7 +296,7 @@ export async function setVehicleCheckTemplateItemMandatory(input: {
   id: string;
   isMandatory: boolean;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const supabase = await createSupabaseServerClient();
   const { data: existing, error: fetchError } = await supabase
     .from("vehicle_check_template_items")
@@ -324,7 +325,7 @@ export async function updateVehicleCheckTemplateItem(input: {
   checkType?: VehicleCheckType | null;
   fieldType?: VehicleCheckFieldType | null;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const label = input.label.trim();
   if (!label) throw new Error("Label is required.");
 
@@ -388,7 +389,7 @@ export async function setVehicleCheckTemplateItemActive(input: {
   id: string;
   isActive: boolean;
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const supabase = await createSupabaseServerClient();
   const { data: existing, error: fetchError } = await supabase
     .from("vehicle_check_template_items")
@@ -407,7 +408,7 @@ export async function setVehicleCheckTemplateItemActive(input: {
 }
 
 export async function deleteVehicleCheckTemplateItem(id: string) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   const supabase = await createSupabaseServerClient();
   const { data: existing, error: fetchError } = await supabase
     .from("vehicle_check_template_items")
@@ -425,7 +426,7 @@ export async function reorderVehicleCheckTemplateItems(input: {
   templateId: string;
   orderedIds: string[];
 }) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_vehicle_check_templates");
   if (input.orderedIds.length === 0) return;
 
   const supabase = await createSupabaseServerClient();

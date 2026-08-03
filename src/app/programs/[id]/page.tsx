@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookOpen, Pencil, PlayCircle } from "lucide-react";
-import { hasRole, requireUserProfile } from "@/lib/auth";
+import { isAdmin, requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { programModulesFromRows } from "@/lib/program-modules";
@@ -26,6 +27,7 @@ import { Button } from "@/components/ui/Button";
 
 export default async function ProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const profile = await requireUserProfile();
+  const caps = await getProfileCapabilities(profile);
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
@@ -47,10 +49,13 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
   const modules = programModulesFromRows(programModuleRows);
   const typedProgram = mapProgramRow(program as ProgramQueryRow);
   const canOpenModules =
-    typedProgram.status === "published" || typedProgram.created_by === profile.id || profile.role === "admin";
+    typedProgram.status === "published" ||
+    typedProgram.created_by === profile.id ||
+    isAdmin(profile);
   const canEdit =
-    hasRole(profile, ["admin"]) ||
-    (hasRole(profile, ["instructor"]) && typedProgram.created_by === profile.id);
+    isAdmin(profile) ||
+    (caps.author_training && typedProgram.created_by === profile.id);
+  const showSelfEnroll = canOpenModules && caps.self_enroll;
 
   const moduleIds = modules.map((m) => m.id);
   const moduleProgress = await loadProgramModuleProgress(supabase, profile.id, moduleIds);
@@ -133,7 +138,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
           </div>
         ) : null}
 
-        {canOpenModules ? (
+        {showSelfEnroll ? (
           <>
             <ProgramEnrollmentPanel
               programId={id}
@@ -146,6 +151,10 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
               enrolledCount={moduleProgress.enrolledCount}
             />
           </>
+        ) : !caps.self_enroll && moduleProgress.enrolledCount === 0 ? (
+          <div className="mb-8 rounded-lg border p-4 text-sm text-muted-foreground">
+            Your permission level cannot self-enroll. Contact an instructor or admin if you need to be enrolled.
+          </div>
         ) : null}
 
         {firstModule && canOpenModules && overallProgress === 0 ? (

@@ -30,7 +30,6 @@ import type { Location } from "@/lib/locations-types";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Input, Textarea } from "@/components/ui/Input";
 
@@ -79,18 +78,19 @@ export function CreateLocationForm() {
           disabled={pending}
           rows={2}
           placeholder="Optional"
+          className="min-h-0"
           onChange={(e) => setNotes(e.target.value)}
         />
       </div>
       {error ? <FieldError>{error}</FieldError> : null}
-      <Button type="submit" disabled={pending || !name.trim()}>
+      <Button type="submit" size="sm" disabled={pending || !name.trim()}>
         {pending ? "Adding…" : "Add location"}
       </Button>
     </form>
   );
 }
 
-function SortableLocationCard({ location }: { location: Location }) {
+function SortableLocationRow({ location }: { location: Location }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(location.name);
@@ -120,148 +120,139 @@ function SortableLocationCard({ location }: { location: Location }) {
     <li
       ref={setNodeRef}
       style={style}
-      className={cn(isDragging && "z-10 opacity-80 shadow-lg")}
+      className={cn(
+        "border-b border-border last:border-0",
+        isDragging && "z-10 bg-background opacity-90 shadow-md"
+      )}
     >
-      <Card>
-        <CardHeader className="flex flex-row items-start gap-2 space-y-0">
+      {!editing ? (
+        <div className="flex items-center gap-2 px-2 py-1.5">
           <button
             type="button"
-            className={cn(
-              "mt-1 flex shrink-0 cursor-grab touch-none items-center self-start rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing",
-              editing && "pointer-events-none opacity-40"
-            )}
+            className="flex shrink-0 cursor-grab touch-none items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
             aria-label={`Reorder ${location.name}`}
-            disabled={editing}
             {...attributes}
             {...listeners}
           >
-            <GripVertical className="h-5 w-5" />
+            <GripVertical className="h-4 w-4" />
           </button>
-
-          {!editing ? (
-            <>
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  {location.is_active ? (
-                    <Badge variant="secondary">Active</Badge>
-                  ) : (
-                    <Badge variant="outline">Inactive</Badge>
-                  )}
-                </div>
-                <CardTitle className="text-xl">{location.name}</CardTitle>
-                {location.notes ? (
-                  <p className="text-sm text-muted-foreground">{location.notes}</p>
-                ) : null}
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setName(location.name);
-                  setNotes(location.notes);
-                  setIsActive(location.is_active);
-                  setError(null);
-                  setEditing(true);
-                }}
-              >
-                Edit
-              </Button>
-            </>
-          ) : (
-            <div className="min-w-0 flex-1 space-y-4">
-              <CardTitle className="text-xl">Edit location</CardTitle>
-              <form
-                className="space-y-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  setError(null);
-                  startTransition(async () => {
-                    try {
-                      await updateLocation(location.id, {
-                        name,
-                        sort_order: location.sort_order,
-                        is_active: isActive,
-                        notes,
-                      });
-                      setEditing(false);
-                      router.refresh();
-                    } catch (err) {
-                      setError(
-                        err instanceof Error ? err.message : "Failed to update location"
-                      );
-                    }
-                  });
-                }}
-              >
-                <div className="space-y-2">
-                  <FieldLabel htmlFor={`location-name-${location.id}`}>Name</FieldLabel>
-                  <Input
-                    id={`location-name-${location.id}`}
-                    required
-                    value={name}
-                    disabled={pending}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <FieldLabel htmlFor={`location-notes-${location.id}`}>Notes</FieldLabel>
-                  <Textarea
-                    id={`location-notes-${location.id}`}
-                    value={notes}
-                    disabled={pending}
-                    rows={2}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    disabled={pending}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                  />
-                  Active (shown in asset forms)
-                </label>
-                {error ? <FieldError>{error}</FieldError> : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button type="submit" disabled={pending || !name.trim()}>
-                    {pending ? "Saving…" : "Save"}
-                  </Button>
-                  <Button type="button" variant="outline" disabled={pending} onClick={reset}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    disabled={pending}
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          `Delete "${location.name}"? This cannot be undone if no assets use it.`
-                        )
-                      ) {
-                        return;
-                      }
-                      setError(null);
-                      startTransition(async () => {
-                        try {
-                          await deleteLocation(location.id);
-                          router.refresh();
-                        } catch (err) {
-                          setError(
-                            err instanceof Error ? err.message : "Failed to delete location"
-                          );
-                        }
-                      });
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </form>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-medium">{location.name}</span>
+              {!location.is_active ? (
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  Inactive
+                </Badge>
+              ) : null}
             </div>
-          )}
-        </CardHeader>
-      </Card>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 px-2"
+            onClick={() => {
+              setName(location.name);
+              setNotes(location.notes);
+              setIsActive(location.is_active);
+              setError(null);
+              setEditing(true);
+            }}
+          >
+            Edit
+          </Button>
+        </div>
+      ) : (
+        <form
+          className="space-y-2 px-2 py-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            startTransition(async () => {
+              try {
+                await updateLocation(location.id, {
+                  name,
+                  sort_order: location.sort_order,
+                  is_active: isActive,
+                  notes,
+                });
+                setEditing(false);
+                router.refresh();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to update location");
+              }
+            });
+          }}
+        >
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="space-y-1">
+              <FieldLabel htmlFor={`location-name-${location.id}`}>Name</FieldLabel>
+              <Input
+                id={`location-name-${location.id}`}
+                required
+                value={name}
+                disabled={pending}
+                className="h-8"
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <label className="flex h-8 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isActive}
+                disabled={pending}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              Active
+            </label>
+          </div>
+          <div className="space-y-1">
+            <FieldLabel htmlFor={`location-notes-${location.id}`}>Notes</FieldLabel>
+            <Textarea
+              id={`location-notes-${location.id}`}
+              value={notes}
+              disabled={pending}
+              rows={2}
+              className="min-h-0"
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+          {error ? <FieldError>{error}</FieldError> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm" disabled={pending || !name.trim()}>
+              {pending ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={reset}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Delete "${location.name}"? This cannot be undone if no assets use it.`
+                  )
+                ) {
+                  return;
+                }
+                setError(null);
+                startTransition(async () => {
+                  try {
+                    await deleteLocation(location.id);
+                    router.refresh();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to delete location");
+                  }
+                });
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </form>
+      )}
     </li>
   );
 }
@@ -306,7 +297,7 @@ export function LocationsAdmin({ locations }: { locations: Location[] }) {
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-      <div className="space-y-3">
+      <div className="space-y-2">
         {orderedLocations.length === 0 ? (
           <p className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
             No locations yet. Add one on the right.
@@ -314,7 +305,7 @@ export function LocationsAdmin({ locations }: { locations: Location[] }) {
         ) : (
           <>
             <p className="text-xs text-muted-foreground">
-              {pending ? "Saving order..." : "Drag locations to reorder."}
+              {pending ? "Saving order..." : "Drag to reorder."}
             </p>
             {error ? <FieldError>{error}</FieldError> : null}
             <DndContext
@@ -326,9 +317,9 @@ export function LocationsAdmin({ locations }: { locations: Location[] }) {
                 items={orderedLocations.map((location) => location.id)}
                 strategy={verticalListSortingStrategy}
               >
-                <ul className="space-y-3">
+                <ul className="overflow-hidden rounded-md border">
                   {orderedLocations.map((location) => (
-                    <SortableLocationCard key={location.id} location={location} />
+                    <SortableLocationRow key={location.id} location={location} />
                   ))}
                 </ul>
               </SortableContext>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, GraduationCap } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
@@ -23,6 +24,8 @@ export default async function ProgramsPage({
   searchParams: Promise<{ tag?: string; category?: string }>;
 }) {
   const profile = await requireUserProfile();
+  const caps = await getProfileCapabilities(profile);
+  const limitedCatalog = !caps.browse_program_catalog;
   const params = await searchParams;
   const requestedTag = (params.tag ?? params.category) as ProgramTag | undefined;
   const activeTag = requestedTag && programTags.includes(requestedTag) ? requestedTag : undefined;
@@ -46,11 +49,22 @@ export default async function ProgramsPage({
         <div className="mb-8">
           <div className="mb-2 flex items-center gap-3">
             <GraduationCap className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold">Programs</h1>
+            <h1 className="text-4xl font-bold">{limitedCatalog ? "Assigned training" : "Programs"}</h1>
           </div>
-          <p className="text-lg text-muted-foreground">Browse training by division.</p>
+          <p className="text-lg text-muted-foreground">
+            {limitedCatalog
+              ? "Programs you have been enrolled in by an instructor or admin."
+              : "Browse training by division."}
+          </p>
         </div>
-        <ProgramCategoryGrid programCounts={tagCounts} />
+        {programList.length === 0 && limitedCatalog ? (
+          <div className="rounded-lg border py-12 text-center">
+            <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="text-muted-foreground">No assigned programs yet.</p>
+          </div>
+        ) : (
+          <ProgramCategoryGrid programCounts={tagCounts} />
+        )}
       </div>
     );
   }
@@ -81,7 +95,9 @@ export default async function ProgramsPage({
       {filteredPrograms.length === 0 ? (
         <div className="rounded-lg border py-12 text-center">
           <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No programs with this tag yet.</p>
+          <p className="text-muted-foreground">
+            {limitedCatalog ? "No assigned programs with this tag yet." : "No programs with this tag yet."}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">

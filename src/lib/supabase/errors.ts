@@ -24,7 +24,12 @@ export function isMissingAssetsTable(error: PostgrestError | null) {
     error.code === "PGRST205" ||
     error.message.includes("assets") ||
     error.message.includes("asset_inspections") ||
-    error.message.includes("Could not find the table")
+    error.message.includes("equipment_categories") ||
+    error.message.includes("equipment_subcategories") ||
+    error.message.includes("equipment_category_id") ||
+    error.message.includes("equipment_subcategory_id") ||
+    error.message.includes("Could not find the table") ||
+    (error.message.includes("Could not find the") && error.message.includes("column"))
   );
 }
 
@@ -40,12 +45,34 @@ export function isMissingVehicleChecksTable(error: PostgrestError | null) {
   );
 }
 
-export function isMissingLocationsTable(error: PostgrestError | null) {
+export function isMissingLocationsTable(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return (
     error.code === "PGRST205" ||
-    error.message.includes("locations") ||
-    error.message.includes("Could not find the table")
+    (error.message?.includes("locations") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
+  );
+}
+
+export function isMissingEquipmentCategoriesTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("equipment_categories") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
+  );
+}
+
+export function isMissingEquipmentSubcategoriesTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("equipment_subcategories") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
   );
 }
 
@@ -55,6 +82,19 @@ export function isMissingMaintenanceRequestsTable(error: PostgrestError | null) 
     error.code === "PGRST205" ||
     error.message.includes("maintenance_requests") ||
     error.message.includes("Could not find the table")
+  );
+}
+
+export function isMissingPersonnelTables(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("personnel_certifications") ||
+    error.message.includes("personnel_documents") ||
+    error.message.includes("personnel_notes") ||
+    error.message.includes("employee_number") ||
+    error.message.includes("Could not find the table") ||
+    (error.message.includes("Could not find the") && error.message.includes("column"))
   );
 }
 

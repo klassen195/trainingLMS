@@ -9,7 +9,7 @@ Internal fire department learning management system for program enrollment, modu
 - Public landing hub at `/`
 - Supabase Auth (email magic link) for Training LMS features
 - SQL migrations with RLS, profile bootstrap trigger, and seed catalog programs
-- Roles: learner, instructor, admin
+- Roles: recruit, firefighter, captain — plus system admin flag
 
 ## Setup
 
@@ -69,7 +69,9 @@ Open `http://localhost:3000`.
 After signing in once (creates your profile), run in SQL editor:
 
 ```sql
-update public.profiles set role = 'admin' where id = '<your-auth-user-uuid>';
+update public.profiles
+set role = 'captain', is_admin = true
+where id = '<your-auth-user-uuid>';
 ```
 
 ## Manual QA checklist
@@ -77,5 +79,14 @@ update public.profiles set role = 'admin' where id = '<your-auth-user-uuid>';
 1. Sign in with magic link.
 2. Browse **Programs** and enroll in a seed program.
 3. Open a module and mark it complete.
-4. As instructor/admin, create and publish a program with modules.
-5. As admin, change a user's role on **Admin**.
+4. As captain/admin, create and publish a program with modules.
+5. As admin, change a user's permission level on **Admin**.
+6. Assign training to a Recruit via SQL (Recruits cannot self-enroll):
+
+```sql
+insert into public.module_enrollments (module_id, user_id)
+select pm.module_id, '<recruit-user-uuid>'
+from public.program_modules pm
+where pm.program_id = '<program-uuid>'
+on conflict (module_id, user_id) do nothing;
+```

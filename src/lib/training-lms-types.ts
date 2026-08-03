@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "instructor" | "learner";
+export type UserRole = "recruit" | "firefighter" | "captain";
 
 export type ProgramTag =
   | "fire"
@@ -23,7 +23,19 @@ export type Profile = {
   email: string | null;
   rank: string | null;
   role: UserRole;
+  is_admin: boolean;
   created_at: string;
+  employee_number?: string | null;
+  job_title?: string | null;
+  department?: string | null;
+  phone?: string | null;
+  hire_date?: string | null;
+  shift?: "red" | "blue" | "green" | "white" | null;
+  home_address?: string | null;
+  emergency_contacts?: string | null;
+  hr_info?: string | null;
+  primary_location_id?: string | null;
+  supervisor_id?: string | null;
 };
 
 export type Program = {

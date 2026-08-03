@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Package } from "lucide-react";
-import { requireUserProfile } from "@/lib/auth";
+import { isAdmin, requireUserProfile } from "@/lib/auth";
 import {
   ASSET_WITH_ASSIGNEE_SELECT,
   INSPECTION_WITH_INSPECTOR_SELECT,
   UNIT_ASSIGNMENT_WITH_ACTOR_SELECT,
   assetDisplayLabel,
+  equipmentAssignmentLabel,
   type ApparatusUnitAssignmentWithActor,
   type AssetInspectionWithInspector,
-  type AssetWithAssignee,
 } from "@/lib/assets-types";
 import {
   resolveVehicleCheckTemplates,
@@ -34,7 +34,7 @@ import {
   type VehicleCheckResponse,
   type VehicleCheckWithDetails,
 } from "@/lib/vehicle-checks-types";
-import { asSingleProfile } from "@/lib/assets";
+import { asSingleProfile, normalizeAssetRow } from "@/lib/assets";
 import { AssetInspectionForm } from "@/components/AssetInspectionForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { DeleteAssetButton } from "@/components/DeleteAssetButton";
@@ -83,7 +83,7 @@ export default async function AssetDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const profile = await requireUserProfile();
-  const isAdmin = profile.role === "admin";
+  const admin = isAdmin(profile);
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
@@ -98,16 +98,7 @@ export default async function AssetDetailPage({
   if (!asset) notFound();
 
   const raw = asset as Record<string, unknown>;
-  const row: AssetWithAssignee = {
-    ...(raw as Omit<AssetWithAssignee, "assignee">),
-    assignee: asSingleProfile(
-      raw.assignee as
-        | { id: string; display_name: string | null; email: string | null }
-        | { id: string; display_name: string | null; email: string | null }[]
-        | null
-        | undefined
-    ),
-  };
+  const row = normalizeAssetRow(raw);
 
   const listHref = row.kind === "ppe" ? "/assets/ppe" : "/assets/apparatus";
 
@@ -322,8 +313,12 @@ export default async function AssetDetailPage({
             <Badge className={assetStatusBadgeClass(row.status)}>
               {assetStatusLabel(row.status)}
             </Badge>
-            {row.station ? <Badge variant="outline">{row.station}</Badge> : null}
-            {row.kind === "ppe" && row.ppe_category ? (
+            {row.kind === "apparatus" && row.station ? (
+              <Badge variant="outline">{row.station}</Badge>
+            ) : null}
+            {row.kind === "ppe" && row.equipment_category?.name ? (
+              <Badge variant="outline">{row.equipment_category.name}</Badge>
+            ) : row.kind === "ppe" && row.ppe_category ? (
               <Badge variant="outline">{ppeCategoryLabel(row.ppe_category)}</Badge>
             ) : null}
             {row.kind === "apparatus" && row.apparatus_type ? (
@@ -336,7 +331,7 @@ export default async function AssetDetailPage({
               <Badge variant="destructive">Inspection overdue</Badge>
             ) : null}
             {row.kind === "ppe" && isPast(row.expires_on) ? (
-              <Badge variant="destructive">Expired</Badge>
+              <Badge variant="destructive">Replacement due</Badge>
             ) : null}
           </div>
         </div>
@@ -344,7 +339,7 @@ export default async function AssetDetailPage({
           <Button variant="outline" asChild>
             <Link href={listHref}>Back</Link>
           </Button>
-          {isAdmin ? (
+          {admin ? (
             <>
               <Button variant="outline" asChild>
                 <Link href={`/assets/${row.id}/edit`}>Edit</Link>
@@ -367,9 +362,38 @@ export default async function AssetDetailPage({
                   <>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Equipment ID
+                      </dt>
+                      <dd className="text-sm">{row.name || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Category
+                      </dt>
+                      <dd className="text-sm">
+                        {row.equipment_category?.name ||
+                          (row.ppe_category ? ppeCategoryLabel(row.ppe_category) : "—")}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Subcategory
+                      </dt>
+                      <dd className="text-sm">
+                        {row.equipment_subcategory?.name || row.subcategory || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Description
+                      </dt>
+                      <dd className="text-sm">{row.description || "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                         Assigned to
                       </dt>
-                      <dd className="text-sm">{formatPerson(row.assignee)}</dd>
+                      <dd className="text-sm">{equipmentAssignmentLabel(row)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">Size</dt>
@@ -377,13 +401,13 @@ export default async function AssetDetailPage({
                     </div>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Manufactured
+                        Manufacture date
                       </dt>
                       <dd className="text-sm">{formatDate(row.manufactured_on)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Expires
+                        Replacement date
                       </dt>
                       <dd
                         className={cn(
@@ -392,6 +416,22 @@ export default async function AssetDetailPage({
                         )}
                       >
                         {formatDate(row.expires_on)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        In service date
+                      </dt>
+                      <dd className="text-sm">{formatDate(row.in_service_on)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Purchase cost
+                      </dt>
+                      <dd className="text-sm">
+                        {row.purchase_cost != null
+                          ? `$${Number(row.purchase_cost).toFixed(2)}`
+                          : "—"}
                       </dd>
                     </div>
                     <div>
@@ -464,7 +504,9 @@ export default async function AssetDetailPage({
                   <dd className="text-sm">{row.manufacturer || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {row.kind === "ppe" ? "Model number" : "Model"}
+                  </dt>
                   <dd className="text-sm">{row.model || "—"}</dd>
                 </div>
                 <div>
@@ -593,7 +635,7 @@ export default async function AssetDetailPage({
         </div>
 
         {row.kind === "ppe" ? (
-          isAdmin ? (
+          admin ? (
             <AssetInspectionForm assetId={row.id} />
           ) : null
         ) : (

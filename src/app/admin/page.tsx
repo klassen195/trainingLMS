@@ -1,21 +1,11 @@
 import { Shield } from "lucide-react";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
-import { DatabaseSetup } from "@/components/DatabaseSetup";
-import type { Profile } from "@/lib/training-lms-types";
+import { requireAdmin } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { AdminUserManager } from "./ui";
 
 export default async function AdminPage() {
-  await requireRole(["admin"]);
-  const supabase = await createSupabaseServerClient();
-
-  const { data: profiles, error } = await supabase.from("profiles").select("*").order("created_at");
-  if (isMissingTrainingLmsTables(error)) return <DatabaseSetup />;
-  if (error) throw error;
+  await requireAdmin();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -25,11 +15,25 @@ export default async function AdminPage() {
           <h1 className="text-4xl font-bold">Admin</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Manage users, locations, roles, and department checklists.
+          Manage locations, permission settings, and department checklists.
         </p>
       </div>
 
       <div className="mb-8 grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Personnel</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Directory, invites, org details, certifications, documents, and training assignment.
+            </p>
+            <Button asChild>
+              <Link href="/personnel">Manage personnel</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Locations</CardTitle>
@@ -40,6 +44,34 @@ export default async function AdminPage() {
             </p>
             <Button asChild>
               <Link href="/admin/locations">Manage locations</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Equipment categories</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Manage the fixed category list for equipment inventory.
+            </p>
+            <Button asChild>
+              <Link href="/admin/equipment-categories">Manage categories</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Equipment subcategories</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Manage subcategory lists under each equipment category.
+            </p>
+            <Button asChild>
+              <Link href="/admin/equipment-subcategories">Manage subcategories</Link>
             </Button>
           </CardContent>
         </Card>
@@ -72,13 +104,6 @@ export default async function AdminPage() {
           </CardContent>
         </Card>
       </div>
-
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold">User profiles</h2>
-        <p className="text-muted-foreground">Select a member to edit their name, rank, and role.</p>
-      </div>
-
-      <AdminUserManager users={(profiles ?? []) as Profile[]} />
     </div>
   );
 }

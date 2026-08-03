@@ -92,17 +92,12 @@ export default async function NewMaintenanceRequestPage({
             <Wrench className="h-8 w-8 text-primary" />
             <h1 className="text-4xl font-bold">Request maintenance</h1>
           </div>
-          <p className="text-muted-foreground">
-            {assetDisplayLabel(row)}
+          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+            <span>{assetDisplayLabel(row)}</span>
             {row.apparatus_type ? (
-              <>
-                {" "}
-                <Badge variant="outline" className="align-middle">
-                  {apparatusTypeLabel(row.apparatus_type)}
-                </Badge>
-              </>
+              <Badge variant="outline">{apparatusTypeLabel(row.apparatus_type)}</Badge>
             ) : null}
-          </p>
+          </div>
         </div>
         <Button variant="outline" asChild>
           <Link href={`/assets/${row.id}`}>Back</Link>

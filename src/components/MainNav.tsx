@@ -14,10 +14,13 @@ import {
   ArrowLeftRight,
   Package,
   ClipboardPen,
+  Users,
+  Siren,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
-import type { Profile, UserRole } from "@/lib/training-lms-types";
+import type { Profile } from "@/lib/training-lms-types";
+import { roleLabel } from "@/lib/labels";
 import { Button } from "@/components/ui/Button";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
 import {
@@ -37,29 +40,44 @@ import {
   SheetTrigger,
 } from "@/components/ui/Sheet";
 
-function hasRole(profile: Profile, roles: UserRole[]) {
-  return roles.includes(profile.role);
-}
-
 const publicNavItems = [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }];
 
-const authNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/programs", label: "Programs", icon: GraduationCap },
-  { href: "/assets", label: "Assets", icon: Package },
-  { href: "/document-training", label: "Document Training", icon: ClipboardPen },
-];
+function authNavItemsFor(profile: Profile, showIncidents: boolean) {
+  return [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/programs", label: "Programs", icon: GraduationCap },
+    { href: "/assets", label: "Assets", icon: Package },
+    ...(showIncidents ? [{ href: "/incidents", label: "Incidents", icon: Siren }] : []),
+    {
+      href: profile.is_admin ? "/personnel" : `/personnel/${profile.id}`,
+      label: "Personnel",
+      icon: Users,
+    },
+    { href: "/document-training", label: "Training", icon: ClipboardPen },
+  ];
+}
 
-export function MainNav({ profile }: { profile: Profile | null }) {
+export function MainNav({
+  profile,
+  showInstructor = false,
+  showAdmin = false,
+  showIncidents = false,
+}: {
+  profile: Profile | null;
+  showInstructor?: boolean;
+  showAdmin?: boolean;
+  showIncidents?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const showInstructor = profile ? hasRole(profile, ["instructor", "admin"]) : false;
-  const showAdmin = profile ? hasRole(profile, ["admin"]) : false;
   const displayName = profile?.display_name ?? profile?.email ?? "Member";
   const initials = displayName.charAt(0).toUpperCase();
+  const accessLabel = profile
+    ? [roleLabel(profile.role), profile.is_admin ? "Admin" : null].filter(Boolean).join(" · ")
+    : null;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -71,7 +89,7 @@ export function MainNav({ profile }: { profile: Profile | null }) {
   }
 
   const loggedInNavItems = [
-    ...authNavItems,
+    ...(profile ? authNavItemsFor(profile, showIncidents) : []),
     ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];
@@ -89,25 +107,27 @@ export function MainNav({ profile }: { profile: Profile | null }) {
         </Link>
 
         <div className="absolute inset-x-0 hidden justify-center pointer-events-none md:flex">
-          <div className="pointer-events-auto flex items-center gap-1">
+          <div className="pointer-events-auto flex items-start gap-1">
             {allNavItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex w-[4.5rem] flex-col items-center justify-center gap-1 rounded-md px-1.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex w-[4.5rem] flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
                   isActive(item.href) && "bg-accent text-accent-foreground"
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-md border bg-background",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background",
                     isActive(item.href) && "border-primary bg-primary text-primary-foreground"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
                 </span>
-                <span className="text-center text-[10px] font-medium leading-tight">{item.label}</span>
+                <span className="flex min-h-[2rem] items-start justify-center text-center text-[10px] font-medium leading-tight">
+                  {item.label}
+                </span>
               </Link>
             ))}
           </div>
@@ -130,7 +150,7 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                     {profile.email ? (
                       <p className="text-xs leading-none text-muted-foreground">{profile.email}</p>
                     ) : null}
-                    <p className="text-xs leading-none text-muted-foreground capitalize">{profile.role}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{accessLabel}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -138,6 +158,12 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                   <Link href="/account">
                     <UserRound className="mr-2 h-4 w-4" />
                     Account
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={profile.is_admin ? "/personnel" : `/personnel/${profile.id}`}>
+                    <Users className="mr-2 h-4 w-4" />
+                    Personnel
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -172,38 +198,42 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                 <SheetTitle>Navigation</SheetTitle>
                 <SheetDescription>TrainingLMS menu</SheetDescription>
               </SheetHeader>
-              <div className="mt-8 grid grid-cols-3 gap-3 px-1">
+              <div className="mt-8 grid grid-cols-3 items-start gap-3 px-1">
                 {allNavItems.map((item) => (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "flex flex-col items-center justify-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                      "flex flex-col items-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
                       isActive(item.href) && "bg-accent text-accent-foreground"
                     )}
                   >
                     <span
                       className={cn(
-                        "flex h-11 w-11 items-center justify-center rounded-md border bg-background",
+                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-md border bg-background",
                         isActive(item.href) && "border-primary bg-primary text-primary-foreground"
                       )}
                     >
                       <item.icon className="h-5 w-5" />
                     </span>
-                    <span className="text-center text-xs font-medium leading-tight">{item.label}</span>
+                    <span className="flex min-h-[2.5rem] items-start justify-center text-center text-xs font-medium leading-tight">
+                      {item.label}
+                    </span>
                   </Link>
                 ))}
                 {profile ? (
                   <Link
                     href="/account"
                     onClick={() => setMobileOpen(false)}
-                    className="flex flex-col items-center justify-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    className="flex flex-col items-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
-                    <span className="flex h-11 w-11 items-center justify-center rounded-md border bg-background">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border bg-background">
                       <UserRound className="h-5 w-5" />
                     </span>
-                    <span className="text-center text-xs font-medium leading-tight">Account</span>
+                    <span className="flex min-h-[2.5rem] items-start justify-center text-center text-xs font-medium leading-tight">
+                      Account
+                    </span>
                   </Link>
                 ) : null}
               </div>
@@ -215,7 +245,7 @@ export function MainNav({ profile }: { profile: Profile | null }) {
                     </Avatar>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{displayName}</span>
-                      <span className="text-xs text-muted-foreground capitalize">{profile.role}</span>
+                      <span className="text-xs text-muted-foreground">{accessLabel}</span>
                     </div>
                   </div>
                   <Button variant="outline" className="w-full" disabled={pending} onClick={handleSignOut}>

@@ -3,15 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type {
   ApparatusType,
   AssetKind,
   AssetStatus,
+  EquipmentAssignmentType,
   InspectionResult,
-  PpeCategory,
 } from "@/lib/assets-types";
 
 function throwIfDbError(error: PostgrestError | null) {
@@ -46,8 +46,15 @@ export type AssetFormInput = {
   model?: string;
   serial_number?: string;
   notes?: string;
+  assignment_type?: EquipmentAssignmentType | null;
   assigned_to?: string | null;
-  ppe_category?: PpeCategory | null;
+  assigned_station?: string | null;
+  assigned_apparatus_id?: string | null;
+  equipment_category_id?: string | null;
+  equipment_subcategory_id?: string | null;
+  description?: string | null;
+  purchase_cost?: number | null;
+  in_service_on?: string | null;
   size?: string;
   manufactured_on?: string | null;
   expires_on?: string | null;
@@ -58,21 +65,107 @@ export type AssetFormInput = {
   vehicle_check_template_ids?: string[];
 };
 
+function equipmentAssignmentFields(input: AssetFormInput): {
+  assignment_type: EquipmentAssignmentType | null;
+  assigned_to: string | null;
+  assigned_station: string | null;
+  assigned_apparatus_id: string | null;
+} {
+  if (input.kind !== "ppe") {
+    return {
+      assignment_type: null,
+      assigned_to: null,
+      assigned_station: null,
+      assigned_apparatus_id: null,
+    };
+  }
+
+  const type = input.assignment_type ?? null;
+  if (type === "person") {
+    const personId = emptyToNull(input.assigned_to ?? undefined);
+    if (!personId) {
+      return {
+        assignment_type: null,
+        assigned_to: null,
+        assigned_station: null,
+        assigned_apparatus_id: null,
+      };
+    }
+    return {
+      assignment_type: "person",
+      assigned_to: personId,
+      assigned_station: null,
+      assigned_apparatus_id: null,
+    };
+  }
+  if (type === "station") {
+    const station = emptyToNull(input.assigned_station ?? undefined);
+    if (!station) {
+      return {
+        assignment_type: null,
+        assigned_to: null,
+        assigned_station: null,
+        assigned_apparatus_id: null,
+      };
+    }
+    return {
+      assignment_type: "station",
+      assigned_to: null,
+      assigned_station: station,
+      assigned_apparatus_id: null,
+    };
+  }
+  if (type === "apparatus") {
+    const apparatusId = emptyToNull(input.assigned_apparatus_id ?? undefined);
+    if (!apparatusId) {
+      return {
+        assignment_type: null,
+        assigned_to: null,
+        assigned_station: null,
+        assigned_apparatus_id: null,
+      };
+    }
+    return {
+      assignment_type: "apparatus",
+      assigned_to: null,
+      assigned_station: null,
+      assigned_apparatus_id: apparatusId,
+    };
+  }
+
+  return {
+    assignment_type: null,
+    assigned_to: null,
+    assigned_station: null,
+    assigned_apparatus_id: null,
+  };
+}
+
 function buildAssetRow(input: AssetFormInput, createdBy?: string) {
+  const assignment = equipmentAssignmentFields(input);
   const base = {
     kind: input.kind,
     name: input.kind === "ppe" ? input.name?.trim() || null : null,
     status: input.status,
-    station: emptyToNull(input.station),
+    station: input.kind === "ppe" ? null : emptyToNull(input.station),
     manufacturer: emptyToNull(input.manufacturer),
     model: emptyToNull(input.model),
     serial_number: emptyToNull(input.serial_number),
     notes: input.notes?.trim() ?? "",
-    assigned_to: input.kind === "ppe" ? emptyToNull(input.assigned_to ?? undefined) : null,
-    ppe_category: input.kind === "ppe" ? input.ppe_category ?? null : null,
+    ...assignment,
+    equipment_category_id:
+      input.kind === "ppe" ? emptyToNull(input.equipment_category_id ?? undefined) : null,
+    equipment_subcategory_id:
+      input.kind === "ppe" ? emptyToNull(input.equipment_subcategory_id ?? undefined) : null,
+    subcategory: null,
+    description: input.kind === "ppe" ? emptyToNull(input.description ?? undefined) : null,
+    purchase_cost: input.kind === "ppe" ? input.purchase_cost ?? null : null,
+    in_service_on: input.kind === "ppe" ? emptyToNull(input.in_service_on ?? undefined) : null,
     size: input.kind === "ppe" ? emptyToNull(input.size) : null,
     manufactured_on: input.kind === "ppe" ? emptyToNull(input.manufactured_on ?? undefined) : null,
     expires_on: input.kind === "ppe" ? emptyToNull(input.expires_on ?? undefined) : null,
+    // Clear legacy enum when saving equipment under the new category model
+    ...(input.kind === "ppe" ? { ppe_category: null } : {}),
     unit_number: input.kind === "apparatus" ? emptyToNull(input.unit_number) : null,
     apparatus_type: input.kind === "apparatus" ? input.apparatus_type ?? null : null,
     year: input.kind === "apparatus" ? input.year ?? null : null,
@@ -177,16 +270,74 @@ async function syncUnitAssignmentHistory(
   }
 }
 
+async function assertSubcategoryMatchesCategory(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  input: AssetFormInput
+) {
+  if (input.kind !== "ppe" || !input.equipment_subcategory_id || !input.equipment_category_id) {
+    return;
+  }
+  const { data: sub, error: subError } = await supabase
+    .from("equipment_subcategories")
+    .select("id, equipment_category_id")
+    .eq("id", input.equipment_subcategory_id)
+    .maybeSingle();
+  throwIfDbError(subError);
+  if (!sub || sub.equipment_category_id !== input.equipment_category_id) {
+    throw new Error("Subcategory must belong to the selected category.");
+  }
+}
+
+async function assertEquipmentAssignment(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  input: AssetFormInput
+) {
+  if (input.kind !== "ppe") return;
+
+  const type = input.assignment_type ?? null;
+  if (!type) return;
+
+  if (type === "person" && !emptyToNull(input.assigned_to ?? undefined)) {
+    throw new Error("Select a person for this assignment.");
+  }
+  if (type === "station" && !emptyToNull(input.assigned_station ?? undefined)) {
+    throw new Error("Select a station for this assignment.");
+  }
+  if (type === "apparatus") {
+    const apparatusId = emptyToNull(input.assigned_apparatus_id ?? undefined);
+    if (!apparatusId) throw new Error("Select an apparatus for this assignment.");
+    const { data: target, error } = await supabase
+      .from("assets")
+      .select("id, kind")
+      .eq("id", apparatusId)
+      .maybeSingle();
+    throwIfDbError(error);
+    if (!target || target.kind !== "apparatus") {
+      throw new Error("Assigned apparatus must be an apparatus asset.");
+    }
+  }
+}
+
 export async function createAsset(input: AssetFormInput) {
-  const profile = await requireRole(["admin"]);
-  if (input.kind === "ppe" && !input.name?.trim()) throw new Error("Name is required.");
-  if (input.kind === "ppe" && !input.station?.trim()) throw new Error("Location is required.");
-  if (input.kind === "ppe" && !input.ppe_category) throw new Error("PPE category is required.");
+  const profile = await requireCapability("manage_assets");
+  if (input.kind === "ppe" && !input.name?.trim()) throw new Error("Equipment ID is required.");
+  if (input.kind === "ppe" && !input.equipment_category_id?.trim()) {
+    throw new Error("Category is required.");
+  }
+  if (
+    input.kind === "ppe" &&
+    input.purchase_cost != null &&
+    (Number.isNaN(input.purchase_cost) || input.purchase_cost < 0)
+  ) {
+    throw new Error("Purchase cost must be a non-negative number.");
+  }
   if (input.kind === "apparatus" && !input.build_number?.trim()) {
     throw new Error("Build number is required.");
   }
 
   const supabase = await createSupabaseServerClient();
+  await assertSubcategoryMatchesCategory(supabase, input);
+  await assertEquipmentAssignment(supabase, input);
   const row = buildAssetRow(input, profile.id);
 
   if (input.kind === "apparatus" && row.unit_number) {
@@ -232,15 +383,25 @@ export async function createAsset(input: AssetFormInput) {
 }
 
 export async function updateAsset(id: string, input: AssetFormInput) {
-  const profile = await requireRole(["admin"]);
-  if (input.kind === "ppe" && !input.name?.trim()) throw new Error("Name is required.");
-  if (input.kind === "ppe" && !input.station?.trim()) throw new Error("Location is required.");
-  if (input.kind === "ppe" && !input.ppe_category) throw new Error("PPE category is required.");
+  const profile = await requireCapability("manage_assets");
+  if (input.kind === "ppe" && !input.name?.trim()) throw new Error("Equipment ID is required.");
+  if (input.kind === "ppe" && !input.equipment_category_id?.trim()) {
+    throw new Error("Category is required.");
+  }
+  if (
+    input.kind === "ppe" &&
+    input.purchase_cost != null &&
+    (Number.isNaN(input.purchase_cost) || input.purchase_cost < 0)
+  ) {
+    throw new Error("Purchase cost must be a non-negative number.");
+  }
   if (input.kind === "apparatus" && !input.build_number?.trim()) {
     throw new Error("Build number is required.");
   }
 
   const supabase = await createSupabaseServerClient();
+  await assertSubcategoryMatchesCategory(supabase, input);
+  await assertEquipmentAssignment(supabase, input);
   const { data: existing, error: existingError } = await supabase
     .from("assets")
     .select("unit_number")
@@ -292,7 +453,7 @@ export async function updateAsset(id: string, input: AssetFormInput) {
 }
 
 export async function deleteAsset(id: string) {
-  await requireRole(["admin"]);
+  await requireCapability("manage_assets");
   const supabase = await createSupabaseServerClient();
   const { data: asset, error: fetchError } = await supabase
     .from("assets")
@@ -317,7 +478,7 @@ export async function createAssetInspection(input: {
   next_due_on?: string | null;
   inspected_at?: string | null;
 }) {
-  const profile = await requireRole(["admin"]);
+  const profile = await requireCapability("manage_assets");
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.from("asset_inspections").insert({

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BookOpen, Plus } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { isAdmin, requireCaptainOrAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
@@ -15,14 +15,14 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 export default async function InstructorPage() {
-  const profile = await requireRole(["instructor", "admin"]);
+  const profile = await requireCaptainOrAdmin();
   const supabase = await createSupabaseServerClient();
 
   let query = supabase
     .from("programs")
     .select(PROGRAM_WITH_TAGS_SELECT)
     .order("updated_at", { ascending: false });
-  if (profile.role === "instructor") {
+  if (!isAdmin(profile)) {
     query = query.eq("created_by", profile.id);
   }
   const { data: programs, error } = await query;

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { isAdmin, requireCaptainOrAdmin } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { programModulesFromRows } from "@/lib/program-modules";
 import { loadChecklistItemsByResourceIds } from "@/lib/checklist-data";
@@ -13,13 +13,13 @@ export default async function EditModulePage({
 }: {
   params: Promise<{ id: string; moduleId: string }>;
 }) {
-  const profile = await requireRole(["instructor", "admin"]);
+  const profile = await requireCaptainOrAdmin();
   const { id, moduleId } = await params;
   const supabase = await createSupabaseServerClient();
 
   const { data: program } = await supabase.from("programs").select("*").eq("id", id).maybeSingle();
   if (!program) notFound();
-  if (profile.role === "instructor" && program.created_by !== profile.id) notFound();
+  if (!isAdmin(profile) && program.created_by !== profile.id) notFound();
 
   const { data: programLink } = await supabase
     .from("program_modules")
@@ -32,7 +32,7 @@ export default async function EditModulePage({
   const moduleItem = programModulesFromRows([programLink])[0];
   if (!moduleItem) notFound();
 
-  const canEditContent = profile.role === "admin" || moduleItem.created_by === profile.id;
+  const canEditContent = isAdmin(profile) || moduleItem.created_by === profile.id;
 
   const { data: resources } = await supabase
     .from("module_resources")
@@ -67,7 +67,7 @@ export default async function EditModulePage({
         programId={id}
         moduleItem={moduleItem}
         canEdit={canEditContent}
-        isAdmin={profile.role === "admin"}
+        isAdmin={isAdmin(profile)}
         resources={resourceList}
         checklistItemsByResourceId={checklistItemsByResourceId}
       />

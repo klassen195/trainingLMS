@@ -1,6 +1,6 @@
 import { Wrench } from "lucide-react";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { asSingleProfile } from "@/lib/assets";
 import {
   MAINTENANCE_PHOTO_BUCKET,
@@ -13,7 +13,7 @@ import { MaintenanceRequestAdminList } from "@/components/MaintenanceRequestAdmi
 import { Button } from "@/components/ui/Button";
 
 export default async function AdminMaintenancePage() {
-  await requireRole(["admin"]);
+  await requireCapability("resolve_maintenance");
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase

@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 import { HardHat, Truck } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-const tabs = [
-  { href: "/assets/ppe", label: "PPE", icon: HardHat },
+const allTabs = [
+  { href: "/assets/ppe", label: "Equipment", icon: HardHat },
   { href: "/assets/apparatus", label: "Apparatus", icon: Truck },
 ] as const;
 
-export function AssetsSectionNav() {
+export function AssetsSectionNav({ showApparatus = true }: { showApparatus?: boolean }) {
   const pathname = usePathname();
+  const tabs = showApparatus ? allTabs : allTabs.filter((tab) => tab.href !== "/assets/apparatus");
 
   return (
-    <div className="mb-6 flex flex-wrap gap-2">
+    <div className="mb-3 flex flex-wrap gap-1.5">
       {tabs.map((tab) => {
         const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
         return (
@@ -22,13 +23,13 @@ export function AssetsSectionNav() {
             key={tab.href}
             href={tab.href}
             className={cn(
-              "inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+              "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
               active
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-input bg-background hover:bg-accent hover:text-accent-foreground"
             )}
           >
-            <tab.icon className="h-4 w-4" />
+            <tab.icon className="h-3.5 w-3.5" />
             {tab.label}
           </Link>
         );

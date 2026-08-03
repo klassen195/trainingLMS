@@ -3,12 +3,17 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Profile, UserRole } from "@/lib/training-lms-types";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
+import { canAuthorTraining, hasRole, isAdmin } from "@/lib/permissions";
+import { loadCapabilityMatrix } from "@/lib/capability-matrix";
+import { profileHasCapability } from "@/lib/capabilities";
 
 export type AuthContext =
   | { kind: "unauthenticated" }
   | { kind: "missing_tables" }
   | { kind: "missing_profile"; userId: string }
   | { kind: "authenticated"; profile: Profile };
+
+export { canAuthorTraining, hasRole, isAdmin, isRecruit } from "@/lib/permissions";
 
 export const getAuthContext = cache(async (): Promise<AuthContext> => {
   const supabase = await createSupabaseServerClient();
@@ -21,7 +26,11 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
   if (error && isMissingTrainingLmsTables(error)) return { kind: "missing_tables" };
   if (error) throw error;
   if (!data) return { kind: "missing_profile", userId: user.id };
-  return { kind: "authenticated", profile: data as Profile };
+  const profile = data as Profile;
+  return {
+    kind: "authenticated",
+    profile: { ...profile, is_admin: Boolean(profile.is_admin) },
+  };
 });
 
 export async function getCurrentUserProfile(): Promise<Profile | null> {
@@ -36,12 +45,22 @@ export async function requireUserProfile(): Promise<Profile> {
   return ctx.profile;
 }
 
-export function hasRole(profile: Profile, roles: UserRole[]) {
-  return roles.includes(profile.role);
-}
-
 export async function requireRole(roles: UserRole[]): Promise<Profile> {
   const profile = await requireUserProfile();
-  if (!hasRole(profile, roles)) redirect("/dashboard");
+  if (!hasRole(profile, roles) && !profile.is_admin) redirect("/dashboard");
+  return profile;
+}
+
+export async function requireAdmin(): Promise<Profile> {
+  const profile = await requireUserProfile();
+  if (!isAdmin(profile)) redirect("/dashboard");
+  return profile;
+}
+
+export async function requireCaptainOrAdmin(): Promise<Profile> {
+  const profile = await requireUserProfile();
+  if (isAdmin(profile)) return profile;
+  const matrix = await loadCapabilityMatrix();
+  if (!profileHasCapability(profile, "author_training", matrix)) redirect("/dashboard");
   return profile;
 }

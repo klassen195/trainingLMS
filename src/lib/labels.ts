@@ -30,9 +30,9 @@ const tagLabels: Record<ProgramTag, string> = {
 };
 
 const roleLabels: Record<UserRole, string> = {
-  admin: "Admin",
-  instructor: "Instructor",
-  learner: "Learner",
+  recruit: "Recruit",
+  firefighter: "Firefighter",
+  captain: "Captain",
 };
 
 const assetStatusLabels: Record<AssetStatus, string> = {

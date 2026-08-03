@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, Truck } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { fetchAssetsWithLatestInspection } from "@/lib/assets";
 import { listLocations } from "@/lib/locations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -17,7 +19,9 @@ export default async function AssetsApparatusPage({
   searchParams: Promise<{ station?: string }>;
 }) {
   const profile = await requireUserProfile();
-  const isAdmin = profile.role === "admin";
+  const caps = await getProfileCapabilities(profile);
+  if (!caps.view_apparatus && !caps.manage_assets) redirect("/assets");
+  const admin = caps.manage_assets;
   const { station: stationParam } = await searchParams;
 
   const supabase = await createSupabaseServerClient();
@@ -50,7 +54,7 @@ export default async function AssetsApparatusPage({
             Unit roster, status, and latest vehicle checks by location.
           </p>
         </div>
-        {isAdmin ? (
+        {admin ? (
           <Button asChild>
             <Link href="/assets/new?kind=apparatus">
               <Plus className="mr-2 h-4 w-4" />
@@ -93,7 +97,7 @@ export default async function AssetsApparatusPage({
       <AssetList
         rows={rows}
         kind="apparatus"
-        isAdmin={isAdmin}
+        isAdmin={admin}
         emptyMessage={
           station
             ? `No apparatus recorded for ${station}.`

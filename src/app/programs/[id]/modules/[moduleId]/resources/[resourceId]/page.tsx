@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { getModulePageContext } from "@/lib/module-page-data";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -23,6 +24,7 @@ export default async function ModuleResourcePage({
   params: Promise<{ id: string; moduleId: string; resourceId: string }>;
 }) {
   const profile = await requireUserProfile();
+  const caps = await getProfileCapabilities(profile);
   const { id, moduleId, resourceId } = await params;
   const ctx = await getModulePageContext(id, moduleId, profile);
 
@@ -61,7 +63,7 @@ export default async function ModuleResourcePage({
         <CardContent className="space-y-6 pt-6">
           {ctx.canEdit ? (
             <div className="flex justify-end gap-2">
-              {isQuiz && profile.role === "admin" ? (
+              {isQuiz && caps.manage_quiz_banks ? (
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/admin/quizzes/${resourceId}/edit`}>Configure quiz</Link>
                 </Button>
