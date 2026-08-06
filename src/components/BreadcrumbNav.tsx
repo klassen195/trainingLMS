@@ -81,6 +81,8 @@ export function BreadcrumbNav() {
     });
     if (paths[1] === "new") {
       breadcrumbs.push({ label: "Invite" });
+    } else if (paths[1] === "supervisor") {
+      breadcrumbs.push({ label: "Supervisor dashboard" });
     } else if (paths[1]) {
       breadcrumbs.push({
         label: "Detail",
@@ -141,6 +143,24 @@ export function BreadcrumbNav() {
           label: "Document Training",
           href: isLast ? undefined : "/document-training",
           icon: <ClipboardPen className="h-4 w-4" />,
+        });
+      } else if (path === "new" && paths[index - 1] === "document-training") {
+        breadcrumbs.push({
+          label: "Log training",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (
+        paths[index - 1] === "document-training" &&
+        /^[0-9a-f-]{36}$/i.test(path)
+      ) {
+        breadcrumbs.push({
+          label: "Session",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (path === "edit" && paths[index - 2] === "document-training") {
+        breadcrumbs.push({
+          label: "Edit",
+          href: isLast ? undefined : currentPath,
         });
       } else if (!isLast || paths[index - 1] !== "programs") {
         breadcrumbs.push({

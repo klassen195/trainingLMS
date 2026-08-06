@@ -9,19 +9,12 @@ import {
 } from "@/lib/labels";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { formatDateTime } from "@/lib/dates";
 
 function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
 ) {
   return person?.display_name || person?.email || "Unknown";
-}
-
-function formatTimestamp(value: string) {
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
 }
 
 export function MaintenanceRequestHistory({
@@ -61,7 +54,7 @@ export function MaintenanceRequestHistory({
                 ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">
                   Requested by {formatPerson(request.requester)} ·{" "}
-                  {formatTimestamp(request.requested_at)}
+                  {formatDateTime(request.requested_at)}
                 </p>
                 {request.photo_url ? (
                   <a
@@ -80,7 +73,7 @@ export function MaintenanceRequestHistory({
                 ) : null}
                 {request.status === "resolved" ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Resolved {request.resolved_at ? formatTimestamp(request.resolved_at) : ""}
+                    Resolved {request.resolved_at ? formatDateTime(request.resolved_at) : ""}
                     {request.resolved_note ? ` — ${request.resolved_note}` : ""}
                   </p>
                 ) : null}

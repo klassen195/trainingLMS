@@ -5,12 +5,41 @@ import {
   SHIFT_DAY_START_MINUTE,
 } from "@/lib/shift-rotation";
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
 /** YYYY-MM-DD in local calendar (for form defaults). */
 export function isoDateLocal(d: Date) {
   const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const month = pad2(d.getMonth() + 1);
+  const day = pad2(d.getDate());
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Display date as DD/MM/YYYY.
+ * Calendar dates (`YYYY-MM-DD`) use the stored day (no timezone shift).
+ * Datetimes use the local calendar day.
+ */
+export function formatDate(value: string | null | undefined, empty = "—") {
+  if (!value) return empty;
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [y, m, d] = trimmed.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  const dt = new Date(trimmed);
+  if (Number.isNaN(dt.getTime())) return value;
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+}
+
+/** Display datetime as DD/MM/YYYY HH:mm (local). */
+export function formatDateTime(value: string | null | undefined, empty = "—") {
+  if (!value) return empty;
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return value;
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 }
 
 function shiftDayAnchorLocal() {
@@ -39,14 +68,12 @@ export function defaultShiftDateIso() {
 
 /** Stable display (no locale) — avoids SSR/client hydration mismatches. */
 export function formatShiftDate(isoDate: string) {
-  const [y, m, d] = isoDate.split("-");
-  if (!y || !m || !d) return isoDate;
-  return `${m}/${d}/${y}`;
+  return formatDate(isoDate, isoDate);
 }
 
 /**
  * Shift Day is a 2-day window based on the stored `shift_date` (start day).
- * Example: 2026-05-26 => "5/26-5/27"
+ * Example: 2026-05-26 => "26/05-27/05"
  */
 export function formatShiftDayRange(startIso: string) {
   const [yStr, mStr, dStr] = startIso.split("-");
@@ -62,25 +89,16 @@ export function formatShiftDayRange(startIso: string) {
   const end = new Date(start);
   end.setDate(start.getDate() + 1);
 
-  const startM = start.getMonth() + 1;
-  const startD = start.getDate();
-  const endM = end.getMonth() + 1;
-  const endD = end.getDate();
+  const startLabel = `${pad2(start.getDate())}/${pad2(start.getMonth() + 1)}`;
+  const endLabel = `${pad2(end.getDate())}/${pad2(end.getMonth() + 1)}`;
 
   if (start.getFullYear() === end.getFullYear()) {
-    return `${startM}/${startD}-${endM}/${endD}`;
+    return `${startLabel}-${endLabel}`;
   }
 
-  return `${startM}/${startD}/${start.getFullYear()}-${endM}/${endD}/${end.getFullYear()}`;
+  return `${startLabel}/${start.getFullYear()}-${endLabel}/${end.getFullYear()}`;
 }
 
 export function formatTimestamp(iso: string) {
-  const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return iso;
-  const y = dt.getUTCFullYear();
-  const mo = String(dt.getUTCMonth() + 1).padStart(2, "0");
-  const da = String(dt.getUTCDate()).padStart(2, "0");
-  const h = String(dt.getUTCHours()).padStart(2, "0");
-  const mi = String(dt.getUTCMinutes()).padStart(2, "0");
-  return `${mo}/${da}/${y} ${h}:${mi}`;
+  return formatDateTime(iso, iso);
 }

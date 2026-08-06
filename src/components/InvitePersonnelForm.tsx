@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { invitePersonnelMember } from "@/app/personnel/actions";
+import { createPersonnelMember } from "@/app/personnel/actions";
 import type { UserRole } from "@/lib/training-lms-types";
 import { permissionLevels } from "@/lib/personnel-types";
 import { roleLabel } from "@/lib/labels";
@@ -11,7 +11,8 @@ import { Input, Select } from "@/components/ui/Input";
 
 export function InvitePersonnelForm() {
   const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [role, setRole] = useState<UserRole>("firefighter");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -24,9 +25,10 @@ export function InvitePersonnelForm() {
         setError(null);
         startTransition(async () => {
           try {
-            await invitePersonnelMember({
+            await createPersonnelMember({
               email,
-              displayName: displayName || undefined,
+              firstName: firstName || undefined,
+              lastName: lastName || undefined,
               role,
             });
           } catch (err) {
@@ -38,7 +40,7 @@ export function InvitePersonnelForm() {
             ) {
               throw err;
             }
-            setError(err instanceof Error ? err.message : "Invite failed");
+            setError(err instanceof Error ? err.message : "Failed to add member");
           }
         });
       }}
@@ -56,14 +58,27 @@ export function InvitePersonnelForm() {
         />
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel htmlFor="invite-name">Display name (optional)</FieldLabel>
-        <Input
-          id="invite-name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Full name"
-        />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <FieldLabel htmlFor="invite-first-name">First name</FieldLabel>
+          <Input
+            id="invite-first-name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="First"
+            autoComplete="given-name"
+          />
+        </div>
+        <div className="space-y-2">
+          <FieldLabel htmlFor="invite-last-name">Last name</FieldLabel>
+          <Input
+            id="invite-last-name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Last"
+            autoComplete="family-name"
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -84,7 +99,7 @@ export function InvitePersonnelForm() {
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
       <Button type="submit" disabled={pending}>
-        {pending ? "Sending invite…" : "Send invite"}
+        {pending ? "Adding…" : "Add member"}
       </Button>
     </form>
   );

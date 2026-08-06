@@ -7,7 +7,9 @@ import {
   unassignProgramFromUser,
 } from "@/app/personnel/actions";
 import type { PersonnelTrainingProgram } from "@/lib/personnel-types";
+import { formatTrainingHours } from "@/lib/personnel-types";
 import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldLabel } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Input";
 
@@ -18,61 +20,87 @@ export function PersonnelTrainingPanel({
   programs,
   allPrograms,
   canManage,
+  ytdHours,
+  ytdYear,
 }: {
   profileId: string;
   programs: PersonnelTrainingProgram[];
   allPrograms: ProgramOption[];
   canManage: boolean;
+  ytdHours: number;
+  ytdYear: number;
 }) {
   const enrolledIds = new Set(programs.map((p) => p.program_id).filter((id) => id !== "_unlinked"));
   const assignable = allPrograms.filter((p) => !enrolledIds.has(p.id));
 
   return (
     <div className="space-y-4">
-      {programs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No training enrollments.</p>
-      ) : (
-        <ul className="space-y-3">
-          {programs.map((program) => (
-            <li key={program.program_id} className="rounded-lg border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  {program.program_id === "_unlinked" ? (
-                    <p className="font-medium">{program.title}</p>
-                  ) : (
-                    <Link
-                      href={`/programs/${program.program_id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {program.title}
-                    </Link>
-                  )}
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {program.completed_count} of {program.enrolled_count} modules completed
-                  </p>
-                </div>
-                {canManage && program.program_id !== "_unlinked" ? (
-                  <UnassignProgramButton userId={profileId} programId={program.program_id} />
-                ) : null}
-              </div>
-              <ul className="mt-3 space-y-1 border-t pt-3 text-sm">
-                {program.modules.map((mod) => (
-                  <li key={mod.module_id} className="flex justify-between gap-2 text-muted-foreground">
-                    <span className="truncate">{mod.title}</span>
-                    <span className="shrink-0">
-                      {mod.completed_at ? "Completed" : "In progress"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardDescription>{ytdYear} year-to-date</CardDescription>
+          <CardTitle className="text-base font-medium text-muted-foreground">
+            Training hours
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-4xl font-semibold tracking-tight tabular-nums">
+            {formatTrainingHours(ytdHours)}
+            <span className="ml-2 text-lg font-normal text-muted-foreground">hours</span>
+          </p>
+        </CardContent>
+      </Card>
 
-      {canManage ? (
-        <AssignProgramForm userId={profileId} assignable={assignable} />
-      ) : null}
+      <Card>
+        <CardContent className="space-y-4 pt-6">
+          {programs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No training enrollments.</p>
+          ) : (
+            <ul className="space-y-3">
+              {programs.map((program) => (
+                <li key={program.program_id} className="rounded-lg border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      {program.program_id === "_unlinked" ? (
+                        <p className="font-medium">{program.title}</p>
+                      ) : (
+                        <Link
+                          href={`/programs/${program.program_id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {program.title}
+                        </Link>
+                      )}
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {program.completed_count} of {program.enrolled_count} modules completed
+                      </p>
+                    </div>
+                    {canManage && program.program_id !== "_unlinked" ? (
+                      <UnassignProgramButton userId={profileId} programId={program.program_id} />
+                    ) : null}
+                  </div>
+                  <ul className="mt-3 space-y-1 border-t pt-3 text-sm">
+                    {program.modules.map((mod) => (
+                      <li
+                        key={mod.module_id}
+                        className="flex justify-between gap-2 text-muted-foreground"
+                      >
+                        <span className="truncate">{mod.title}</span>
+                        <span className="shrink-0">
+                          {mod.completed_at ? "Completed" : "In progress"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {canManage ? (
+            <AssignProgramForm userId={profileId} assignable={assignable} />
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }

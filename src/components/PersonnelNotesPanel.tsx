@@ -7,17 +7,7 @@ import { personnelDisplayName } from "@/lib/personnel-types";
 import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
 import { Textarea } from "@/components/ui/Input";
-
-function formatDateTime(value: string) {
-  try {
-    return new Date(value).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return value;
-  }
-}
+import { formatDateTime } from "@/lib/dates";
 
 export function PersonnelNotesPanel({
   profileId,

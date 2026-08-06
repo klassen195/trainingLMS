@@ -27,9 +27,15 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
   if (error) throw error;
   if (!data) return { kind: "missing_profile", userId: user.id };
   const profile = data as Profile;
+
+  if (profile.is_active === false) {
+    await supabase.auth.signOut();
+    redirect("/login?error=account_deactivated");
+  }
+
   return {
     kind: "authenticated",
-    profile: { ...profile, is_admin: Boolean(profile.is_admin) },
+    profile: { ...profile, is_admin: Boolean(profile.is_admin), is_active: profile.is_active !== false },
   };
 });
 

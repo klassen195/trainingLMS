@@ -14,7 +14,18 @@ export default async function LoginPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) redirect("/dashboard");
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile?.is_active === false) {
+      await supabase.auth.signOut();
+    } else {
+      redirect("/dashboard");
+    }
+  }
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12">

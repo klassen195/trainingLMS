@@ -92,9 +92,34 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
     error.message.includes("personnel_certifications") ||
     error.message.includes("personnel_documents") ||
     error.message.includes("personnel_notes") ||
+    error.message.includes("personnel_taskbooks") ||
+    error.message.includes("personnel_taskbook_prerequisite_checks") ||
+    error.message.includes("personnel_recognitions") ||
     error.message.includes("employee_number") ||
     error.message.includes("Could not find the table") ||
     (error.message.includes("Could not find the") && error.message.includes("column"))
+  );
+}
+
+export function isMissingTrainingSessionsTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("training_sessions") ||
+    error.message.includes("training_session_attendees") ||
+    error.message.includes("training_session_files") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
+export function isMissingTrainingCategoriesTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("training_categories") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
   );
 }
 

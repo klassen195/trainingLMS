@@ -20,10 +20,16 @@ export type EnrollmentStatus = "active" | "completed";
 export type Profile = {
   id: string;
   display_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string | null;
   rank: string | null;
+  swing_up?: string[] | null;
+  rank_promoted_on?: string | null;
   role: UserRole;
   is_admin: boolean;
+  is_active?: boolean;
+  invited_at?: string | null;
   created_at: string;
   employee_number?: string | null;
   job_title?: string | null;

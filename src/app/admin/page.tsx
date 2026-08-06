@@ -78,6 +78,20 @@ export default async function AdminPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-lg">Training categories</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">
+              Manage categories for Document Training (Fire, EMS, Officer, and more).
+            </p>
+            <Button asChild>
+              <Link href="/admin/training-categories">Manage categories</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-lg">Vehicle checks</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-4">

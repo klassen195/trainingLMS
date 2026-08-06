@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
+import { formatDate } from "@/lib/dates";
 import Link from "next/link";
 
 function isOverdue(date: string | null | undefined) {
@@ -26,11 +27,7 @@ function isExpired(date: string | null | undefined) {
 
 function formatCheckTime(value: string | null | undefined) {
   if (!value) return null;
-  try {
-    return new Date(value).toLocaleDateString();
-  } catch {
-    return value;
-  }
+  return formatDate(value, value);
 }
 
 export function AssetList({
@@ -100,7 +97,7 @@ export function AssetList({
                     <>
                       {isAdmin ? <>Assigned to {equipmentAssignmentLabel(asset)} · </> : null}
                       {asset.size ? <>Size {asset.size} · </> : null}
-                      {asset.expires_on ? <>Expires {asset.expires_on}</> : "No expiration set"}
+                      {asset.expires_on ? <>Expires {formatDate(asset.expires_on)}</> : "No expiration set"}
                     </>
                   ) : (
                     <>
@@ -119,7 +116,7 @@ export function AssetList({
                         overdueInspection ? "font-medium text-destructive" : "text-muted-foreground"
                       )}
                     >
-                      Next inspection due {asset.latest_next_due_on}
+                      Next inspection due {formatDate(asset.latest_next_due_on)}
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">No inspections logged</p>

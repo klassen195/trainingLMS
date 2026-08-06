@@ -25,6 +25,7 @@ import { VehicleCheckSwapDetail } from "@/components/VehicleCheckSwapDetail";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { formatDateTime } from "@/lib/dates";
 
 function asSingle<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -35,14 +36,6 @@ function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
 ) {
   return person?.display_name || person?.email || "Unknown";
-}
-
-function formatTimestamp(value: string) {
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
 }
 
 export default async function VehicleCheckDetailPage({
@@ -206,7 +199,7 @@ export default async function VehicleCheckDetailPage({
             ) : null}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            {formatTimestamp(check.checked_at)} · {formatPerson(check.checker)}
+            {formatDateTime(check.checked_at)} · {formatPerson(check.checker)}
           </p>
           {check.notes ? (
             <p className="mt-2 text-sm text-muted-foreground">{check.notes}</p>

@@ -18,6 +18,7 @@ import {
   ppeCategoryLabel,
 } from "@/lib/labels";
 import { cn } from "@/lib/cn";
+import { formatDate } from "@/lib/dates";
 import {
   Accordion,
   AccordionContent,
@@ -460,29 +461,29 @@ export function EquipmentTable({
       case "serialNumber":
         return asset.serial_number || "—";
       case "manufacturedOn":
-        return asset.manufactured_on || "—";
+        return formatDate(asset.manufactured_on);
       case "replacementDate": {
         if (!asset.expires_on) return "—";
         return (
           <span className={cn(isPast(asset.expires_on) && "font-medium text-destructive")}>
-            {asset.expires_on}
+            {formatDate(asset.expires_on)}
           </span>
         );
       }
       case "purchaseCost":
         return formatCost(asset.purchase_cost);
       case "inServiceOn":
-        return asset.in_service_on || "—";
+        return formatDate(asset.in_service_on);
       case "nextInspection": {
         if (!asset.latest_next_due_on) return "—";
         return (
           <span className={cn(isPast(asset.latest_next_due_on) && "font-medium text-destructive")}>
-            {asset.latest_next_due_on}
+            {formatDate(asset.latest_next_due_on)}
           </span>
         );
       }
       case "lastInspected":
-        return asset.latest_inspected_at?.slice(0, 10) || "—";
+        return formatDate(asset.latest_inspected_at);
       case "notes":
         return asset.notes ? (
           <span className="line-clamp-1 max-w-[12rem]">{asset.notes}</span>

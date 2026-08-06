@@ -37,6 +37,11 @@ export default async function EditAssetPage({
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("id, display_name, email")
+    .or(
+      row.assigned_to
+        ? `is_active.eq.true,id.eq.${row.assigned_to}`
+        : "is_active.eq.true"
+    )
     .order("display_name", { ascending: true });
 
   if (profilesError) throw profilesError;

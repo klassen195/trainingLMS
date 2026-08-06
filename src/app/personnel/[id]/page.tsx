@@ -1,15 +1,28 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Pencil, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { isAdmin, requireUserProfile } from "@/lib/auth";
 import {
   fetchPersonnelCertifications,
   fetchPersonnelDocuments,
   fetchPersonnelNotes,
   fetchPersonnelProfile,
+  fetchPersonnelRecognitions,
+  fetchPersonnelTaskbooks,
+  fetchPersonnelTaskbookPrerequisiteChecks,
+  fetchPendingTaskbookApprovals,
   fetchPersonnelTraining,
+  fetchPersonnelYtdTrainingHours,
+  personHasSupervisorCoverage,
 } from "@/lib/personnel";
-import { isCertExpired, personnelDisplayName, personnelShiftLabel } from "@/lib/personnel-types";
+import {
+  isCertExpired,
+  isRankOnProbation,
+  formatSwingUpRanks,
+  personnelDisplayName,
+  personnelShiftLabel,
+  isPersonnelSupervisorOf,
+} from "@/lib/personnel-types";
 import { roleLabel } from "@/lib/labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -22,19 +35,18 @@ import { PersonnelDocumentsPanel } from "@/components/PersonnelDocumentsPanel";
 import {
   PersonnelFieldGrid,
   PersonnelFileLayout,
-  PersonnelSectionEmpty,
   type PersonnelFileSection,
 } from "@/components/PersonnelFileLayout";
 import { PersonnelNotesPanel } from "@/components/PersonnelNotesPanel";
+import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPanel";
+import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
+import { PersonnelEditButton } from "@/components/PersonnelSectionNavButtons";
+import { SendPersonnelInviteButton } from "@/components/SendPersonnelInviteButton";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  return value.slice(0, 10);
-}
+import { formatDate } from "@/lib/dates";
 
 export default async function PersonnelDetailPage({
   params,
@@ -44,9 +56,7 @@ export default async function PersonnelDetailPage({
   const { id } = await params;
   const viewer = await requireUserProfile();
   const canManage = isAdmin(viewer);
-  if (!canManage && viewer.id !== id) {
-    redirect(`/personnel/${viewer.id}`);
-  }
+  const isSelf = viewer.id === id;
 
   const supabase = await createSupabaseServerClient();
   const { profile, error } = await fetchPersonnelProfile(supabase, id);
@@ -57,29 +67,59 @@ export default async function PersonnelDetailPage({
   if (error) throw error;
   if (!profile) notFound();
 
+  const isSupervisorOfPerson = isPersonnelSupervisorOf(viewer, profile);
+  if (!canManage && !isSelf && !isSupervisorOfPerson) {
+    redirect(`/personnel/${viewer.id}`);
+  }
+
   const [
     { rows: certifications, error: certError },
     { rows: documents, error: docError },
     { rows: notes, error: notesError },
+    { rows: taskbooks, error: taskbooksError },
+    { rows: prerequisiteChecks, error: prereqError },
+    { rows: recognitions, error: recognitionsError },
+    { rows: pendingApprovals, error: pendingError },
     { programs, error: trainingError },
+    { hours: ytdHours, year: ytdYear, error: ytdError },
+    { hasSupervisor, error: supervisorCoverageError },
   ] = await Promise.all([
     fetchPersonnelCertifications(supabase, id),
     fetchPersonnelDocuments(supabase, id),
     fetchPersonnelNotes(supabase, id),
+    fetchPersonnelTaskbooks(supabase, id),
+    fetchPersonnelTaskbookPrerequisiteChecks(supabase, id),
+    fetchPersonnelRecognitions(supabase, id),
+    isSelf
+      ? fetchPendingTaskbookApprovals(supabase, viewer)
+      : Promise.resolve({ rows: [], error: null }),
     fetchPersonnelTraining(supabase, id),
+    fetchPersonnelYtdTrainingHours(supabase, id),
+    personHasSupervisorCoverage(supabase, profile),
   ]);
 
   if (
     (certError && isMissingPersonnelTables(certError)) ||
     (docError && isMissingPersonnelTables(docError)) ||
-    (notesError && isMissingPersonnelTables(notesError))
+    (notesError && isMissingPersonnelTables(notesError)) ||
+    (taskbooksError && isMissingPersonnelTables(taskbooksError)) ||
+    (prereqError && isMissingPersonnelTables(prereqError)) ||
+    (recognitionsError && isMissingPersonnelTables(recognitionsError)) ||
+    (pendingError && isMissingPersonnelTables(pendingError)) ||
+    (supervisorCoverageError && isMissingPersonnelTables(supervisorCoverageError))
   ) {
     return <PersonnelDatabaseSetup />;
   }
   if (certError) throw certError;
   if (docError) throw docError;
   if (notesError) throw notesError;
+  if (taskbooksError) throw taskbooksError;
+  if (prereqError) throw prereqError;
+  if (recognitionsError) throw recognitionsError;
+  if (pendingError) throw pendingError;
   if (trainingError) throw trainingError;
+  if (ytdError) throw ytdError;
+  if (supervisorCoverageError) throw supervisorCoverageError;
 
   const { data: allPrograms } = canManage
     ? await supabase.from("programs").select("id, title, status").order("title")
@@ -88,7 +128,8 @@ export default async function PersonnelDetailPage({
   const expiredCount = certifications.filter((c) => isCertExpired(c.expires_on)).length;
 
   const demographicsRows = [
-    { label: "Name", value: personnelDisplayName(profile) },
+    { label: "First name", value: profile.first_name?.trim() || "—" },
+    { label: "Last name", value: profile.last_name?.trim() || "—" },
     { label: "Email", value: profile.email || "—" },
     { label: "Phone", value: profile.phone || "—" },
     { label: "Home address", value: profile.home_address || "—", fullWidth: true },
@@ -100,14 +141,33 @@ export default async function PersonnelDetailPage({
     { label: "HR info", value: profile.hr_info || "—", fullWidth: true },
   ];
 
+  const onProbation = isRankOnProbation(profile.rank_promoted_on);
+
   const workRows = [
-    { label: "Rank", value: profile.rank || "—" },
+    {
+      label: "Rank",
+      value: (
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <span>{profile.rank || "—"}</span>
+          {profile.rank && onProbation ? (
+            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
+              Probation
+            </Badge>
+          ) : null}
+        </span>
+      ),
+    },
+    { label: "Swing up", value: formatSwingUpRanks(profile.swing_up) },
+    {
+      label: "Promoted to this rank",
+      value: formatDate(profile.rank_promoted_on),
+    },
     { label: "Shift", value: personnelShiftLabel(profile.shift) },
     { label: "Employee #", value: profile.employee_number || "—" },
     { label: "Hire date", value: formatDate(profile.hire_date) },
     { label: "Station", value: profile.primary_location?.name || "—" },
     {
-      label: "Supervisor",
+      label: "Supervisor (Captain)",
       value: profile.supervisor ? personnelDisplayName(profile.supervisor) : "—",
     },
   ];
@@ -156,9 +216,36 @@ export default async function PersonnelDetailPage({
       ),
     },
     {
+      id: "taskbooks",
+      label: "Taskbooks",
+      content: (
+        <PersonnelTaskbooksPanel
+          profileId={id}
+          taskbooks={taskbooks}
+          prerequisiteChecks={prerequisiteChecks}
+          pendingApprovals={isSelf ? pendingApprovals : []}
+          canRequest={isSelf}
+          canCheckPrerequisites={isSelf}
+          canDecide={canManage || isSupervisorOfPerson}
+          canIssue={canManage}
+          hasSupervisor={hasSupervisor}
+        />
+      ),
+    },
+    {
       id: "recognitions",
       label: "Recognitions",
-      content: <PersonnelSectionEmpty message="No recognitions yet" />,
+      content: (
+        <Card>
+          <CardContent className="pt-6">
+            <PersonnelRecognitionsPanel
+              profileId={id}
+              recognitions={recognitions}
+              canManage={canManage}
+            />
+          </CardContent>
+        </Card>
+      ),
     },
     ...(canManage
       ? [
@@ -179,16 +266,14 @@ export default async function PersonnelDetailPage({
       id: "training",
       label: "Training",
       content: (
-        <Card>
-          <CardContent className="pt-6">
-            <PersonnelTrainingPanel
-              profileId={id}
-              programs={programs}
-              allPrograms={allPrograms ?? []}
-              canManage={canManage}
-            />
-          </CardContent>
-        </Card>
+        <PersonnelTrainingPanel
+          profileId={id}
+          programs={programs}
+          allPrograms={allPrograms ?? []}
+          canManage={canManage}
+          ytdHours={ytdHours}
+          ytdYear={ytdYear}
+        />
       ),
     },
     {
@@ -231,8 +316,15 @@ export default async function PersonnelDetailPage({
             <p className="text-lg text-muted-foreground">{profile.email}</p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
+            {profile.is_active === false ? <Badge variant="outline">Inactive</Badge> : null}
+            {!profile.invited_at ? <Badge variant="outline">Not invited</Badge> : null}
             {profile.is_admin ? <Badge variant="outline">System admin</Badge> : null}
             {profile.rank ? <Badge variant="outline">{profile.rank}</Badge> : null}
+            {profile.rank && onProbation ? (
+              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
+                Probation
+              </Badge>
+            ) : null}
             {expiredCount > 0 ? (
               <Badge className="bg-destructive text-destructive-foreground">
                 {expiredCount} expired certification{expiredCount === 1 ? "" : "s"}
@@ -241,17 +333,18 @@ export default async function PersonnelDetailPage({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="secondary">
+            <Link href="/personnel">Directory</Link>
+          </Button>
           {canManage ? (
             <>
-              <Button asChild variant="secondary">
-                <Link href="/personnel">Directory</Link>
-              </Button>
-              <Button asChild>
-                <Link href={`/personnel/${id}/edit`}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </Link>
-              </Button>
+              {profile.is_active !== false && profile.email ? (
+                <SendPersonnelInviteButton
+                  userId={profile.id}
+                  hasBeenInvited={Boolean(profile.invited_at)}
+                />
+              ) : null}
+              <PersonnelEditButton personId={id} />
             </>
           ) : null}
         </div>

@@ -16,6 +16,7 @@ import {
   ClipboardPen,
   Users,
   Siren,
+  Lightbulb,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -42,14 +43,14 @@ import {
 
 const publicNavItems = [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }];
 
-function authNavItemsFor(profile: Profile, showIncidents: boolean) {
+function authNavItemsFor(showIncidents: boolean) {
   return [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/programs", label: "Programs", icon: GraduationCap },
     { href: "/assets", label: "Assets", icon: Package },
     ...(showIncidents ? [{ href: "/incidents", label: "Incidents", icon: Siren }] : []),
     {
-      href: profile.is_admin ? "/personnel" : `/personnel/${profile.id}`,
+      href: "/personnel",
       label: "Personnel",
       icon: Users,
     },
@@ -89,7 +90,7 @@ export function MainNav({
   }
 
   const loggedInNavItems = [
-    ...(profile ? authNavItemsFor(profile, showIncidents) : []),
+    ...(profile ? authNavItemsFor(showIncidents) : []),
     ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];
@@ -161,7 +162,13 @@ export function MainNav({
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href={profile.is_admin ? "/personnel" : `/personnel/${profile.id}`}>
+                  <Link href="/ideas">
+                    <Lightbulb className="mr-2 h-4 w-4" />
+                    Ideas
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/personnel">
                     <Users className="mr-2 h-4 w-4" />
                     Personnel
                   </Link>
@@ -223,18 +230,40 @@ export function MainNav({
                   </Link>
                 ))}
                 {profile ? (
-                  <Link
-                    href="/account"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex flex-col items-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border bg-background">
-                      <UserRound className="h-5 w-5" />
-                    </span>
-                    <span className="flex min-h-[2.5rem] items-start justify-center text-center text-xs font-medium leading-tight">
-                      Account
-                    </span>
-                  </Link>
+                  <>
+                    <Link
+                      href="/account"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex flex-col items-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border bg-background">
+                        <UserRound className="h-5 w-5" />
+                      </span>
+                      <span className="flex min-h-[2.5rem] items-start justify-center text-center text-xs font-medium leading-tight">
+                        Account
+                      </span>
+                    </Link>
+                    <Link
+                      href="/ideas"
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-md px-2 py-3 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                        isActive("/ideas") && "bg-accent text-accent-foreground"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-11 w-11 shrink-0 items-center justify-center rounded-md border bg-background",
+                          isActive("/ideas") && "border-primary bg-primary text-primary-foreground"
+                        )}
+                      >
+                        <Lightbulb className="h-5 w-5" />
+                      </span>
+                      <span className="flex min-h-[2.5rem] items-start justify-center text-center text-xs font-medium leading-tight">
+                        Ideas
+                      </span>
+                    </Link>
+                  </>
                 ) : null}
               </div>
               {profile ? (

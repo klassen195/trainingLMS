@@ -5,13 +5,7 @@ import { Check } from "lucide-react";
 import { setChecklistItemComplete } from "@/app/actions";
 import type { ChecklistItemWithProgress } from "@/lib/training-lms-types";
 import { cn } from "@/lib/cn";
-
-function formatCompletedDate(value: string) {
-  return new Date(value).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
+import { formatDateTime } from "@/lib/dates";
 
 export function ChecklistItemsPanel({
   programId,
@@ -72,7 +66,7 @@ export function ChecklistItemsPanel({
                   {item.completed_at ? (
                     <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                       <Check className="h-3 w-3" />
-                      Completed {formatCompletedDate(item.completed_at)}
+                      Completed {formatDateTime(item.completed_at)}
                     </span>
                   ) : null}
                 </span>

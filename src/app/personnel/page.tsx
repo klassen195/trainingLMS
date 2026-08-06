@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { Plus, Users } from "lucide-react";
+import { ClipboardList, Plus, Users } from "lucide-react";
 import { requireUserProfile, isAdmin } from "@/lib/auth";
-import { fetchPersonnelDirectory } from "@/lib/personnel";
+import { fetchPersonnelDirectory, viewerHasDirectReports } from "@/lib/personnel";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   isMissingPersonnelTables,
@@ -14,12 +13,13 @@ import { Button } from "@/components/ui/Button";
 
 export default async function PersonnelPage() {
   const profile = await requireUserProfile();
-  if (!isAdmin(profile)) {
-    redirect(`/personnel/${profile.id}`);
-  }
+  const admin = isAdmin(profile);
 
   const supabase = await createSupabaseServerClient();
-  const { rows, error } = await fetchPersonnelDirectory(supabase);
+  const [{ rows, error }, { hasReports }] = await Promise.all([
+    fetchPersonnelDirectory(supabase),
+    viewerHasDirectReports(supabase, profile),
+  ]);
 
   if (isMissingTrainingLmsTables(error) || isMissingPersonnelTables(error)) {
     return <PersonnelDatabaseSetup />;
@@ -53,15 +53,32 @@ export default async function PersonnelPage() {
             Department directory, training assignments, certifications, and documents.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/personnel/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Invite member
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {hasReports ? (
+            <Button asChild variant="outline">
+              <Link href="/personnel/supervisor">
+                <ClipboardList className="mr-2 h-4 w-4" />
+                Supervisor dashboard
+              </Link>
+            </Button>
+          ) : null}
+          {admin ? (
+            <Button asChild>
+              <Link href="/personnel/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Add member
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
-      <PersonnelDirectory rows={rows} expiredCertCountByUser={expiredCertCountByUser} />
+      <PersonnelDirectory
+        rows={rows}
+        expiredCertCountByUser={expiredCertCountByUser}
+        viewerId={profile.id}
+        canOpenAllFiles={admin}
+      />
     </div>
   );
 }

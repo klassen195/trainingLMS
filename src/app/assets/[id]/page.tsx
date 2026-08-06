@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import {
   MAINTENANCE_PHOTO_BUCKET,
   MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT,
@@ -54,20 +55,6 @@ function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
 ) {
   return person?.display_name || person?.email || "Unknown";
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  return value.slice(0, 10);
-}
-
-function formatTimestamp(value: string | null | undefined) {
-  if (!value) return "—";
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
 }
 
 function isPast(date: string | null | undefined) {
@@ -470,13 +457,13 @@ export default async function AssetDetailPage({
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                         Last daily check
                       </dt>
-                      <dd className="text-sm">{formatTimestamp(latestDailyAt)}</dd>
+                      <dd className="text-sm">{formatDateTime(latestDailyAt)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                         Last weekly check
                       </dt>
-                      <dd className="text-sm">{formatTimestamp(latestWeeklyAt)}</dd>
+                      <dd className="text-sm">{formatDateTime(latestWeeklyAt)}</dd>
                     </div>
                     <div className="sm:col-span-2">
                       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -546,7 +533,7 @@ export default async function AssetDetailPage({
                         {inspectionHistory.map((item) => (
                           <tr key={item.id} className="border-b last:border-0">
                             <td className="px-2 py-2 align-top whitespace-nowrap">
-                              {formatTimestamp(item.inspected_at)}
+                              {formatDateTime(item.inspected_at)}
                             </td>
                             <td className="px-2 py-2 align-top">
                               <Badge

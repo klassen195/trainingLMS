@@ -155,11 +155,16 @@ export function RequestList({
         {error ? <FieldError className="mb-3">{error}</FieldError> : null}
 
         <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-left text-sm">
+          <table
+            className={cn(
+              "w-full table-fixed text-left text-sm",
+              tab === "resolved" ? "min-w-[1100px]" : "min-w-[720px]"
+            )}
+          >
             <thead className="text-xs uppercase text-muted-foreground">
               <tr className="border-b border-border">
                 <th
-                  className="w-[18%] px-3 py-2 font-medium"
+                  className={cn("px-3 py-2 font-medium", tab === "resolved" ? "w-[14%]" : "w-[18%]")}
                   aria-sort={sortBy === "date" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   <button
@@ -171,7 +176,7 @@ export function RequestList({
                   </button>
                 </th>
                 <th
-                  className="w-[12%] px-3 py-2 font-medium"
+                  className={cn("px-3 py-2 font-medium", tab === "resolved" ? "w-[10%]" : "w-[12%]")}
                   aria-sort={sortBy === "category" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   <button
@@ -182,8 +187,10 @@ export function RequestList({
                     Category{sortArrow("category")}
                   </button>
                 </th>
-                <th className="w-[34%] px-3 py-2 font-medium">Notes</th>
-                <th className="w-[16%] px-3 py-2 font-medium">
+                <th className={cn("px-3 py-2 font-medium", tab === "resolved" ? "w-[20%]" : "w-[34%]")}>
+                  Notes
+                </th>
+                <th className={cn("px-3 py-2 font-medium", tab === "resolved" ? "w-[12%]" : "w-[16%]")}>
                   <button
                     type="button"
                     onClick={() => toggleSort("date")}
@@ -195,12 +202,12 @@ export function RequestList({
                 </th>
                 {tab === "resolved" ? (
                   <>
-                    <th className="px-3 py-2 font-medium">Resolved</th>
-                    <th className="px-3 py-2 font-medium">Resolved note</th>
-                    <th className="px-3 py-2 font-medium">Resolved by</th>
+                    <th className="w-[12%] px-3 py-2 font-medium">Resolved</th>
+                    <th className="w-[18%] px-3 py-2 font-medium">Resolved note</th>
+                    <th className="w-[14%] px-3 py-2 font-medium">Resolved by</th>
                   </>
                 ) : (
-                  <th className="px-3 py-2 font-medium"></th>
+                  <th className="w-[20%] px-3 py-2 font-medium"></th>
                 )}
               </tr>
             </thead>
@@ -223,15 +230,19 @@ export function RequestList({
                     <td className="break-words px-3 py-3 whitespace-pre-wrap text-foreground">
                       {r.request_notes || "-"}
                     </td>
-                    <td className="px-3 py-3 text-muted-foreground">{formatTimestamp(r.created_at)}</td>
+                    <td className="break-words px-3 py-3 text-muted-foreground">
+                      {formatTimestamp(r.created_at)}
+                    </td>
 
                     {tab === "resolved" ? (
                       <>
-                        <td className="px-3 py-3 text-muted-foreground">
+                        <td className="break-words px-3 py-3 text-muted-foreground">
                           {r.resolved_at ? formatTimestamp(r.resolved_at) : "-"}
                         </td>
-                        <td className="px-3 py-3 whitespace-pre-wrap text-foreground">{r.resolved_note || "-"}</td>
-                        <td className="px-3 py-3 text-muted-foreground">
+                        <td className="break-words px-3 py-3 whitespace-pre-wrap text-foreground">
+                          {r.resolved_note || "-"}
+                        </td>
+                        <td className="break-all px-3 py-3 text-muted-foreground">
                           {r.resolved_by
                             ? currentUserId && r.resolved_by === currentUserId
                               ? "You"

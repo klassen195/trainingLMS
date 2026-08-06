@@ -17,19 +17,12 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError } from "@/components/ui/Field";
 import { Textarea } from "@/components/ui/Input";
+import { formatDateTime } from "@/lib/dates";
 
 function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
 ) {
   return person?.display_name || person?.email || "Unknown";
-}
-
-function formatTimestamp(value: string) {
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return value;
-  }
 }
 
 export function MaintenanceRequestAdminList({
@@ -136,7 +129,7 @@ export function MaintenanceRequestAdminList({
                 ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">
                   Requested by {formatPerson(request.requester)} ·{" "}
-                  {formatTimestamp(request.requested_at)}
+                  {formatDateTime(request.requested_at)}
                   {request.asset?.station ? ` · ${request.asset.station}` : ""}
                 </p>
                 {request.photo_url ? (

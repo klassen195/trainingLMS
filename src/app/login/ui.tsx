@@ -19,6 +19,8 @@ const COOLDOWN_SECONDS = 60;
 const AUTH_ERRORS: Record<string, string> = {
   auth_callback_failed: "Sign-in link expired or was already used. Request a new magic link or use a sign-in code.",
   auth_config_missing: "Authentication is not configured. Contact your administrator.",
+  account_deactivated:
+    "This account has been deactivated. Contact a system administrator if you need access restored.",
 };
 
 type SignInMethod = "magic_link" | "code" | "password";

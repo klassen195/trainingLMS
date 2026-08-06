@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TrainingLMS",
+  title: "Anchor Point",
   description: "Fire department training LMS and shift exchange",
 };
 

@@ -5,6 +5,7 @@ export const APP_CAPABILITIES = [
   "self_enroll",
   "author_training",
   "ems_qi",
+  "document_training",
   "view_apparatus",
   "view_all_ppe",
   "submit_vehicle_checks",
@@ -47,6 +48,11 @@ export const capabilityMeta: Record<
     group: "Training",
     label: "EMS QI",
     description: "Access the EMS Call QA/QI review tool.",
+  },
+  document_training: {
+    group: "Training",
+    label: "Document training",
+    description: "Log in-house training sessions and certification courses.",
   },
   view_apparatus: {
     group: "Assets & operations",

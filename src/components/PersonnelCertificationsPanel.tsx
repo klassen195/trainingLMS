@@ -12,11 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
 import { Input, Textarea } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return value.slice(0, 10);
-}
+import { formatDate } from "@/lib/dates";
 
 export function PersonnelCertificationsPanel({
   profileId,

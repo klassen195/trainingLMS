@@ -7,6 +7,7 @@ export type PersonnelFileSectionId =
   | "demographics"
   | "work"
   | "certifications"
+  | "taskbooks"
   | "recognitions"
   | "security"
   | "training"
@@ -103,21 +104,24 @@ export function PersonnelFileLayout({
 export function PersonnelFieldGrid({
   rows,
 }: {
-  rows: { label: string; value: string; fullWidth?: boolean }[];
+  rows: { label: string; value: ReactNode; fullWidth?: boolean }[];
 }) {
   return (
     <dl className="grid gap-4 sm:grid-cols-2">
-      {rows.map((row) => (
-        <div
-          key={row.label}
-          className={row.fullWidth || row.value.includes("\n") ? "sm:col-span-2" : undefined}
-        >
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {row.label}
-          </dt>
-          <dd className="mt-1 whitespace-pre-wrap text-sm">{row.value}</dd>
-        </div>
-      ))}
+      {rows.map((row) => {
+        const isMultiline = typeof row.value === "string" && row.value.includes("\n");
+        return (
+          <div
+            key={row.label}
+            className={row.fullWidth || isMultiline ? "sm:col-span-2" : undefined}
+          >
+            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {row.label}
+            </dt>
+            <dd className="mt-1 whitespace-pre-wrap text-sm">{row.value}</dd>
+          </div>
+        );
+      })}
     </dl>
   );
 }

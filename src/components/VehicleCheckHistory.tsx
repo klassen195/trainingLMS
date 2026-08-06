@@ -18,19 +18,12 @@ import { vehicleCheckTypeLabel } from "@/lib/labels";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { formatDate } from "@/lib/dates";
 
 function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
 ) {
   return person?.display_name || person?.email || "Unknown";
-}
-
-function formatTimestamp(value: string) {
-  try {
-    return new Date(value).toLocaleDateString();
-  } catch {
-    return value;
-  }
 }
 
 function unresolvedIssueCount(check: VehicleCheckWithDetails) {
@@ -131,7 +124,7 @@ export function VehicleCheckHistory({
                     <Fragment key={check.id}>
                       <tr className="border-b last:border-0">
                         <td className="px-2 py-2 align-top whitespace-nowrap">
-                          {formatTimestamp(check.checked_at)}
+                          {formatDate(check.checked_at)}
                         </td>
                         <td className="px-2 py-2 align-top">{typesLabel(check, assetId)}</td>
                         <td className="px-2 py-2 align-top">

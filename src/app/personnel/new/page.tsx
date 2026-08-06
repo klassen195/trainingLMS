@@ -9,9 +9,10 @@ export default async function InvitePersonnelPage() {
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">Invite member</h1>
+        <h1 className="text-3xl font-bold">Add member</h1>
         <p className="mt-2 text-muted-foreground">
-          Send a Supabase invite email. A personnel profile is created when they accept.
+          Create a personnel record now. You can send their sign-in invite from their file when
+          you are ready.
         </p>
       </div>
       <InvitePersonnelForm />

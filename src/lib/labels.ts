@@ -137,17 +137,173 @@ export const programTags = Object.keys(tagLabels) as ProgramTag[];
 export const programCategories = programTags;
 
 export const fireRanks = [
-  "Probationary Firefighter",
   "Firefighter",
   "Engineer",
-  "Lieutenant",
   "Captain",
   "Battalion Chief",
-  "Deputy Chief",
+  "Assistant Chief",
   "Fire Chief",
 ] as const;
 
 export type FireRank = (typeof fireRanks)[number];
+
+/** Ranks available for swing-up qualification (excludes entry and chief ranks). */
+export const swingUpRanks = [
+  "Engineer",
+  "Captain",
+  "Battalion Chief",
+] as const satisfies readonly FireRank[];
+
+export type SwingUpRank = (typeof swingUpRanks)[number];
+
+/** Taskbook catalog grouped for display. */
+export const taskbookGroups = [
+  {
+    id: "rank",
+    label: "Rank",
+    ranks: [
+      "Firefighter",
+      "Engineer",
+      "Captain",
+      "MSO",
+      "Battalion Chief",
+      "Deputy Fire Marshal",
+    ],
+  },
+  {
+    id: "specialty",
+    label: "Specialty",
+    ranks: ["Fire Boat Operator", "Rescue Boat Operator", "Drone Operator"],
+  },
+  {
+    id: "ems",
+    label: "EMS",
+    ranks: ["EMT", "AEMT", "Paramedic", "Critical Care Transport"],
+  },
+  {
+    id: "wildland",
+    label: "Wildland",
+    ranks: ["REMS", "FFT1 (Squad Boss)", "Single Resource Boss"],
+  },
+] as const;
+
+export type TaskbookGroupId = (typeof taskbookGroups)[number]["id"];
+export type TaskbookRank = (typeof taskbookGroups)[number]["ranks"][number];
+
+/** All available taskbooks (rank progression + specialties), catalog order. */
+export const taskbookRanks = taskbookGroups.flatMap(
+  (group) => group.ranks
+) as readonly TaskbookRank[];
+
+/** Taskbooks issued automatically on hire (not requestable). */
+export const autoIssuedTaskbooks = ["Firefighter"] as const satisfies readonly TaskbookRank[];
+
+export type AutoIssuedTaskbook = (typeof autoIssuedTaskbooks)[number];
+
+/** Taskbooks members can apply for. */
+export const requestableTaskbooks = taskbookRanks.filter(
+  (rank): rank is Exclude<TaskbookRank, AutoIssuedTaskbook> =>
+    !(autoIssuedTaskbooks as readonly string[]).includes(rank)
+);
+
+export type TaskbookPrerequisite = {
+  id: string;
+  label: string;
+};
+
+/** Prerequisites per taskbook. Empty arrays mean no checklist for that book. */
+export const taskbookPrerequisites: Record<TaskbookRank, readonly TaskbookPrerequisite[]> = {
+  Firefighter: [],
+  Engineer: [
+    { id: "eng-driver-operator", label: "Driver Operator Certification or Equivalent" },
+    { id: "eng-iso", label: "Incident Safety Officer Certification" },
+    { id: "eng-ff-probation", label: "Successfully Passed Firefighter Probation" },
+  ],
+  Captain: [
+    { id: "cap-eng-taskbook", label: "Completed Engineer Task Book" },
+    { id: "cap-fo1", label: "Fire Officer 1 or meets NFPA 1021 Standards" },
+    { id: "cap-ic300", label: "Incident Command (IC) 300" },
+    {
+      id: "cap-blue-card",
+      label: "Blue Card / Calming the Chaos or an equivalent approved course",
+    },
+    { id: "cap-s131", label: "S-131/G-131 (preferred)" },
+    {
+      id: "cap-cfi-first-responders",
+      label: "CFI Trainer - First Responders Impact Fire Investigations",
+    },
+    { id: "cap-cfi-fire-flow", label: "CFI Trainer - Fire Flow Analysis" },
+    { id: "cap-cfi-wildland", label: "CFI Trainer - Wildland Investigations" },
+    { id: "cap-cfi-vehicle", label: "CFI Trainer - Investigating Vehicle Fires" },
+    { id: "cap-cfi-youth", label: "CFI Trainer - Youth Set Fires" },
+    { id: "cap-building-construction", label: "Building Construction Course" },
+    { id: "cap-leadership", label: "Leadership Training (32 Hours)" },
+    { id: "cap-strategy-tactics", label: "Strategy & Tactics (32 Hours)" },
+    { id: "cap-progressive-discipline", label: "Progressive Discipline Course (preferred)" },
+  ],
+  "Battalion Chief": [
+    {
+      id: "bc-12mo-captain",
+      label: "Completion of twelve (12) months as a promoted Captain",
+    },
+    {
+      id: "bc-fo2",
+      label: "Meet NFPA 1021 knowledge and skill standards for Fire Officer II",
+    },
+    { id: "bc-media", label: "Working with the Media Course (AWR 209 – preferred)" },
+    { id: "bc-ic300", label: "Incident Command (IC) FEMA Level 300" },
+    { id: "bc-ic400", label: "Incident Command (IC) FEMA Level 400" },
+    {
+      id: "bc-blue-card",
+      label: "Blue Card/Calming the Chaos or an equivalent approved course",
+    },
+  ],
+  "Deputy Fire Marshal": [],
+  MSO: [
+    { id: "mso-ccp-fpc", label: "Completion of the CCP or FPC Certification" },
+    { id: "mso-captain-qualified", label: "Captain Qualified" },
+  ],
+  "Critical Care Transport": [
+    { id: "cct-ccp-fpc", label: "Completion of their CCP or FPC certification" },
+  ],
+  EMT: [{ id: "emt-idaho-card", label: "Current Idaho EMT Card" }],
+  AEMT: [{ id: "aemt-idaho-card", label: "Current Idaho AEMT Card" }],
+  Paramedic: [{ id: "paramedic-idaho-card", label: "Current Idaho Paramedic Card" }],
+  "Fire Boat Operator": [
+    { id: "boat-idaho-safety", label: "Completed Idaho Boater Safety Course" },
+    { id: "boat-kcfr-crewmember", label: "Completed KCFR Crewmember Training" },
+  ],
+  "Rescue Boat Operator": [
+    { id: "rescue-boat-idaho-safety", label: "Completed Idaho Boater Safety Course" },
+    { id: "rescue-boat-swim-test", label: "Passed KCFR Swim Test" },
+    { id: "rescue-boat-class", label: "Rescue Boat Class" },
+    { id: "rescue-boat-swift-water", label: "Swift Water Class" },
+  ],
+  "Drone Operator": [
+    {
+      id: "drone-formal-training",
+      label: "Completion of Formal Training Class (Online or Classroom)",
+    },
+  ],
+  REMS: [
+    { id: "rems-s130", label: "NWCG S-130 Wildland Firefighter Training" },
+    { id: "rems-s131", label: "NWCG S-131 Firefighter Type I (preferred)" },
+    { id: "rems-s190", label: "NWCG S-190 Introduction to Wildland Fire Behavior" },
+    { id: "rems-l180", label: "NWCG L-180 Human Factors in the Wildland Fire Service" },
+  ],
+  "FFT1 (Squad Boss)": [{ id: "fft1-s131", label: "S-131" }],
+  "Single Resource Boss": [
+    { id: "srb-s230", label: "S-230" },
+    { id: "srb-s290", label: "S-290" },
+  ],
+};
+
+export function getTaskbookPrerequisites(rank: string): readonly TaskbookPrerequisite[] {
+  if ((taskbookRanks as readonly string[]).includes(rank)) {
+    return taskbookPrerequisites[rank as TaskbookRank];
+  }
+  return [];
+}
 
 export function assetStatusLabel(status: AssetStatus) {
   return assetStatusLabels[status];

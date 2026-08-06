@@ -26,6 +26,7 @@ export default async function NewAssetPage({
   const { data: profiles, error } = await supabase
     .from("profiles")
     .select("id, display_name, email")
+    .eq("is_active", true)
     .order("display_name", { ascending: true });
 
   if (isMissingAssetsTable(error)) return <AssetsDatabaseSetup />;
