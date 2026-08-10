@@ -7,6 +7,7 @@ import {
   listTrainingSessionProfiles,
 } from "@/app/document-training/actions";
 import { listTrainingCategories } from "@/lib/training-categories";
+import { listQualifications } from "@/lib/qualifications";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   DocumentTrainingForm,
@@ -23,14 +24,20 @@ export default async function EditDocumentTrainingPage({
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [session, profiles, { rows: activeCategories, error: categoriesError }] =
-    await Promise.all([
-      getTrainingSession(id),
-      listTrainingSessionProfiles(),
-      listTrainingCategories(supabase, { activeOnly: true }),
-    ]);
+  const [
+    session,
+    profiles,
+    { rows: activeCategories, error: categoriesError },
+    { rows: activeQualifications, error: qualificationsError },
+  ] = await Promise.all([
+    getTrainingSession(id),
+    listTrainingSessionProfiles(),
+    listTrainingCategories(supabase, { activeOnly: true }),
+    listQualifications(supabase, { activeOnly: true }),
+  ]);
 
   if (categoriesError) throw new Error(categoriesError.message);
+  if (qualificationsError) throw new Error(qualificationsError.message);
   if (!session) notFound();
 
   // Keep the current category available even if it was later deactivated.
@@ -41,21 +48,49 @@ export default async function EditDocumentTrainingPage({
     if (current) categories = [current, ...categories];
   }
 
+  let qualifications = activeQualifications;
+  if (
+    session.qualification &&
+    !qualifications.some((q) => q.id === session.qualification_id)
+  ) {
+    const { rows: allQualifications } = await listQualifications(supabase);
+    const current = allQualifications.find((q) => q.id === session.qualification_id);
+    if (current) qualifications = [current, ...qualifications];
+  }
+
   const initial: DocumentTrainingFormInitial = {
     sessionId: session.id,
     sessionType: session.session_type,
     categoryId: session.category_id,
     title: session.title,
-    hours: session.hours != null ? String(session.hours) : "",
     location: session.location ?? "",
     notes: session.notes ?? "",
     attendeeIds: session.attendees.map((a) => a.profile_id),
     occurredOn: session.occurred_on ?? "",
+    startTime: session.start_time ?? "",
+    endTime: session.end_time ?? "",
     instructorName: session.instructor_name ?? "",
     provider: session.provider ?? "",
-    startedOn: session.started_on ?? "",
-    endedOn: session.ended_on ?? "",
     expiresOn: session.expires_on ?? "",
+    qualificationId: session.qualification_id ?? "",
+    hours: session.hours,
+    hoursOverridden: session.hours_overridden,
+    days:
+      session.days.length > 0
+        ? session.days.map((day) => ({
+            occurredOn: day.occurred_on,
+            startTime: day.start_time,
+            endTime: day.end_time,
+          }))
+        : session.started_on
+          ? [
+              {
+                occurredOn: session.started_on,
+                startTime: session.start_time ?? "",
+                endTime: session.end_time ?? "",
+              },
+            ]
+          : [],
   };
 
   return (
@@ -75,7 +110,12 @@ export default async function EditDocumentTrainingPage({
         </div>
       </div>
 
-      <DocumentTrainingForm profiles={profiles} categories={categories} initial={initial} />
+      <DocumentTrainingForm
+        profiles={profiles}
+        categories={categories}
+        qualifications={qualifications}
+        initial={initial}
+      />
     </div>
   );
 }

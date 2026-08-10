@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 export default async function SupervisorDashboardPage() {
   const viewer = await requireUserProfile();
   const supabase = await createSupabaseServerClient();
-  const { rows, taskbooksByProfile, error } = await fetchSupervisorCrew(
+  const { rows, taskbooksByProfile, qualificationsByProfile, error } = await fetchSupervisorCrew(
     supabase,
     viewer
   );
@@ -38,8 +38,9 @@ export default async function SupervisorDashboardPage() {
             <h1 className="text-4xl font-bold">Supervisor dashboard</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Station, rank, swing-up, and open taskbooks for your crew. Captains see assigned
-            personnel; Battalion Chiefs see everyone on their shift.
+            Station, EMS, rank, swing-up, upcoming dates, qualifications, and open taskbooks for
+            your crew. Captains see assigned personnel; Battalion Chiefs see everyone on their
+            shift.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -50,7 +51,11 @@ export default async function SupervisorDashboardPage() {
         </Button>
       </div>
 
-      <SupervisorDashboard rows={rows} taskbooksByProfile={taskbooksByProfile} />
+      <SupervisorDashboard
+        rows={rows}
+        taskbooksByProfile={taskbooksByProfile}
+        qualificationsByProfile={qualificationsByProfile}
+      />
     </div>
   );
 }

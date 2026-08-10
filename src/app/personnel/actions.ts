@@ -204,6 +204,10 @@ export async function updatePersonnelProfile(input: {
   homeAddress: string | null;
   emergencyContacts: string | null;
   hrInfo: string | null;
+  anniversary: string | null;
+  spouseName: string | null;
+  spouseBirthday: string | null;
+  kidsBirthdays: string | null;
   primaryLocationId: string | null;
   supervisorId: string | null;
   role: UserRole;
@@ -246,6 +250,10 @@ export async function updatePersonnelProfile(input: {
       home_address: input.homeAddress?.trim() || null,
       emergency_contacts: input.emergencyContacts?.trim() || null,
       hr_info: input.hrInfo?.trim() || null,
+      anniversary: input.anniversary || null,
+      spouse_name: input.spouseName?.trim() || null,
+      spouse_birthday: input.spouseBirthday || null,
+      kids_birthdays: input.kidsBirthdays?.trim() || null,
       primary_location_id: input.primaryLocationId || null,
       supervisor_id: input.supervisorId || null,
       role: input.role,
@@ -407,6 +415,236 @@ export async function deletePersonnelCertification(input: { id: string; profileI
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("personnel_certifications")
+    .delete()
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function createPersonnelQualification(input: {
+  profileId: string;
+  qualificationId: string;
+  earnedOn?: string;
+  expiresOn?: string;
+  notes?: string;
+}) {
+  const admin = await requireAdmin();
+  const qualificationId = input.qualificationId.trim();
+  if (!qualificationId) throw new Error("Select a qualification.");
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: qualification, error: qualificationError } = await supabase
+    .from("qualifications")
+    .select("id, is_active")
+    .eq("id", qualificationId)
+    .maybeSingle();
+  throwIfDbError(qualificationError);
+  if (!qualification) throw new Error("Qualification not found.");
+  if (!qualification.is_active) throw new Error("That qualification is inactive.");
+
+  const { error } = await supabase.from("personnel_qualifications").insert({
+    profile_id: input.profileId,
+    qualification_id: qualificationId,
+    earned_on: input.earnedOn || null,
+    expires_on: input.expiresOn || null,
+    notes: input.notes?.trim() || null,
+    created_by: admin.id,
+  });
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function updatePersonnelQualification(input: {
+  id: string;
+  profileId: string;
+  qualificationId: string;
+  earnedOn?: string;
+  expiresOn?: string;
+  notes?: string;
+}) {
+  await requireAdmin();
+  const qualificationId = input.qualificationId.trim();
+  if (!qualificationId) throw new Error("Select a qualification.");
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("personnel_qualifications")
+    .select("id, qualification_id")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(existingError);
+  if (!existing) throw new Error("Qualification assignment not found.");
+
+  const { data: qualification, error: qualificationError } = await supabase
+    .from("qualifications")
+    .select("id, is_active")
+    .eq("id", qualificationId)
+    .maybeSingle();
+  throwIfDbError(qualificationError);
+  if (!qualification) throw new Error("Qualification not found.");
+  if (!qualification.is_active && qualification.id !== existing.qualification_id) {
+    throw new Error("That qualification is inactive.");
+  }
+
+  const { error } = await supabase
+    .from("personnel_qualifications")
+    .update({
+      qualification_id: qualificationId,
+      earned_on: input.earnedOn || null,
+      expires_on: input.expiresOn || null,
+      notes: input.notes?.trim() || null,
+    })
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function deletePersonnelQualification(input: { id: string; profileId: string }) {
+  await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_qualifications")
+    .delete()
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function setPersonnelEmsClearance(input: {
+  profileId: string;
+  clearanceLevelId: string | null;
+}) {
+  await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const clearanceLevelId = input.clearanceLevelId?.trim() || null;
+
+  if (clearanceLevelId) {
+    const [{ data: level, error: levelError }, { data: profile, error: profileError }] =
+      await Promise.all([
+        supabase
+          .from("ems_clearance_levels")
+          .select("id, is_active")
+          .eq("id", clearanceLevelId)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("ems_cleared_level_id")
+          .eq("id", input.profileId)
+          .maybeSingle(),
+      ]);
+    throwIfDbError(levelError);
+    throwIfDbError(profileError);
+    if (!level) throw new Error("EMS clearance level not found.");
+    if (!level.is_active && level.id !== profile?.ems_cleared_level_id) {
+      throw new Error("That clearance level is inactive.");
+    }
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ ems_cleared_level_id: clearanceLevelId })
+    .eq("id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function createPersonnelEmsLicense(input: {
+  profileId: string;
+  emsLevelId: string;
+  issuedOn?: string;
+  expiresOn?: string;
+  licenseNumber?: string;
+  notes?: string;
+}) {
+  const admin = await requireAdmin();
+  const emsLevelId = input.emsLevelId.trim();
+  if (!emsLevelId) throw new Error("Select an EMS level.");
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: level, error: levelError } = await supabase
+    .from("ems_levels")
+    .select("id, is_active")
+    .eq("id", emsLevelId)
+    .maybeSingle();
+  throwIfDbError(levelError);
+  if (!level) throw new Error("EMS level not found.");
+  if (!level.is_active) throw new Error("That EMS level is inactive.");
+
+  const { error } = await supabase.from("personnel_ems_licenses").insert({
+    profile_id: input.profileId,
+    ems_level_id: emsLevelId,
+    issued_on: input.issuedOn || null,
+    expires_on: input.expiresOn || null,
+    license_number: input.licenseNumber?.trim() || null,
+    notes: input.notes?.trim() || null,
+    created_by: admin.id,
+  });
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function updatePersonnelEmsLicense(input: {
+  id: string;
+  profileId: string;
+  emsLevelId: string;
+  issuedOn?: string;
+  expiresOn?: string;
+  licenseNumber?: string;
+  notes?: string;
+}) {
+  await requireAdmin();
+  const emsLevelId = input.emsLevelId.trim();
+  if (!emsLevelId) throw new Error("Select an EMS level.");
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("personnel_ems_licenses")
+    .select("id, ems_level_id")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(existingError);
+  if (!existing) throw new Error("EMS license not found.");
+
+  const { data: level, error: levelError } = await supabase
+    .from("ems_levels")
+    .select("id, is_active")
+    .eq("id", emsLevelId)
+    .maybeSingle();
+  throwIfDbError(levelError);
+  if (!level) throw new Error("EMS level not found.");
+  if (!level.is_active && level.id !== existing.ems_level_id) {
+    throw new Error("That EMS level is inactive.");
+  }
+
+  const { error } = await supabase
+    .from("personnel_ems_licenses")
+    .update({
+      ems_level_id: emsLevelId,
+      issued_on: input.issuedOn || null,
+      expires_on: input.expiresOn || null,
+      license_number: input.licenseNumber?.trim() || null,
+      notes: input.notes?.trim() || null,
+    })
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function deletePersonnelEmsLicense(input: { id: string; profileId: string }) {
+  await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_ems_licenses")
     .delete()
     .eq("id", input.id)
     .eq("profile_id", input.profileId);

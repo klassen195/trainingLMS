@@ -42,6 +42,70 @@ export function formatDateTime(value: string | null | undefined, empty = "—") 
   return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 }
 
+/** Display a Postgres/HTML time (`HH:MM` or `HH:MM:SS`) as HH:mm. */
+export function formatTime(value: string | null | undefined, empty = "—") {
+  if (!value) return empty;
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return value;
+  return `${pad2(Number(match[1]))}:${match[2]}`;
+}
+
+/** Normalize form/DB time strings to `HH:MM:SS`, or null if empty. */
+export function normalizeTimeInput(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() || "";
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) throw new Error("Invalid time.");
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = match[3] != null ? Number(match[3]) : 0;
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    !Number.isFinite(seconds) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59 ||
+    seconds < 0 ||
+    seconds > 59
+  ) {
+    throw new Error("Invalid time.");
+  }
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+}
+
+/** Hours between two times (`HH:MM` / `HH:MM:SS`), rounded to 2 decimals. */
+export function hoursBetweenTimes(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined
+): number | null {
+  let start: string | null;
+  let end: string | null;
+  try {
+    start = normalizeTimeInput(startTime);
+    end = normalizeTimeInput(endTime);
+  } catch {
+    return null;
+  }
+  if (!start || !end || end <= start) return null;
+
+  const toMinutes = (value: string) => {
+    const [h, m] = value.split(":").map(Number);
+    return h * 60 + m;
+  };
+
+  return Math.round(((toMinutes(end) - toMinutes(start)) / 60) * 100) / 100;
+}
+
+/** Value suitable for `<input type="time">` (`HH:MM`). */
+export function toTimeInputValue(value: string | null | undefined) {
+  if (!value) return "";
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return "";
+  return `${pad2(Number(match[1]))}:${match[2]}`;
+}
+
 function shiftDayAnchorLocal() {
   const [yStr, mStr, dStr] = SHIFT_DAY_ANCHOR_ISO.split("-");
   const y = Number(yStr);

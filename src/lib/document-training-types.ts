@@ -1,5 +1,5 @@
 import type { PersonnelShift } from "@/lib/personnel-types";
-import { formatDate } from "@/lib/dates";
+import { formatDate, formatTime } from "@/lib/dates";
 
 export type TrainingSessionType = "in_house" | "certification_course";
 
@@ -9,20 +9,38 @@ export type TrainingSession = {
   category_id: string;
   title: string;
   hours: number | null;
+  hours_overridden: boolean;
   location: string | null;
   notes: string | null;
   occurred_on: string | null;
+  start_time: string | null;
+  end_time: string | null;
   instructor_name: string | null;
   provider: string | null;
   started_on: string | null;
   ended_on: string | null;
   expires_on: string | null;
+  qualification_id: string | null;
   recorded_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
+export type TrainingSessionDay = {
+  id: string;
+  session_id: string;
+  occurred_on: string;
+  start_time: string;
+  end_time: string;
+  sort_order: number;
+};
+
 export type TrainingSessionCategory = {
+  id: string;
+  name: string;
+};
+
+export type TrainingSessionQualification = {
   id: string;
   name: string;
 };
@@ -58,13 +76,16 @@ export type TrainingSessionListItem = TrainingSession & {
   attendee_count: number;
   recorder?: TrainingSessionRecorder | null;
   category?: TrainingSessionCategory | null;
+  qualification?: TrainingSessionQualification | null;
 };
 
 export type TrainingSessionDetail = TrainingSession & {
   recorder?: TrainingSessionRecorder | null;
   category?: TrainingSessionCategory | null;
+  qualification?: TrainingSessionQualification | null;
   attendees: TrainingSessionAttendee[];
   files: TrainingSessionFile[];
+  days: TrainingSessionDay[];
 };
 
 export type TrainingSessionProfileOption = {
@@ -79,9 +100,12 @@ export type TrainingSessionProfileOption = {
 };
 
 export const TRAINING_SESSION_SELECT =
-  "id, session_type, category_id, title, hours, location, notes, occurred_on, instructor_name, provider, started_on, ended_on, expires_on, recorded_by, created_at, updated_at";
+  "id, session_type, category_id, title, hours, hours_overridden, location, notes, occurred_on, start_time, end_time, instructor_name, provider, started_on, ended_on, expires_on, qualification_id, recorded_by, created_at, updated_at";
 
-export const TRAINING_SESSION_WITH_RECORDER_SELECT = `${TRAINING_SESSION_SELECT}, recorder:profiles!recorded_by(id, display_name, email), category:training_categories!category_id(id, name)`;
+export const TRAINING_SESSION_WITH_RECORDER_SELECT = `${TRAINING_SESSION_SELECT}, recorder:profiles!recorded_by(id, display_name, email), category:training_categories!category_id(id, name), qualification:qualifications!qualification_id(id, name)`;
+
+export const TRAINING_SESSION_DAY_SELECT =
+  "id, session_id, occurred_on, start_time, end_time, sort_order";
 
 export const TRAINING_SESSION_FILES_BUCKET = "training-session-files";
 
@@ -131,18 +155,69 @@ export function trainingSessionTypeLabel(type: TrainingSessionType) {
   return type === "in_house" ? "In-house training" : "Certification course";
 }
 
+export function trainingSessionTimeRange(session: {
+  start_time?: string | null;
+  end_time?: string | null;
+}) {
+  const start = session.start_time ? formatTime(session.start_time, "") : "";
+  const end = session.end_time ? formatTime(session.end_time, "") : "";
+  if (start && end) return `${start} – ${end}`;
+  if (start) return start;
+  if (end) return end;
+  return null;
+}
+
+export function trainingSessionDayLabel(day: {
+  occurred_on: string;
+  start_time?: string | null;
+  end_time?: string | null;
+}) {
+  const date = formatDate(day.occurred_on);
+  const times = trainingSessionTimeRange(day);
+  return times ? `${date} · ${times}` : date;
+}
+
 export function trainingSessionDisplayDate(session: {
   session_type: TrainingSessionType;
   occurred_on: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
   started_on: string | null;
   ended_on: string | null;
+  days?: Array<{
+    occurred_on: string;
+    start_time?: string | null;
+    end_time?: string | null;
+  }> | null;
 }) {
   if (session.session_type === "in_house") {
-    return session.occurred_on ? formatDate(session.occurred_on) : null;
+    if (!session.occurred_on) return null;
+    const date = formatDate(session.occurred_on);
+    const times = trainingSessionTimeRange(session);
+    return times ? `${date} · ${times}` : date;
   }
+
+  const days = session.days ?? [];
+  if (days.length === 1) {
+    return trainingSessionDayLabel(days[0]);
+  }
+  if (days.length > 1) {
+    const sorted = [...days].sort((a, b) =>
+      a.occurred_on.localeCompare(b.occurred_on)
+    );
+    const first = sorted[0].occurred_on;
+    const last = sorted[sorted.length - 1].occurred_on;
+    if (first === last) return formatDate(first);
+    return `${formatDate(first)} – ${formatDate(last)}`;
+  }
+
+  let dateLabel: string | null = null;
   if (session.started_on && session.ended_on && session.started_on !== session.ended_on) {
-    return `${formatDate(session.started_on)} – ${formatDate(session.ended_on)}`;
+    dateLabel = `${formatDate(session.started_on)} – ${formatDate(session.ended_on)}`;
+  } else {
+    const single = session.started_on ?? session.ended_on ?? null;
+    dateLabel = single ? formatDate(single) : null;
   }
-  const single = session.started_on ?? session.ended_on ?? null;
-  return single ? formatDate(single) : null;
+  // Multi-day / day-backed certs should not show a single parent time pair.
+  return dateLabel;
 }

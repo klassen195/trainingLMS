@@ -95,6 +95,15 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
     error.message.includes("personnel_taskbooks") ||
     error.message.includes("personnel_taskbook_prerequisite_checks") ||
     error.message.includes("personnel_recognitions") ||
+    error.message.includes("personnel_qualifications") ||
+    error.message.includes("personnel_ems_licenses") ||
+    error.message.includes("ems_levels") ||
+    error.message.includes("ems_clearance_levels") ||
+    error.message.includes("ems_cleared_level_id") ||
+    error.message.includes("anniversary") ||
+    error.message.includes("spouse_name") ||
+    error.message.includes("spouse_birthday") ||
+    error.message.includes("kids_birthdays") ||
     error.message.includes("employee_number") ||
     error.message.includes("Could not find the table") ||
     (error.message.includes("Could not find the") && error.message.includes("column"))
@@ -108,6 +117,7 @@ export function isMissingTrainingSessionsTable(error: PostgrestError | null) {
     error.message.includes("training_sessions") ||
     error.message.includes("training_session_attendees") ||
     error.message.includes("training_session_files") ||
+    error.message.includes("training_session_days") ||
     error.message.includes("Could not find the table")
   );
 }
@@ -119,6 +129,42 @@ export function isMissingTrainingCategoriesTable(
   return (
     error.code === "PGRST205" ||
     (error.message?.includes("training_categories") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
+  );
+}
+
+export function isMissingQualificationsTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("qualifications") ?? false) ||
+    (error.message?.includes("personnel_qualifications") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
+  );
+}
+
+export function isMissingEmsLevelsTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("ems_levels") ?? false) ||
+    (error.message?.includes("personnel_ems_licenses") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
+  );
+}
+
+export function isMissingEmsClearanceLevelsTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("ems_clearance_levels") ?? false) ||
+    (error.message?.includes("ems_cleared_level_id") ?? false) ||
     (error.message?.includes("Could not find the table") ?? false)
   );
 }

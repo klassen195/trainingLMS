@@ -40,8 +40,13 @@ export type Profile = {
   home_address?: string | null;
   emergency_contacts?: string | null;
   hr_info?: string | null;
+  anniversary?: string | null;
+  spouse_name?: string | null;
+  spouse_birthday?: string | null;
+  kids_birthdays?: string | null;
   primary_location_id?: string | null;
   supervisor_id?: string | null;
+  ems_cleared_level_id?: string | null;
 };
 
 export type Program = {

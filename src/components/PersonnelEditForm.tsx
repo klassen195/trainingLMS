@@ -6,8 +6,10 @@ import type { Location } from "@/lib/locations-types";
 import type {
   PersonnelCertification,
   PersonnelDocument,
+  PersonnelEmsLicense,
   PersonnelNote,
   PersonnelProfile,
+  PersonnelQualification,
   PersonnelRecognition,
   PersonnelShift,
   PersonnelTaskbook,
@@ -21,16 +23,24 @@ import {
   personnelShiftLabel,
   isRankOnProbation,
   normalizeSwingUpRanks,
+  parseFamilyKids,
+  serializeFamilyKids,
+  type FamilyKidInput,
 } from "@/lib/personnel-types";
 import type { Profile, UserRole } from "@/lib/training-lms-types";
+import type { EmsClearanceLevel } from "@/lib/ems-clearance-levels-types";
+import type { EmsLevel } from "@/lib/ems-levels-types";
+import type { Qualification } from "@/lib/qualifications-types";
 import { fireRanks, swingUpRanks, roleLabel } from "@/lib/labels";
 import { PersonnelCertificationsPanel } from "@/components/PersonnelCertificationsPanel";
 import { PersonnelDocumentsPanel } from "@/components/PersonnelDocumentsPanel";
+import { PersonnelEmsPanel } from "@/components/PersonnelEmsPanel";
 import {
   PersonnelFileLayout,
   type PersonnelFileSection,
 } from "@/components/PersonnelFileLayout";
 import { PersonnelNotesPanel } from "@/components/PersonnelNotesPanel";
+import { PersonnelQualificationsPanel } from "@/components/PersonnelQualificationsPanel";
 import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPanel";
 import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
@@ -45,6 +55,11 @@ export function PersonnelEditForm({
   locations,
   supervisors,
   certifications,
+  emsLicenses = [],
+  emsLevelCatalog = [],
+  emsClearanceCatalog = [],
+  qualifications = [],
+  qualificationCatalog = [],
   documents,
   notes,
   taskbooks,
@@ -60,6 +75,11 @@ export function PersonnelEditForm({
   locations: Location[];
   supervisors: Profile[];
   certifications: PersonnelCertification[];
+  emsLicenses?: PersonnelEmsLicense[];
+  emsLevelCatalog?: EmsLevel[];
+  emsClearanceCatalog?: EmsClearanceLevel[];
+  qualifications?: PersonnelQualification[];
+  qualificationCatalog?: Qualification[];
   documents: PersonnelDocument[];
   notes: PersonnelNote[];
   taskbooks: PersonnelTaskbook[];
@@ -82,6 +102,13 @@ export function PersonnelEditForm({
   const [homeAddress, setHomeAddress] = useState(person.home_address ?? "");
   const [emergencyContacts, setEmergencyContacts] = useState(person.emergency_contacts ?? "");
   const [hrInfo, setHrInfo] = useState(person.hr_info ?? "");
+  const [anniversary, setAnniversary] = useState(person.anniversary ?? "");
+  const [spouseName, setSpouseName] = useState(person.spouse_name ?? "");
+  const [spouseBirthday, setSpouseBirthday] = useState(person.spouse_birthday ?? "");
+  const [kids, setKids] = useState<FamilyKidInput[]>(() => {
+    const parsed = parseFamilyKids(person.kids_birthdays);
+    return parsed.length > 0 ? parsed : [{ name: "", birthday: "" }];
+  });
   const [primaryLocationId, setPrimaryLocationId] = useState(person.primary_location_id ?? "");
   const [supervisorId, setSupervisorId] = useState(person.supervisor_id ?? "");
   const [role, setRole] = useState<UserRole>(person.role);
@@ -118,6 +145,10 @@ export function PersonnelEditForm({
           homeAddress: homeAddress || null,
           emergencyContacts: emergencyContacts || null,
           hrInfo: hrInfo || null,
+          anniversary: anniversary || null,
+          spouseName: spouseName || null,
+          spouseBirthday: spouseBirthday || null,
+          kidsBirthdays: serializeFamilyKids(kids),
           primaryLocationId: primaryLocationId || null,
           supervisorId: supervisorId || null,
           role,
@@ -232,6 +263,106 @@ export function PersonnelEditForm({
                   value={hrInfo}
                   onChange={(e) => setHrInfo(e.target.value)}
                 />
+              </div>
+            </div>
+            <div className="space-y-4 border-t pt-4">
+              <p className="text-sm font-medium">Family</p>
+              <div className="grid max-w-xl gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="spouseName">Spouse name</FieldLabel>
+                  <Input
+                    id="spouseName"
+                    value={spouseName}
+                    onChange={(e) => setSpouseName(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="spouseBirthday">Spouse birthday</FieldLabel>
+                  <Input
+                    id="spouseBirthday"
+                    type="date"
+                    value={spouseBirthday}
+                    onChange={(e) => setSpouseBirthday(e.target.value)}
+                    className="w-full max-w-[11rem]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="anniversary">Anniversary</FieldLabel>
+                  <Input
+                    id="anniversary"
+                    type="date"
+                    value={anniversary}
+                    onChange={(e) => setAnniversary(e.target.value)}
+                    className="w-full max-w-[11rem]"
+                  />
+                </div>
+                <div className="space-y-3 sm:col-span-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <FieldLabel>Kids</FieldLabel>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setKids((prev) => [...prev, { name: "", birthday: "" }])}
+                    >
+                      Add kid
+                    </Button>
+                  </div>
+                  <ul className="space-y-2">
+                    {kids.map((kid, index) => (
+                      <li
+                        key={index}
+                        className="grid max-w-xl gap-2 sm:grid-cols-[minmax(0,14rem)_11rem_auto] sm:items-end"
+                      >
+                        <div className="space-y-1.5">
+                          <FieldLabel htmlFor={`kid-name-${index}`}>Name</FieldLabel>
+                          <Input
+                            id={`kid-name-${index}`}
+                            value={kid.name}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setKids((prev) =>
+                                prev.map((row, i) => (i === index ? { ...row, name: value } : row))
+                              );
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <FieldLabel htmlFor={`kid-birthday-${index}`}>Birthday</FieldLabel>
+                          <Input
+                            id={`kid-birthday-${index}`}
+                            type="date"
+                            value={kid.birthday}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setKids((prev) =>
+                                prev.map((row, i) =>
+                                  i === index ? { ...row, birthday: value } : row
+                                )
+                              );
+                            }}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
+                          disabled={kids.length <= 1 && !kid.name && !kid.birthday}
+                          onClick={() => {
+                            setKids((prev) => {
+                              const next = prev.filter((_, i) => i !== index);
+                              return next.length > 0 ? next : [{ name: "", birthday: "" }];
+                            });
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             </div>
             {renderSaveBar()}
@@ -388,6 +519,25 @@ export function PersonnelEditForm({
       ),
     },
     {
+      id: "ems",
+      label: "EMS",
+      content: (
+        <Card>
+          <CardContent className="pt-6">
+            <PersonnelEmsPanel
+              profileId={person.id}
+              licenses={emsLicenses}
+              licenseCatalog={emsLevelCatalog}
+              clearanceCatalog={emsClearanceCatalog}
+              clearedLevelId={person.ems_cleared_level_id}
+              clearedLevel={person.ems_cleared_level}
+              canManage
+            />
+          </CardContent>
+        </Card>
+      ),
+    },
+    {
       id: "certifications",
       label: "Certifications",
       content: (
@@ -396,6 +546,22 @@ export function PersonnelEditForm({
             <PersonnelCertificationsPanel
               profileId={person.id}
               certifications={certifications}
+              canManage
+            />
+          </CardContent>
+        </Card>
+      ),
+    },
+    {
+      id: "qualifications",
+      label: "Qualifications",
+      content: (
+        <Card>
+          <CardContent className="pt-6">
+            <PersonnelQualificationsPanel
+              profileId={person.id}
+              qualifications={qualifications}
+              catalog={qualificationCatalog}
               canManage
             />
           </CardContent>

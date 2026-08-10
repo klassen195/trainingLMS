@@ -5,10 +5,12 @@ import { requireCapability } from "@/lib/capability-access";
 import { getTrainingSession } from "@/app/document-training/actions";
 import { TrainingSessionFileDownloadButton } from "@/components/TrainingSessionFileDownloadButton";
 import {
+  trainingSessionDayLabel,
   trainingSessionDisplayDate,
+  trainingSessionTimeRange,
   trainingSessionTypeLabel,
 } from "@/lib/document-training-types";
-import { personnelDisplayName } from "@/lib/personnel-types";
+import { personnelDisplayName, formatTrainingHours } from "@/lib/personnel-types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -58,18 +60,16 @@ export default async function DocumentTrainingDetailPage({
             <dl className="grid gap-4 sm:grid-cols-2">
               <DetailItem label="Category" value={session.category?.name} />
               {session.session_type === "in_house" ? (
-                <DetailItem label="Instructor" value={session.instructor_name} />
+                <>
+                  <DetailItem label="Instructor" value={session.instructor_name} />
+                  <DetailItem
+                    label="Time"
+                    value={trainingSessionTimeRange(session)}
+                  />
+                </>
               ) : (
                 <>
                   <DetailItem label="Provider" value={session.provider} />
-                  <DetailItem
-                    label="Start date"
-                    value={session.started_on ? formatDate(session.started_on) : null}
-                  />
-                  <DetailItem
-                    label="End date"
-                    value={session.ended_on ? formatDate(session.ended_on) : null}
-                  />
                   <DetailItem
                     label="Expiration"
                     value={session.expires_on ? formatDate(session.expires_on) : null}
@@ -78,14 +78,39 @@ export default async function DocumentTrainingDetailPage({
               )}
               <DetailItem
                 label="Hours"
-                value={session.hours != null ? String(session.hours) : null}
+                value={
+                  session.hours != null
+                    ? `${formatTrainingHours(session.hours)}${
+                        session.hours_overridden ? " (overridden)" : ""
+                      }`
+                    : null
+                }
               />
               <DetailItem label="Location" value={session.location} />
+              <DetailItem
+                label="Qualifies for"
+                value={session.qualification?.name}
+              />
               <DetailItem
                 label="Logged by"
                 value={session.recorder ? personnelDisplayName(session.recorder) : null}
               />
             </dl>
+            {session.session_type === "certification_course" &&
+            session.days.length > 0 ? (
+              <div className="mt-4 border-t pt-4">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">
+                  Session days
+                </p>
+                <ul className="space-y-1.5">
+                  {session.days.map((day) => (
+                    <li key={day.id} className="text-sm">
+                      {trainingSessionDayLabel(day)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {session.notes ? (
               <div className="mt-4 border-t pt-4">
                 <p className="mb-1 text-sm font-medium text-muted-foreground">Notes</p>

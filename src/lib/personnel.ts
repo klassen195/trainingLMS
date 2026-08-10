@@ -2,8 +2,10 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import {
   PERSONNEL_CERTIFICATION_SELECT,
   PERSONNEL_DOCUMENT_SELECT,
+  PERSONNEL_EMS_LICENSE_SELECT,
   PERSONNEL_NOTE_SELECT,
   PERSONNEL_PROFILE_SELECT,
+  PERSONNEL_QUALIFICATION_SELECT,
   PERSONNEL_RECOGNITION_SELECT,
   PERSONNEL_TASKBOOK_SELECT,
   PERSONNEL_TASKBOOK_WITH_PROFILE_SELECT,
@@ -13,8 +15,10 @@ import {
   normalizeSwingUpRanks,
   type PersonnelCertification,
   type PersonnelDocument,
+  type PersonnelEmsLicense,
   type PersonnelNote,
   type PersonnelProfile,
+  type PersonnelQualification,
   type PersonnelRecognition,
   type PersonnelShift,
   type PersonnelTaskbook,
@@ -123,6 +127,43 @@ async function fetchOpenTaskbooksByProfileIds(
   };
 }
 
+async function fetchQualificationsByProfileIds(
+  supabase: SupabaseClient,
+  reportIds: string[]
+) {
+  if (reportIds.length === 0) {
+    return {
+      qualificationsByProfile: {} as Record<string, PersonnelQualification[]>,
+      error: null as PostgrestError | null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("personnel_qualifications")
+    .select(PERSONNEL_QUALIFICATION_SELECT)
+    .in("profile_id", reportIds)
+    .order("earned_on", { ascending: false, nullsFirst: false });
+
+  if (error) {
+    return {
+      qualificationsByProfile: {} as Record<string, PersonnelQualification[]>,
+      error: error as PostgrestError,
+    };
+  }
+
+  const qualificationsByProfile: Record<string, PersonnelQualification[]> = {};
+  for (const row of (data ?? []) as unknown as PersonnelQualification[]) {
+    const list = qualificationsByProfile[row.profile_id] ?? [];
+    list.push(row);
+    qualificationsByProfile[row.profile_id] = list;
+  }
+
+  return {
+    qualificationsByProfile,
+    error: null as PostgrestError | null,
+  };
+}
+
 function asSingleRelation<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? (value[0] ?? null) : value;
@@ -145,10 +186,18 @@ export function normalizePersonnelProfile(row: Record<string, unknown>): Personn
     home_address: (base.home_address as string | null | undefined) ?? null,
     emergency_contacts: (base.emergency_contacts as string | null | undefined) ?? null,
     hr_info: (base.hr_info as string | null | undefined) ?? null,
+    anniversary: (base.anniversary as string | null | undefined) ?? null,
+    spouse_name: (base.spouse_name as string | null | undefined) ?? null,
+    spouse_birthday: (base.spouse_birthday as string | null | undefined) ?? null,
+    kids_birthdays: (base.kids_birthdays as string | null | undefined) ?? null,
     primary_location_id: (base.primary_location_id as string | null | undefined) ?? null,
     supervisor_id: (base.supervisor_id as string | null | undefined) ?? null,
+    ems_cleared_level_id: (base.ems_cleared_level_id as string | null | undefined) ?? null,
     primary_location: asSingleRelation(row.primary_location as PersonnelProfile["primary_location"]),
     supervisor: asSingleRelation(row.supervisor as PersonnelProfile["supervisor"]),
+    ems_cleared_level: asSingleRelation(
+      row.ems_cleared_level as PersonnelProfile["ems_cleared_level"]
+    ),
   };
 }
 
@@ -215,6 +264,32 @@ export async function fetchPersonnelCertifications(supabase: SupabaseClient, pro
 
   return {
     rows: (data ?? []) as PersonnelCertification[],
+    error: error as PostgrestError | null,
+  };
+}
+
+export async function fetchPersonnelQualifications(supabase: SupabaseClient, profileId: string) {
+  const { data, error } = await supabase
+    .from("personnel_qualifications")
+    .select(PERSONNEL_QUALIFICATION_SELECT)
+    .eq("profile_id", profileId)
+    .order("earned_on", { ascending: false, nullsFirst: false });
+
+  return {
+    rows: (data ?? []) as unknown as PersonnelQualification[],
+    error: error as PostgrestError | null,
+  };
+}
+
+export async function fetchPersonnelEmsLicenses(supabase: SupabaseClient, profileId: string) {
+  const { data, error } = await supabase
+    .from("personnel_ems_licenses")
+    .select(PERSONNEL_EMS_LICENSE_SELECT)
+    .eq("profile_id", profileId)
+    .order("expires_on", { ascending: true, nullsFirst: false });
+
+  return {
+    rows: (data ?? []) as unknown as PersonnelEmsLicense[],
     error: error as PostgrestError | null,
   };
 }
@@ -350,6 +425,7 @@ export async function fetchSupervisorCrew(
     return {
       rows: [] as PersonnelProfile[],
       taskbooksByProfile: {} as Record<string, PersonnelTaskbook[]>,
+      qualificationsByProfile: {} as Record<string, PersonnelQualification[]>,
       error: assigned.error,
     };
   }
@@ -357,20 +433,26 @@ export async function fetchSupervisorCrew(
     return {
       rows: [] as PersonnelProfile[],
       taskbooksByProfile: {} as Record<string, PersonnelTaskbook[]>,
+      qualificationsByProfile: {} as Record<string, PersonnelQualification[]>,
       error: shift.error,
     };
   }
 
   const rows = mergeProfilesById([assigned.rows, shift.rows]);
-  const { taskbooksByProfile, error: taskbooksError } = await fetchOpenTaskbooksByProfileIds(
-    supabase,
-    rows.map((r) => r.id)
-  );
+  const reportIds = rows.map((r) => r.id);
+  const [
+    { taskbooksByProfile, error: taskbooksError },
+    { qualificationsByProfile, error: qualificationsError },
+  ] = await Promise.all([
+    fetchOpenTaskbooksByProfileIds(supabase, reportIds),
+    fetchQualificationsByProfileIds(supabase, reportIds),
+  ]);
 
   return {
     rows,
     taskbooksByProfile,
-    error: taskbooksError,
+    qualificationsByProfile,
+    error: taskbooksError ?? qualificationsError,
   };
 }
 

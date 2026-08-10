@@ -44,3 +44,26 @@ export function PersonnelBackToFileButton({ personId }: { personId: string }) {
     </Button>
   );
 }
+
+export function PersonnelDirectoryButton() {
+  return (
+    <Button asChild variant="secondary">
+      <Link
+        href="/personnel"
+        onClick={() => {
+          // Clear any personnel-file section hash before leaving so the
+          // directory does not inherit scroll/hash from the file view.
+          if (window.location.hash) {
+            window.history.replaceState(
+              null,
+              "",
+              `${window.location.pathname}${window.location.search}`
+            );
+          }
+        }}
+      >
+        Directory
+      </Link>
+    </Button>
+  );
+}

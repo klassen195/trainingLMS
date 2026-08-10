@@ -3,8 +3,10 @@ import { requireAdmin } from "@/lib/auth";
 import {
   fetchPersonnelCertifications,
   fetchPersonnelDocuments,
+  fetchPersonnelEmsLicenses,
   fetchPersonnelNotes,
   fetchPersonnelProfile,
+  fetchPersonnelQualifications,
   fetchPersonnelRecognitions,
   fetchPersonnelTaskbooks,
   fetchPersonnelTaskbookPrerequisiteChecks,
@@ -14,8 +16,12 @@ import {
 import { personnelDisplayName } from "@/lib/personnel-types";
 import type { Profile } from "@/lib/training-lms-types";
 import { LOCATION_SELECT, type Location } from "@/lib/locations-types";
+import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
+import { listEmsLevels } from "@/lib/ems-levels";
+import { listQualifications } from "@/lib/qualifications";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  isMissingEmsLevelsTable,
   isMissingPersonnelTables,
   isMissingTrainingLmsTables,
 } from "@/lib/supabase/errors";
@@ -43,6 +49,8 @@ export default async function PersonnelEditPage({
     { data: locations },
     { data: supervisors },
     { rows: certifications, error: certError },
+    { rows: emsLicenses, error: emsLicensesError },
+    { rows: qualifications, error: qualificationsError },
     { rows: documents, error: docError },
     { rows: notes, error: notesError },
     { rows: taskbooks, error: taskbooksError },
@@ -50,6 +58,9 @@ export default async function PersonnelEditPage({
     { rows: recognitions, error: recognitionsError },
     { programs, error: trainingError },
     { hours: ytdHours, year: ytdYear, error: ytdError },
+    { rows: qualificationCatalog, error: catalogError },
+    { rows: emsLevelCatalog, error: emsCatalogError },
+    { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
   ] = await Promise.all([
     supabase
       .from("locations")
@@ -69,6 +80,8 @@ export default async function PersonnelEditPage({
       )
       .order("display_name", { ascending: true, nullsFirst: false }),
     fetchPersonnelCertifications(supabase, id),
+    fetchPersonnelEmsLicenses(supabase, id),
+    fetchPersonnelQualifications(supabase, id),
     fetchPersonnelDocuments(supabase, id),
     fetchPersonnelNotes(supabase, id),
     fetchPersonnelTaskbooks(supabase, id),
@@ -76,10 +89,16 @@ export default async function PersonnelEditPage({
     fetchPersonnelRecognitions(supabase, id),
     fetchPersonnelTraining(supabase, id),
     fetchPersonnelYtdTrainingHours(supabase, id),
+    listQualifications(supabase, { activeOnly: true }),
+    listEmsLevels(supabase, { activeOnly: true }),
+    listEmsClearanceLevels(supabase, { activeOnly: true }),
   ]);
 
   if (
     (certError && isMissingPersonnelTables(certError)) ||
+    (emsLicensesError &&
+      (isMissingPersonnelTables(emsLicensesError) || isMissingEmsLevelsTable(emsLicensesError))) ||
+    (qualificationsError && isMissingPersonnelTables(qualificationsError)) ||
     (docError && isMissingPersonnelTables(docError)) ||
     (notesError && isMissingPersonnelTables(notesError)) ||
     (taskbooksError && isMissingPersonnelTables(taskbooksError)) ||
@@ -89,6 +108,8 @@ export default async function PersonnelEditPage({
     return <PersonnelDatabaseSetup />;
   }
   if (certError) throw certError;
+  if (emsLicensesError) throw emsLicensesError;
+  if (qualificationsError) throw qualificationsError;
   if (docError) throw docError;
   if (notesError) throw notesError;
   if (taskbooksError) throw taskbooksError;
@@ -96,6 +117,9 @@ export default async function PersonnelEditPage({
   if (recognitionsError) throw recognitionsError;
   if (trainingError) throw trainingError;
   if (ytdError) throw ytdError;
+  if (catalogError) throw new Error(catalogError.message);
+  if (emsCatalogError) throw new Error(emsCatalogError.message);
+  if (emsClearanceCatalogError) throw new Error(emsClearanceCatalogError.message);
 
   const { data: allPrograms } = await supabase
     .from("programs")
@@ -118,6 +142,11 @@ export default async function PersonnelEditPage({
         locations={(locations ?? []) as Location[]}
         supervisors={(supervisors ?? []) as Profile[]}
         certifications={certifications}
+        emsLicenses={emsLicenses}
+        emsLevelCatalog={emsLevelCatalog}
+        emsClearanceCatalog={emsClearanceCatalog}
+        qualifications={qualifications}
+        qualificationCatalog={qualificationCatalog}
         documents={documents}
         notes={notes}
         taskbooks={taskbooks}

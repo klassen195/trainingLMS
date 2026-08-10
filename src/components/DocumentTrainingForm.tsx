@@ -17,11 +17,14 @@ import {
   type TrainingSessionProfileOption,
   type TrainingSessionType,
 } from "@/lib/document-training-types";
+import { toTimeInputValue, hoursBetweenTimes } from "@/lib/dates";
 import type { TrainingCategory } from "@/lib/training-categories-types";
+import type { Qualification } from "@/lib/qualifications-types";
 import {
   personnelDisplayName,
   personnelShiftLabel,
   personnelShifts,
+  formatTrainingHours,
   type PersonnelShift,
 } from "@/lib/personnel-types";
 import { cn } from "@/lib/cn";
@@ -47,30 +50,55 @@ const SESSION_TYPES: {
   },
 ];
 
+type SessionDayDraft = {
+  key: string;
+  occurredOn: string;
+  startTime: string;
+  endTime: string;
+};
+
+function newDayDraft(partial?: Partial<Omit<SessionDayDraft, "key">>): SessionDayDraft {
+  return {
+    key: crypto.randomUUID(),
+    occurredOn: partial?.occurredOn ?? "",
+    startTime: partial?.startTime ?? "",
+    endTime: partial?.endTime ?? "",
+  };
+}
+
 export type DocumentTrainingFormInitial = {
   sessionId: string;
   sessionType: TrainingSessionType;
   categoryId: string;
   title: string;
-  hours: string;
   location: string;
   notes: string;
   attendeeIds: string[];
   occurredOn: string;
+  startTime: string;
+  endTime: string;
   instructorName: string;
   provider: string;
-  startedOn: string;
-  endedOn: string;
   expiresOn: string;
+  qualificationId: string;
+  hours: number | null;
+  hoursOverridden: boolean;
+  days: Array<{
+    occurredOn: string;
+    startTime: string;
+    endTime: string;
+  }>;
 };
 
 export function DocumentTrainingForm({
   profiles,
   categories,
+  qualifications,
   initial,
 }: {
   profiles: TrainingSessionProfileOption[];
   categories: TrainingCategory[];
+  qualifications: Qualification[];
   initial?: DocumentTrainingFormInitial;
 }) {
   const router = useRouter();
@@ -86,7 +114,6 @@ export function DocumentTrainingForm({
     initial?.categoryId || categories[0]?.id || ""
   );
   const [title, setTitle] = useState(initial?.title ?? "");
-  const [hours, setHours] = useState(initial?.hours ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [attendeeIds, setAttendeeIds] = useState<string[]>(initial?.attendeeIds ?? []);
@@ -95,12 +122,54 @@ export function DocumentTrainingForm({
   const [attendeeStationId, setAttendeeStationId] = useState("");
 
   const [occurredOn, setOccurredOn] = useState(initial?.occurredOn ?? "");
+  const [startTime, setStartTime] = useState(toTimeInputValue(initial?.startTime));
+  const [endTime, setEndTime] = useState(toTimeInputValue(initial?.endTime));
   const [instructorName, setInstructorName] = useState(initial?.instructorName ?? "");
 
   const [provider, setProvider] = useState(initial?.provider ?? "");
-  const [startedOn, setStartedOn] = useState(initial?.startedOn ?? "");
-  const [endedOn, setEndedOn] = useState(initial?.endedOn ?? "");
   const [expiresOn, setExpiresOn] = useState(initial?.expiresOn ?? "");
+  const [qualificationId, setQualificationId] = useState(initial?.qualificationId ?? "");
+  const [days, setDays] = useState<SessionDayDraft[]>(() => {
+    if (initial?.days && initial.days.length > 0) {
+      return initial.days.map((day) =>
+        newDayDraft({
+          occurredOn: day.occurredOn,
+          startTime: toTimeInputValue(day.startTime),
+          endTime: toTimeInputValue(day.endTime),
+        })
+      );
+    }
+    return [newDayDraft()];
+  });
+  const [hoursOverridden, setHoursOverridden] = useState(
+    Boolean(initial?.hoursOverridden)
+  );
+  const [hoursOverride, setHoursOverride] = useState(() =>
+    initial?.hoursOverridden && initial.hours != null
+      ? formatTrainingHours(initial.hours)
+      : ""
+  );
+
+  const inHouseHours = useMemo(
+    () => hoursBetweenTimes(startTime, endTime),
+    [startTime, endTime]
+  );
+
+  const talliedHours = useMemo(() => {
+    let total = 0;
+    let complete = 0;
+    for (const day of days) {
+      const hours = hoursBetweenTimes(day.startTime, day.endTime);
+      if (hours == null) continue;
+      total += hours;
+      complete += 1;
+    }
+    if (complete === 0) return null;
+    return Math.round(total * 100) / 100;
+  }, [days]);
+
+  const calculatedHours =
+    sessionType === "certification_course" ? talliedHours : inHouseHours;
 
   const stationOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -151,12 +220,29 @@ export function DocumentTrainingForm({
     if (isEdit) return;
     setSessionType(next);
     setOccurredOn("");
+    setStartTime("");
+    setEndTime("");
     setInstructorName("");
     setProvider("");
-    setStartedOn("");
-    setEndedOn("");
     setExpiresOn("");
+    setQualificationId("");
+    setDays([newDayDraft()]);
+    setHoursOverridden(false);
+    setHoursOverride("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function updateDay(
+    key: string,
+    patch: Partial<Pick<SessionDayDraft, "occurredOn" | "startTime" | "endTime">>
+  ) {
+    setDays((prev) =>
+      prev.map((day) => (day.key === key ? { ...day, ...patch } : day))
+    );
+  }
+
+  function removeDay(key: string) {
+    setDays((prev) => (prev.length <= 1 ? prev : prev.filter((day) => day.key !== key)));
   }
 
   function toggleAttendee(id: string) {
@@ -198,15 +284,29 @@ export function DocumentTrainingForm({
               sessionType,
               categoryId,
               title,
-              hours: hours.trim() === "" ? null : hours,
               location,
               notes,
               occurredOn,
+              startTime,
+              endTime,
               instructorName,
               provider,
-              startedOn,
-              endedOn,
               expiresOn,
+              days:
+                sessionType === "certification_course"
+                  ? days.map((day) => ({
+                      occurredOn: day.occurredOn,
+                      startTime: day.startTime,
+                      endTime: day.endTime,
+                    }))
+                  : undefined,
+              hoursOverridden:
+                sessionType === "certification_course" ? hoursOverridden : false,
+              hoursOverride:
+                sessionType === "certification_course" && hoursOverridden
+                  ? hoursOverride
+                  : null,
+              qualificationId: qualificationId || null,
               attendeeIds,
             };
 
@@ -336,7 +436,7 @@ export function DocumentTrainingForm({
               </div>
 
               {sessionType === "in_house" ? (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <>
                   <div>
                     <FieldLabel htmlFor="occurred-on">Date</FieldLabel>
                     <Input
@@ -346,6 +446,28 @@ export function DocumentTrainingForm({
                       onChange={(e) => setOccurredOn(e.target.value)}
                       required
                     />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <FieldLabel htmlFor="start-time">Start time</FieldLabel>
+                      <Input
+                        id="start-time"
+                        type="time"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="end-time">End time</FieldLabel>
+                      <Input
+                        id="end-time"
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
                   <div>
                     <FieldLabel htmlFor="instructor-name">Instructor</FieldLabel>
@@ -357,7 +479,7 @@ export function DocumentTrainingForm({
                       placeholder="Name"
                     />
                   </div>
-                </div>
+                </>
               ) : (
                 <>
                   <div>
@@ -370,51 +492,158 @@ export function DocumentTrainingForm({
                       placeholder="e.g. State Fire Academy"
                     />
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
+
+                  <div className="space-y-3">
                     <div>
-                      <FieldLabel htmlFor="started-on">Start date</FieldLabel>
-                      <Input
-                        id="started-on"
-                        type="date"
-                        value={startedOn}
-                        onChange={(e) => setStartedOn(e.target.value)}
-                        required
-                      />
+                      <FieldLabel>Session days</FieldLabel>
+                      <FieldHint>
+                        Add each day the course met. Hours tally from these times unless
+                        overridden below.
+                      </FieldHint>
                     </div>
-                    <div>
-                      <FieldLabel htmlFor="ended-on">End date</FieldLabel>
-                      <Input
-                        id="ended-on"
-                        type="date"
-                        value={endedOn}
-                        onChange={(e) => setEndedOn(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel htmlFor="expires-on">Expiration</FieldLabel>
-                      <Input
-                        id="expires-on"
-                        type="date"
-                        value={expiresOn}
-                        onChange={(e) => setExpiresOn(e.target.value)}
-                      />
-                    </div>
+                    {days.map((day, index) => (
+                      <div
+                        key={day.key}
+                        className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
+                      >
+                        <div>
+                          <FieldLabel htmlFor={`day-date-${day.key}`}>
+                            Date{days.length > 1 ? ` ${index + 1}` : ""}
+                          </FieldLabel>
+                          <Input
+                            id={`day-date-${day.key}`}
+                            type="date"
+                            value={day.occurredOn}
+                            onChange={(e) =>
+                              updateDay(day.key, { occurredOn: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel htmlFor={`day-start-${day.key}`}>Start</FieldLabel>
+                          <Input
+                            id={`day-start-${day.key}`}
+                            type="time"
+                            value={day.startTime}
+                            onChange={(e) =>
+                              updateDay(day.key, { startTime: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div>
+                          <FieldLabel htmlFor={`day-end-${day.key}`}>End</FieldLabel>
+                          <Input
+                            id={`day-end-${day.key}`}
+                            type="time"
+                            value={day.endTime}
+                            onChange={(e) =>
+                              updateDay(day.key, { endTime: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={days.length <= 1}
+                            onClick={() => removeDay(day.key)}
+                            aria-label={`Remove day ${index + 1}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDays((prev) => [...prev, newDayDraft()])}
+                    >
+                      Add another day
+                    </Button>
+                  </div>
+
+                  <div>
+                    <FieldLabel htmlFor="expires-on">Expiration</FieldLabel>
+                    <Input
+                      id="expires-on"
+                      type="date"
+                      value={expiresOn}
+                      onChange={(e) => setExpiresOn(e.target.value)}
+                    />
+                    <FieldHint>Credential expiration, if applicable.</FieldHint>
                   </div>
                 </>
               )}
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
+                <div className="space-y-2">
                   <FieldLabel htmlFor="hours">Hours</FieldLabel>
-                  <Input
-                    id="hours"
-                    type="number"
-                    min={0}
-                    step="0.25"
-                    value={hours}
-                    onChange={(e) => setHours(e.target.value)}
-                    placeholder="e.g. 2"
-                  />
+                  {sessionType === "certification_course" && hoursOverridden ? (
+                    <Input
+                      id="hours"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={hoursOverride}
+                      onChange={(e) => setHoursOverride(e.target.value)}
+                      required
+                      placeholder="Total hours from certificate"
+                    />
+                  ) : (
+                    <Input
+                      id="hours"
+                      value={
+                        calculatedHours != null
+                          ? formatTrainingHours(calculatedHours)
+                          : ""
+                      }
+                      readOnly
+                      tabIndex={-1}
+                      placeholder={
+                        sessionType === "certification_course"
+                          ? "Sum of daily times"
+                          : "From start and end time"
+                      }
+                    />
+                  )}
+                  {sessionType === "certification_course" ? (
+                    <>
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border"
+                          checked={hoursOverridden}
+                          onChange={(e) => {
+                            const next = e.target.checked;
+                            setHoursOverridden(next);
+                            if (next) {
+                              setHoursOverride(
+                                talliedHours != null
+                                  ? formatTrainingHours(talliedHours)
+                                  : hoursOverride
+                              );
+                            } else {
+                              setHoursOverride("");
+                            }
+                          }}
+                        />
+                        Override total hours
+                      </label>
+                      <FieldHint>
+                        {hoursOverridden
+                          ? "Using the certificate total instead of the daily tally."
+                          : "Calculated as the sum of each day’s start and end time."}
+                      </FieldHint>
+                    </>
+                  ) : (
+                    <FieldHint>Calculated from start and end time.</FieldHint>
+                  )}
                 </div>
                 <div>
                   <FieldLabel htmlFor="location">Location</FieldLabel>
@@ -425,6 +654,29 @@ export function DocumentTrainingForm({
                     placeholder="Station, classroom, etc."
                   />
                 </div>
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="qualification-id">
+                  Does this training qualify attendees for anything?
+                </FieldLabel>
+                <Select
+                  id="qualification-id"
+                  value={qualificationId}
+                  onChange={(e) => setQualificationId(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {qualifications.map((qualification) => (
+                    <option key={qualification.id} value={qualification.id}>
+                      {qualification.name}
+                      {!qualification.is_active ? " (inactive)" : ""}
+                    </option>
+                  ))}
+                </Select>
+                <FieldHint>
+                  If selected, attendees are granted this qualification on their personnel file
+                  when you save.
+                </FieldHint>
               </div>
 
               <div>

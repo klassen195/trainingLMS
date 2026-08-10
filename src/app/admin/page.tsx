@@ -1,122 +1,173 @@
-import { Shield } from "lucide-react";
+import {
+  BadgeCheck,
+  ChevronRight,
+  ClipboardCheck,
+  Cross,
+  type LucideIcon,
+  MapPin,
+  Shield,
+  ShieldCheck,
+  Tags,
+  Users,
+  Wrench,
+  Layers,
+  ListTree,
+} from "lucide-react";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
-import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+
+type AdminLink = {
+  href: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+type AdminGroup = {
+  title: string;
+  items: AdminLink[];
+};
+
+const ADMIN_GROUPS: AdminGroup[] = [
+  {
+    title: "People",
+    items: [
+      {
+        href: "/personnel",
+        label: "Personnel",
+        description: "Directory, invites, and personnel files",
+        icon: Users,
+      },
+      {
+        href: "/admin/permissions",
+        label: "Permissions",
+        description: "Role capability matrix",
+        icon: Shield,
+      },
+      {
+        href: "/admin/ems-levels",
+        label: "EMS levels",
+        description: "License levels held on personnel files",
+        icon: Cross,
+      },
+      {
+        href: "/admin/ems-clearance-levels",
+        label: "EMS clearance",
+        description: "Cleared-to-operate levels",
+        icon: ShieldCheck,
+      },
+    ],
+  },
+  {
+    title: "Training",
+    items: [
+      {
+        href: "/admin/training-categories",
+        label: "Categories",
+        description: "Document training categories",
+        icon: Tags,
+      },
+      {
+        href: "/admin/qualifications",
+        label: "Qualifications",
+        description: "Qualifications granted by training",
+        icon: BadgeCheck,
+      },
+    ],
+  },
+  {
+    title: "Assets",
+    items: [
+      {
+        href: "/admin/locations",
+        label: "Locations",
+        description: "Stations and other sites",
+        icon: MapPin,
+      },
+      {
+        href: "/admin/equipment-categories",
+        label: "Equipment categories",
+        description: "Inventory category list",
+        icon: Layers,
+      },
+      {
+        href: "/admin/equipment-subcategories",
+        label: "Equipment subcategories",
+        description: "Subcategories under each category",
+        icon: ListTree,
+      },
+      {
+        href: "/admin/vehicle-checks",
+        label: "Vehicle checks",
+        description: "Apparatus checklist templates",
+        icon: ClipboardCheck,
+      },
+      {
+        href: "/admin/maintenance",
+        label: "Maintenance",
+        description: "Review apparatus requests",
+        icon: Wrench,
+      },
+    ],
+  },
+];
 
 export default async function AdminPage() {
   await requireAdmin();
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-3">
           <Shield className="h-8 w-8 text-primary" />
           <h1 className="text-4xl font-bold">Admin</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Manage locations, permission settings, and department checklists.
+          Department settings, catalogs, and access.
         </p>
       </div>
 
-      <div className="mb-8 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Personnel</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Directory, invites, org details, certifications, documents, and training assignment.
-            </p>
-            <Button asChild>
-              <Link href="/personnel">Manage personnel</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Locations</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Manage stations and other sites for asset assignment.
-            </p>
-            <Button asChild>
-              <Link href="/admin/locations">Manage locations</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Equipment categories</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Manage the fixed category list for equipment inventory.
-            </p>
-            <Button asChild>
-              <Link href="/admin/equipment-categories">Manage categories</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Equipment subcategories</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Manage subcategory lists under each equipment category.
-            </p>
-            <Button asChild>
-              <Link href="/admin/equipment-subcategories">Manage subcategories</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Training categories</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Manage categories for Document Training (Fire, EMS, Officer, and more).
-            </p>
-            <Button asChild>
-              <Link href="/admin/training-categories">Manage categories</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Vehicle checks</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Edit Daily and Weekly apparatus checklist templates.
-            </p>
-            <Button asChild>
-              <Link href="/admin/vehicle-checks">Manage templates</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Maintenance requests</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Review and resolve apparatus maintenance requests.
-            </p>
-            <Button asChild>
-              <Link href="/admin/maintenance">Manage requests</Link>
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="space-y-6">
+        {ADMIN_GROUPS.map((group) => (
+          <Card key={group.title}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold tracking-tight text-muted-foreground">
+                {group.title}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ul className="divide-y divide-border">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 px-6 py-3 transition-colors",
+                          "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+                        )}
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium">{item.label}</span>
+                          <span className="block truncate text-sm text-muted-foreground">
+                            {item.description}
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );
