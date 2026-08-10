@@ -1,14 +1,25 @@
 import Link from "next/link";
-import type { PersonnelProfile, PersonnelTaskbook } from "@/lib/personnel-types";
+import type {
+  PersonnelProfile,
+  PersonnelQualification,
+  PersonnelTaskbook,
+} from "@/lib/personnel-types";
 import {
   formatSwingUpRanks,
+  familyDateEventLabel,
+  familyDateTitle,
+  isCertExpired,
   isRankOnProbation,
   isTaskbookOverdue,
   personnelDisplayName,
   personnelShiftLabel,
   taskbookStatusLabel,
   taskbookTimeLeftLabel,
+  upcomingFamilyDates,
+  upcomingImportantDateWhenLabel,
 } from "@/lib/personnel-types";
+import { formatDate } from "@/lib/dates";
+import { cn } from "@/lib/cn";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -29,9 +40,11 @@ function personInitials(person: PersonnelProfile) {
 export function SupervisorDashboard({
   rows,
   taskbooksByProfile,
+  qualificationsByProfile,
 }: {
   rows: PersonnelProfile[];
   taskbooksByProfile: Record<string, PersonnelTaskbook[]>;
+  qualificationsByProfile: Record<string, PersonnelQualification[]>;
 }) {
   if (rows.length === 0) {
     return (
@@ -48,6 +61,8 @@ export function SupervisorDashboard({
         const station = person.primary_location?.name || "—";
         const shift = personnelShiftLabel(person.shift);
         const openBooks = taskbooksByProfile[person.id] ?? [];
+        const qualifications = qualificationsByProfile[person.id] ?? [];
+        const upcomingDates = upcomingFamilyDates(person);
         return (
           <Card key={person.id} className="flex flex-col">
             <CardHeader className="flex-row items-start gap-3 space-y-0 p-4">
@@ -93,14 +108,91 @@ export function SupervisorDashboard({
                   ) : null}
                 </div>
                 <div>
+                  <dt className="text-xs text-muted-foreground">EMS</dt>
+                  <dd className="mt-0.5 font-medium">
+                    {person.ems_cleared_level?.name || "—"}
+                  </dd>
+                </div>
+                <div>
                   <dt className="text-xs text-muted-foreground">Rank</dt>
                   <dd className="mt-0.5 font-medium">{person.rank || "—"}</dd>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <dt className="text-xs text-muted-foreground">Swing-up</dt>
                   <dd className="mt-0.5 font-medium">{formatSwingUpRanks(person.swing_up)}</dd>
                 </div>
               </dl>
+
+              {upcomingDates.length > 0 ? (
+                <div className="border-t pt-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Upcoming dates
+                  </p>
+                  <ul className="space-y-1.5">
+                    {upcomingDates.map((item) => {
+                      const roleLabel =
+                        item.role === "anniversary"
+                          ? null
+                          : item.name
+                            ? familyDateEventLabel(item)
+                            : null;
+                      return (
+                        <li
+                          key={`${item.role}-${item.name ?? ""}-${item.nextOn}`}
+                          className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-sm"
+                        >
+                          <span className="min-w-0">
+                            <span className="font-medium">{familyDateTitle(item)}</span>
+                            {roleLabel ? (
+                              <span className="text-muted-foreground"> · {roleLabel}</span>
+                            ) : null}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(item.nextOn)} ·{" "}
+                            {upcomingImportantDateWhenLabel(item.daysUntil)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="border-t pt-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Qualifications
+                </p>
+                {qualifications.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">None recorded</p>
+                ) : (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {qualifications.map((row) => {
+                      const expired = isCertExpired(row.expires_on);
+                      const name = row.qualification?.name ?? "Qualification";
+                      return (
+                        <li key={row.id}>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "max-w-full font-normal",
+                              expired &&
+                                "border-destructive/40 bg-destructive/10 text-destructive"
+                            )}
+                            title={
+                              row.expires_on
+                                ? `${name} · Expires ${formatDate(row.expires_on)}`
+                                : name
+                            }
+                          >
+                            <span className="truncate">{name}</span>
+                            {expired ? <span className="ml-1 shrink-0">· Expired</span> : null}
+                          </Badge>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
 
               <div className="mt-auto border-t pt-3">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

@@ -6,7 +6,9 @@ import { cn } from "@/lib/cn";
 export type PersonnelFileSectionId =
   | "demographics"
   | "work"
+  | "ems"
   | "certifications"
+  | "qualifications"
   | "taskbooks"
   | "recognitions"
   | "security"
@@ -54,7 +56,8 @@ export function PersonnelFileLayout({
     setActiveId(id);
     const next = `#${id}`;
     if (window.location.hash !== next) {
-      window.history.replaceState(null, "", next);
+      // replaceState avoids the browser scrolling to a matching id/anchor.
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${next}`);
     }
   }
 

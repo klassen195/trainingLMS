@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PersonnelProfile } from "@/lib/personnel-types";
@@ -23,6 +23,14 @@ export function PersonnelDirectory({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+
+  useEffect(() => {
+    // Section hashes from personnel files can linger and leave the directory scrolled down.
+    if (window.location.hash) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

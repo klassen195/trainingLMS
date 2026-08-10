@@ -190,7 +190,21 @@ export function BreadcrumbNav() {
                       </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink asChild>
-                        <Link href={crumb.href!} className="flex items-center gap-2 hover:underline">
+                        <Link
+                          href={crumb.href!}
+                          className="flex items-center gap-2 hover:underline"
+                          onClick={() => {
+                            if (crumb.href !== "/personnel") return;
+                            if (typeof window === "undefined") return;
+                            if (window.location.hash) {
+                              window.history.replaceState(
+                                null,
+                                "",
+                                `${window.location.pathname}${window.location.search}`
+                              );
+                            }
+                          }}
+                        >
                           {crumb.icon}
                           {crumb.label}
                         </Link>

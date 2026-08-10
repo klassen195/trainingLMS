@@ -1,12 +1,13 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { isAdmin, requireUserProfile } from "@/lib/auth";
 import {
   fetchPersonnelCertifications,
   fetchPersonnelDocuments,
+  fetchPersonnelEmsLicenses,
   fetchPersonnelNotes,
   fetchPersonnelProfile,
+  fetchPersonnelQualifications,
   fetchPersonnelRecognitions,
   fetchPersonnelTaskbooks,
   fetchPersonnelTaskbookPrerequisiteChecks,
@@ -16,37 +17,47 @@ import {
   personHasSupervisorCoverage,
 } from "@/lib/personnel";
 import {
+  collectExpiringPersonnelItems,
   isCertExpired,
   isRankOnProbation,
   formatSwingUpRanks,
   personnelDisplayName,
   personnelShiftLabel,
   isPersonnelSupervisorOf,
+  familyDateEventLabel,
+  familyDateTitle,
+  listFamilyDates,
 } from "@/lib/personnel-types";
 import { roleLabel } from "@/lib/labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import {
-  isMissingPersonnelTables,
-  isMissingTrainingLmsTables,
-} from "@/lib/supabase/errors";
+import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
+import { listEmsLevels } from "@/lib/ems-levels";
 import { PersonnelCertificationsPanel } from "@/components/PersonnelCertificationsPanel";
 import { PersonnelDatabaseSetup } from "@/components/PersonnelDatabaseSetup";
 import { PersonnelDocumentsPanel } from "@/components/PersonnelDocumentsPanel";
+import { PersonnelEmsPanel } from "@/components/PersonnelEmsPanel";
+import { PersonnelExpiringNotifications } from "@/components/PersonnelExpiringNotifications";
 import {
   PersonnelFieldGrid,
   PersonnelFileLayout,
   type PersonnelFileSection,
 } from "@/components/PersonnelFileLayout";
 import { PersonnelNotesPanel } from "@/components/PersonnelNotesPanel";
+import { PersonnelQualificationsPanel } from "@/components/PersonnelQualificationsPanel";
 import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPanel";
 import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
-import { PersonnelEditButton } from "@/components/PersonnelSectionNavButtons";
+import { PersonnelDirectoryButton, PersonnelEditButton } from "@/components/PersonnelSectionNavButtons";
 import { SendPersonnelInviteButton } from "@/components/SendPersonnelInviteButton";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { formatDate } from "@/lib/dates";
+import {
+  isMissingEmsLevelsTable,
+  isMissingPersonnelTables,
+  isMissingTrainingLmsTables,
+} from "@/lib/supabase/errors";
+import { listQualifications } from "@/lib/qualifications";
 
 export default async function PersonnelDetailPage({
   params,
@@ -74,6 +85,8 @@ export default async function PersonnelDetailPage({
 
   const [
     { rows: certifications, error: certError },
+    { rows: emsLicenses, error: emsLicensesError },
+    { rows: qualifications, error: qualificationsError },
     { rows: documents, error: docError },
     { rows: notes, error: notesError },
     { rows: taskbooks, error: taskbooksError },
@@ -83,8 +96,13 @@ export default async function PersonnelDetailPage({
     { programs, error: trainingError },
     { hours: ytdHours, year: ytdYear, error: ytdError },
     { hasSupervisor, error: supervisorCoverageError },
+    { rows: qualificationCatalog, error: catalogError },
+    { rows: emsLevelCatalog, error: emsCatalogError },
+    { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
   ] = await Promise.all([
     fetchPersonnelCertifications(supabase, id),
+    fetchPersonnelEmsLicenses(supabase, id),
+    fetchPersonnelQualifications(supabase, id),
     fetchPersonnelDocuments(supabase, id),
     fetchPersonnelNotes(supabase, id),
     fetchPersonnelTaskbooks(supabase, id),
@@ -96,10 +114,16 @@ export default async function PersonnelDetailPage({
     fetchPersonnelTraining(supabase, id),
     fetchPersonnelYtdTrainingHours(supabase, id),
     personHasSupervisorCoverage(supabase, profile),
+    listQualifications(supabase, { activeOnly: true }),
+    listEmsLevels(supabase, { activeOnly: true }),
+    listEmsClearanceLevels(supabase, { activeOnly: true }),
   ]);
 
   if (
     (certError && isMissingPersonnelTables(certError)) ||
+    (emsLicensesError &&
+      (isMissingPersonnelTables(emsLicensesError) || isMissingEmsLevelsTable(emsLicensesError))) ||
+    (qualificationsError && isMissingPersonnelTables(qualificationsError)) ||
     (docError && isMissingPersonnelTables(docError)) ||
     (notesError && isMissingPersonnelTables(notesError)) ||
     (taskbooksError && isMissingPersonnelTables(taskbooksError)) ||
@@ -111,6 +135,8 @@ export default async function PersonnelDetailPage({
     return <PersonnelDatabaseSetup />;
   }
   if (certError) throw certError;
+  if (emsLicensesError) throw emsLicensesError;
+  if (qualificationsError) throw qualificationsError;
   if (docError) throw docError;
   if (notesError) throw notesError;
   if (taskbooksError) throw taskbooksError;
@@ -120,12 +146,19 @@ export default async function PersonnelDetailPage({
   if (trainingError) throw trainingError;
   if (ytdError) throw ytdError;
   if (supervisorCoverageError) throw supervisorCoverageError;
+  if (catalogError) throw new Error(catalogError.message);
+  if (emsCatalogError) throw new Error(emsCatalogError.message);
+  if (emsClearanceCatalogError) throw new Error(emsClearanceCatalogError.message);
 
   const { data: allPrograms } = canManage
     ? await supabase.from("programs").select("id, title, status").order("title")
     : { data: [] as { id: string; title: string; status: string }[] };
 
   const expiredCount = certifications.filter((c) => isCertExpired(c.expires_on)).length;
+  const expiringItems = collectExpiringPersonnelItems(
+    { certifications, emsLicenses, qualifications },
+    { withinMonths: 6 }
+  );
 
   const demographicsRows = [
     { label: "First name", value: profile.first_name?.trim() || "—" },
@@ -140,6 +173,8 @@ export default async function PersonnelDetailPage({
     },
     { label: "HR info", value: profile.hr_info || "—", fullWidth: true },
   ];
+
+  const familyDates = listFamilyDates(profile);
 
   const onProbation = isRankOnProbation(profile.rank_promoted_on);
 
@@ -183,8 +218,35 @@ export default async function PersonnelDetailPage({
       label: "Demographics",
       content: (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="space-y-6 pt-6">
             <PersonnelFieldGrid rows={demographicsRows} />
+            <div className="space-y-3 border-t pt-6">
+              <h3 className="text-sm font-medium">Family</h3>
+              {familyDates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No family info recorded.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {familyDates.map((item) => {
+                    const familyRole = familyDateEventLabel(item);
+                    const dateLabel = item.date ? formatDate(item.date) : null;
+                    // When the title is already the role (no name), don't repeat it in the detail.
+                    const detailParts =
+                      item.name || item.role === "anniversary"
+                        ? [item.name ? familyRole : null, dateLabel]
+                        : [dateLabel];
+                    const detail = detailParts.filter(Boolean).join(" · ");
+                    return (
+                      <li key={`${item.role}-${item.name ?? ""}-${item.date ?? ""}`}>
+                        <p className="text-sm font-medium">{familyDateTitle(item)}</p>
+                        {detail ? (
+                          <p className="text-sm text-muted-foreground">{detail}</p>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </CardContent>
         </Card>
       ),
@@ -201,6 +263,25 @@ export default async function PersonnelDetailPage({
       ),
     },
     {
+      id: "ems",
+      label: "EMS",
+      content: (
+        <Card>
+          <CardContent className="pt-6">
+            <PersonnelEmsPanel
+              profileId={id}
+              licenses={emsLicenses}
+              licenseCatalog={emsLevelCatalog}
+              clearanceCatalog={emsClearanceCatalog}
+              clearedLevelId={profile.ems_cleared_level_id}
+              clearedLevel={profile.ems_cleared_level}
+              canManage={canManage}
+            />
+          </CardContent>
+        </Card>
+      ),
+    },
+    {
       id: "certifications",
       label: "Certifications",
       content: (
@@ -209,6 +290,22 @@ export default async function PersonnelDetailPage({
             <PersonnelCertificationsPanel
               profileId={id}
               certifications={certifications}
+              canManage={canManage}
+            />
+          </CardContent>
+        </Card>
+      ),
+    },
+    {
+      id: "qualifications",
+      label: "Qualifications",
+      content: (
+        <Card>
+          <CardContent className="pt-6">
+            <PersonnelQualificationsPanel
+              profileId={id}
+              qualifications={qualifications}
+              catalog={qualificationCatalog}
               canManage={canManage}
             />
           </CardContent>
@@ -311,6 +408,7 @@ export default async function PersonnelDetailPage({
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <Users className="h-8 w-8 text-primary" />
             <h1 className="text-4xl font-bold">{personnelDisplayName(profile)}</h1>
+            <PersonnelExpiringNotifications items={expiringItems} withinMonths={6} />
           </div>
           {profile.email ? (
             <p className="text-lg text-muted-foreground">{profile.email}</p>
@@ -333,9 +431,7 @@ export default async function PersonnelDetailPage({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="secondary">
-            <Link href="/personnel">Directory</Link>
-          </Button>
+          <PersonnelDirectoryButton />
           {canManage ? (
             <>
               {profile.is_active !== false && profile.email ? (

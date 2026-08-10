@@ -65,10 +65,16 @@ export type PersonnelProfile = Profile & {
   home_address: string | null;
   emergency_contacts: string | null;
   hr_info: string | null;
+  anniversary: string | null;
+  spouse_name: string | null;
+  spouse_birthday: string | null;
+  kids_birthdays: string | null;
   primary_location_id: string | null;
   supervisor_id: string | null;
+  ems_cleared_level_id: string | null;
   primary_location?: PersonnelLocation | null;
   supervisor?: ProfileSummary | null;
+  ems_cleared_level?: { id: string; name: string } | null;
 };
 
 export type PersonnelCertification = {
@@ -96,6 +102,37 @@ export type PersonnelRecognition = {
 export const PERSONNEL_RECOGNITION_SELECT =
   "id, profile_id, award_id, awarded_on, notes, created_by, created_at";
 
+export type PersonnelQualification = {
+  id: string;
+  profile_id: string;
+  qualification_id: string;
+  earned_on: string | null;
+  expires_on: string | null;
+  notes: string | null;
+  source_session_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  qualification?: { id: string; name: string } | null;
+};
+
+export const PERSONNEL_QUALIFICATION_SELECT =
+  "id, profile_id, qualification_id, earned_on, expires_on, notes, source_session_id, created_by, created_at, qualification:qualifications!qualification_id(id, name)";
+
+export type PersonnelEmsLicense = {
+  id: string;
+  profile_id: string;
+  ems_level_id: string;
+  issued_on: string | null;
+  expires_on: string | null;
+  license_number: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  ems_level?: { id: string; name: string } | null;
+};
+
+export const PERSONNEL_EMS_LICENSE_SELECT =
+  "id, profile_id, ems_level_id, issued_on, expires_on, license_number, notes, created_by, created_at, ems_level:ems_levels!ems_level_id(id, name)";
 
 export type PersonnelDocument = {
   id: string;
@@ -167,9 +204,9 @@ export type PersonnelTrainingProgram = {
 };
 
 export const PROFILE_ORG_SELECT =
-  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, role, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, primary_location_id, supervisor_id";
+  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, role, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays, primary_location_id, supervisor_id, ems_cleared_level_id";
 
-export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!primary_location_id(id, name), supervisor:profiles!supervisor_id(id, display_name, first_name, last_name, email)`;
+export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!primary_location_id(id, name), supervisor:profiles!supervisor_id(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!ems_cleared_level_id(id, name)`;
 
 export const PERSONNEL_CERTIFICATION_SELECT =
   "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, created_by, created_at";
@@ -260,6 +297,380 @@ export function isCertExpired(expiresOn: string | null | undefined) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return new Date(`${expiresOn}T00:00:00`) < today;
+}
+
+/** Whole days from local today until a calendar date (`YYYY-MM-DD`). Negative if past. */
+export function daysUntilExpiry(expiresOn: string, now = new Date()) {
+  const today = startOfLocalDay(now);
+  const target = new Date(`${expiresOn}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return null;
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+export type ExpiringPersonnelItemKind = "certification" | "ems_license" | "qualification";
+
+export type ExpiringPersonnelItem = {
+  id: string;
+  kind: ExpiringPersonnelItemKind;
+  label: string;
+  expiresOn: string;
+  /** Negative when already expired */
+  daysUntil: number;
+  sectionId: "certifications" | "ems" | "qualifications";
+};
+
+export function expiringItemKindLabel(kind: ExpiringPersonnelItemKind) {
+  if (kind === "certification") return "Certification";
+  if (kind === "ems_license") return "EMS license";
+  return "Qualification";
+}
+
+/**
+ * Certifications, EMS licenses, and qualifications that are already expired
+ * or expire within the next `withinMonths` months (default 6).
+ */
+export function collectExpiringPersonnelItems(
+  input: {
+    certifications?: { id: string; name: string; expires_on: string | null }[];
+    emsLicenses?: {
+      id: string;
+      expires_on: string | null;
+      ems_level?: { name: string } | null;
+    }[];
+    qualifications?: {
+      id: string;
+      expires_on: string | null;
+      qualification?: { name: string } | null;
+    }[];
+  },
+  options?: { withinMonths?: number; now?: Date }
+): ExpiringPersonnelItem[] {
+  const withinMonths = options?.withinMonths ?? 6;
+  const now = options?.now ?? new Date();
+  const today = startOfLocalDay(now);
+  const horizon = new Date(today);
+  horizon.setMonth(horizon.getMonth() + withinMonths);
+
+  const items: ExpiringPersonnelItem[] = [];
+
+  for (const cert of input.certifications ?? []) {
+    if (!cert.expires_on) continue;
+    const daysUntil = daysUntilExpiry(cert.expires_on, now);
+    if (daysUntil == null) continue;
+    const expiresAt = new Date(`${cert.expires_on}T00:00:00`);
+    if (expiresAt > horizon) continue;
+    items.push({
+      id: cert.id,
+      kind: "certification",
+      label: cert.name.trim() || "Certification",
+      expiresOn: cert.expires_on,
+      daysUntil,
+      sectionId: "certifications",
+    });
+  }
+
+  for (const license of input.emsLicenses ?? []) {
+    if (!license.expires_on) continue;
+    const daysUntil = daysUntilExpiry(license.expires_on, now);
+    if (daysUntil == null) continue;
+    const expiresAt = new Date(`${license.expires_on}T00:00:00`);
+    if (expiresAt > horizon) continue;
+    items.push({
+      id: license.id,
+      kind: "ems_license",
+      label: license.ems_level?.name?.trim() || "EMS license",
+      expiresOn: license.expires_on,
+      daysUntil,
+      sectionId: "ems",
+    });
+  }
+
+  for (const row of input.qualifications ?? []) {
+    if (!row.expires_on) continue;
+    const daysUntil = daysUntilExpiry(row.expires_on, now);
+    if (daysUntil == null) continue;
+    const expiresAt = new Date(`${row.expires_on}T00:00:00`);
+    if (expiresAt > horizon) continue;
+    items.push({
+      id: row.id,
+      kind: "qualification",
+      label: row.qualification?.name?.trim() || "Qualification",
+      expiresOn: row.expires_on,
+      daysUntil,
+      sectionId: "qualifications",
+    });
+  }
+
+  return items.sort(
+    (a, b) =>
+      a.daysUntil - b.daysUntil ||
+      a.expiresOn.localeCompare(b.expiresOn) ||
+      a.label.localeCompare(b.label)
+  );
+}
+
+export function expiringWhenLabel(daysUntil: number) {
+  if (daysUntil < 0) {
+    const ago = Math.abs(daysUntil);
+    if (ago === 1) return "Expired yesterday";
+    return `Expired ${ago} days ago`;
+  }
+  if (daysUntil === 0) return "Expires today";
+  if (daysUntil === 1) return "Expires tomorrow";
+  return `Expires in ${daysUntil} days`;
+}
+
+export type FamilyDateEntry = {
+  role: "spouse" | "anniversary" | "kid";
+  /** Kid name when known */
+  name: string | null;
+  event: "birthday" | "anniversary";
+  /** Original date string for display when available */
+  date: string | null;
+};
+
+export type UpcomingFamilyDate = FamilyDateEntry & {
+  daysUntil: number;
+  /** Next occurrence as YYYY-MM-DD */
+  nextOn: string;
+};
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function startOfLocalDay(d: Date) {
+  const next = new Date(d);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function parseMonthDay(value: string | null | undefined): { month: number; day: number } | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return { month, day };
+    return null;
+  }
+  const slash = trimmed.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (slash) {
+    // App displays DD/MM/YYYY
+    const day = Number(slash[1]);
+    const month = Number(slash[2]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return { month, day };
+  }
+  return null;
+}
+
+function nextOccurrenceWithinDays(
+  month: number,
+  day: number,
+  from: Date,
+  withinDays: number
+): { daysUntil: number; nextOn: string } | null {
+  const today = startOfLocalDay(from);
+  for (let yearOffset = 0; yearOffset <= 1; yearOffset++) {
+    const year = today.getFullYear() + yearOffset;
+    // Feb 29 → Feb 28 in non-leap years
+    const candidateDay =
+      month === 2 && day === 29
+        ? new Date(year, 1, 29).getMonth() === 1
+          ? 29
+          : 28
+        : day;
+    const candidate = new Date(year, month - 1, candidateDay);
+    if (candidate.getMonth() !== month - 1) continue;
+    const daysUntil = Math.round((candidate.getTime() - today.getTime()) / 86_400_000);
+    if (daysUntil >= 0 && daysUntil <= withinDays) {
+      return {
+        daysUntil,
+        nextOn: `${candidate.getFullYear()}-${pad2(candidate.getMonth() + 1)}-${pad2(candidate.getDate())}`,
+      };
+    }
+  }
+  return null;
+}
+
+function parseKidsBirthdayLines(
+  text: string | null | undefined
+): { name: string | null; month: number | null; day: number | null; date: string | null }[] {
+  if (!text?.trim()) return [];
+  const rows: {
+    name: string | null;
+    month: number | null;
+    day: number | null;
+    date: string | null;
+  }[] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const isoInLine = line.match(/(\d{4}-\d{2}-\d{2})/);
+    const slashInLine = line.match(/(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/);
+    const dateToken = isoInLine?.[1] ?? slashInLine?.[1] ?? null;
+    const md = parseMonthDay(dateToken);
+
+    let name: string | null = line;
+    if (dateToken) {
+      name =
+        line
+          .replace(dateToken, "")
+          .replace(/[—–\-:,|/]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim() || null;
+    }
+    if (!name && !dateToken) continue;
+    rows.push({
+      name,
+      month: md?.month ?? null,
+      day: md?.day ?? null,
+      date: dateToken,
+    });
+  }
+  return rows;
+}
+
+export type FamilyKidInput = {
+  name: string;
+  birthday: string;
+};
+
+/** Parse kids_birthdays text into editable name + birthday rows. */
+export function parseFamilyKids(text: string | null | undefined): FamilyKidInput[] {
+  return parseKidsBirthdayLines(text).map((row) => ({
+    name: row.name ?? "",
+    birthday: row.date && /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? row.date : "",
+  }));
+}
+
+/** Serialize kid rows back to kids_birthdays text storage. */
+export function serializeFamilyKids(kids: FamilyKidInput[]): string | null {
+  const lines = kids
+    .map((kid) => {
+      const name = kid.name.trim();
+      const birthday = kid.birthday.trim();
+      if (!name && !birthday) return null;
+      if (name && birthday) return `${name} — ${birthday}`;
+      return name || birthday;
+    })
+    .filter((line): line is string => Boolean(line));
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+/** All recorded family entries for demographics display. */
+export function listFamilyDates(person: {
+  anniversary?: string | null;
+  spouse_name?: string | null;
+  spouse_birthday?: string | null;
+  kids_birthdays?: string | null;
+}): FamilyDateEntry[] {
+  const rows: FamilyDateEntry[] = [];
+  const spouseName = person.spouse_name?.trim() || null;
+  const spouseBirthday = person.spouse_birthday?.trim() || null;
+
+  if (spouseName || spouseBirthday) {
+    rows.push({
+      role: "spouse",
+      name: spouseName,
+      event: "birthday",
+      date: spouseBirthday,
+    });
+  }
+  if (person.anniversary?.trim()) {
+    rows.push({
+      role: "anniversary",
+      name: null,
+      event: "anniversary",
+      date: person.anniversary.trim(),
+    });
+  }
+  for (const kid of parseKidsBirthdayLines(person.kids_birthdays)) {
+    rows.push({
+      role: "kid",
+      name: kid.name,
+      event: "birthday",
+      date: kid.date,
+    });
+  }
+
+  return rows;
+}
+
+/** Family dates whose next occurrence falls within the coming month (default 30 days). */
+export function upcomingFamilyDates(
+  person: {
+    anniversary?: string | null;
+    spouse_name?: string | null;
+    spouse_birthday?: string | null;
+    kids_birthdays?: string | null;
+  },
+  options?: { withinDays?: number; now?: Date }
+): UpcomingFamilyDate[] {
+  const withinDays = options?.withinDays ?? 30;
+  const now = options?.now ?? new Date();
+  const upcoming: UpcomingFamilyDate[] = [];
+
+  for (const entry of listFamilyDates(person)) {
+    const md = parseMonthDay(entry.date);
+    if (!md) continue;
+    const next = nextOccurrenceWithinDays(md.month, md.day, now, withinDays);
+    if (!next) continue;
+    upcoming.push({
+      ...entry,
+      daysUntil: next.daysUntil,
+      nextOn: next.nextOn,
+    });
+  }
+
+  const roleOrder = { spouse: 0, anniversary: 1, kid: 2 } as const;
+  return upcoming.sort(
+    (a, b) =>
+      a.daysUntil - b.daysUntil ||
+      roleOrder[a.role] - roleOrder[b.role] ||
+      (a.name ?? "").localeCompare(b.name ?? "")
+  );
+}
+
+/** @deprecated Prefer upcomingFamilyDates */
+export function upcomingImportantDates(
+  person: {
+    anniversary?: string | null;
+    spouse_name?: string | null;
+    spouse_birthday?: string | null;
+    kids_birthdays?: string | null;
+  },
+  options?: { withinDays?: number; now?: Date }
+) {
+  return upcomingFamilyDates(person, options).map((row) => ({
+    label: familyDateTitle(row),
+    daysUntil: row.daysUntil,
+    nextOn: row.nextOn,
+  }));
+}
+
+/** Primary line: person name when known, otherwise role label. */
+export function familyDateTitle(item: Pick<FamilyDateEntry, "role" | "name">) {
+  if (item.name) return item.name;
+  if (item.role === "spouse") return "Spouse";
+  if (item.role === "anniversary") return "Anniversary";
+  return "Kid";
+}
+
+/** Secondary role/event labels (excluding the date itself). */
+export function familyDateEventLabel(item: Pick<FamilyDateEntry, "role" | "event" | "name">) {
+  if (item.role === "spouse") return "Spouse";
+  if (item.role === "kid") return "Kid";
+  if (item.event === "anniversary") return "Anniversary";
+  return null;
+}
+
+export function upcomingImportantDateWhenLabel(daysUntil: number) {
+  if (daysUntil === 0) return "Today";
+  if (daysUntil === 1) return "Tomorrow";
+  return `In ${daysUntil} days`;
 }
 
 /** Normalize DB/array/string swing-up values into a clean string list. */
