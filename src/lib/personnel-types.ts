@@ -413,6 +413,7 @@ export function expiringWhenLabel(daysUntil: number) {
   if (daysUntil < 0) {
     const ago = Math.abs(daysUntil);
     if (ago === 1) return "Expired yesterday";
+    if (ago >= 365) return "Expired";
     return `Expired ${ago} days ago`;
   }
   if (daysUntil === 0) return "Expires today";

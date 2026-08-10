@@ -80,12 +80,12 @@ export function PersonnelExpiringNotifications({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80 p-0">
         <DropdownMenuLabel className="px-3 py-2.5 font-semibold">
-          Expiring in the next {withinMonths} months
+          Expired & due within {withinMonths} months
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="my-0" />
         {count === 0 ? (
           <p className="px-3 py-4 text-sm text-muted-foreground">
-            Nothing expired or due in this window.
+            No certifications, EMS licenses, or qualifications in this window.
           </p>
         ) : (
           <ul className="max-h-80 overflow-y-auto py-1">
