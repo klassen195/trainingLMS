@@ -62,7 +62,7 @@ export async function listTrainingSessionProfiles(): Promise<TrainingSessionProf
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, display_name, email, shift, primary_location_id, primary_location:locations!primary_location_id(id, name)"
+      "id, display_name, first_name, last_name, email, shift, primary_location_id, primary_location:locations!primary_location_id(id, name)"
     )
     .eq("is_active", true)
     .order("display_name", { ascending: true });

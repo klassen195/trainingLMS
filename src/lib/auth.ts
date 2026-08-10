@@ -35,7 +35,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
 
   return {
     kind: "authenticated",
-    profile: { ...profile, is_admin: Boolean(profile.is_admin), is_active: profile.is_active !== false },
+    profile: { ...profile, is_admin: Boolean(profile.is_admin), is_active: true },
   };
 });
 

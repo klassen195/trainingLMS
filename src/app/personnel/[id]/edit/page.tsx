@@ -9,6 +9,7 @@ import {
   fetchPersonnelTaskbooks,
   fetchPersonnelTaskbookPrerequisiteChecks,
   fetchPersonnelTraining,
+  fetchPersonnelYtdTrainingHours,
 } from "@/lib/personnel";
 import { personnelDisplayName } from "@/lib/personnel-types";
 import type { Profile } from "@/lib/training-lms-types";
@@ -48,6 +49,7 @@ export default async function PersonnelEditPage({
     { rows: prerequisiteChecks, error: prereqError },
     { rows: recognitions, error: recognitionsError },
     { programs, error: trainingError },
+    { hours: ytdHours, year: ytdYear, error: ytdError },
   ] = await Promise.all([
     supabase
       .from("locations")
@@ -73,6 +75,7 @@ export default async function PersonnelEditPage({
     fetchPersonnelTaskbookPrerequisiteChecks(supabase, id),
     fetchPersonnelRecognitions(supabase, id),
     fetchPersonnelTraining(supabase, id),
+    fetchPersonnelYtdTrainingHours(supabase, id),
   ]);
 
   if (
@@ -92,6 +95,7 @@ export default async function PersonnelEditPage({
   if (prereqError) throw prereqError;
   if (recognitionsError) throw recognitionsError;
   if (trainingError) throw trainingError;
+  if (ytdError) throw ytdError;
 
   const { data: allPrograms } = await supabase
     .from("programs")
@@ -121,6 +125,8 @@ export default async function PersonnelEditPage({
         recognitions={recognitions}
         programs={programs}
         allPrograms={allPrograms ?? []}
+        ytdHours={ytdHours}
+        ytdYear={ytdYear}
       />
     </div>
   );

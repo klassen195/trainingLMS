@@ -70,6 +70,8 @@ export type TrainingSessionDetail = TrainingSession & {
 export type TrainingSessionProfileOption = {
   id: string;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   email: string | null;
   shift: PersonnelShift | null;
   primary_location_id: string | null;

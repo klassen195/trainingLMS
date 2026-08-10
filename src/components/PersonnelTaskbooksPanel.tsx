@@ -28,6 +28,7 @@ import {
   requestableTaskbooks,
   taskbookGroups,
   taskbookRanks,
+  type TaskbookGroupId,
 } from "@/lib/labels";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -86,9 +87,13 @@ function groupTaskbooks(taskbooks: PersonnelTaskbook[]) {
   }
 
   const known = new Set(taskbookRanks as readonly string[]);
-  const grouped = taskbookGroups
+  const grouped: {
+    id: TaskbookGroupId | "other";
+    label: string;
+    taskbooks: PersonnelTaskbook[];
+  }[] = taskbookGroups
     .map((group) => ({
-      id: group.id,
+      id: group.id as TaskbookGroupId,
       label: group.label,
       taskbooks: group.ranks.flatMap((rank) => byRank.get(rank) ?? []),
     }))

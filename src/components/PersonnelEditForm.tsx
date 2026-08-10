@@ -52,6 +52,8 @@ export function PersonnelEditForm({
   recognitions = [],
   programs,
   allPrograms,
+  ytdHours,
+  ytdYear,
 }: {
   person: PersonnelProfile;
   viewerId: string;
@@ -65,6 +67,8 @@ export function PersonnelEditForm({
   recognitions?: PersonnelRecognition[];
   programs: PersonnelTrainingProgram[];
   allPrograms: { id: string; title: string; status: string }[];
+  ytdHours: number;
+  ytdYear: number;
 }) {
   const [firstName, setFirstName] = useState(person.first_name ?? "");
   const [lastName, setLastName] = useState(person.last_name ?? "");
@@ -556,6 +560,8 @@ export function PersonnelEditForm({
               programs={programs}
               allPrograms={allPrograms}
               canManage
+              ytdHours={ytdHours}
+              ytdYear={ytdYear}
             />
           </CardContent>
         </Card>
