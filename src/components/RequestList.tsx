@@ -105,7 +105,10 @@ export function RequestList({
   async function resolveNow(id: string) {
     setError(null);
     try {
-      await resolveShiftExchangeRequest({ id, resolvedNote: resolvedNote.trim() || undefined });
+      await resolveShiftExchangeRequest({
+        id,
+        resolvedNote: resolvedNote.trim() || undefined,
+      });
       setResolvingId(null);
       setResolvedNote("");
     } catch (err) {

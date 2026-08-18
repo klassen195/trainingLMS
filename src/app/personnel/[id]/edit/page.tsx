@@ -19,6 +19,7 @@ import { LOCATION_SELECT, type Location } from "@/lib/locations-types";
 import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
 import { listEmsLevels } from "@/lib/ems-levels";
 import { listQualifications } from "@/lib/qualifications";
+import { listPermissionLevels } from "@/lib/permission-levels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   isMissingEmsLevelsTable,
@@ -61,6 +62,7 @@ export default async function PersonnelEditPage({
     { rows: qualificationCatalog, error: catalogError },
     { rows: emsLevelCatalog, error: emsCatalogError },
     { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
+    { rows: permissionLevels, error: permissionLevelsError },
   ] = await Promise.all([
     supabase
       .from("locations")
@@ -71,7 +73,7 @@ export default async function PersonnelEditPage({
     supabase
       .from("profiles")
       .select(
-        "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, role, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, primary_location_id, supervisor_id"
+        "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, primary_location_id, supervisor_id"
       )
       .or(
         profile.supervisor_id
@@ -92,6 +94,7 @@ export default async function PersonnelEditPage({
     listQualifications(supabase, { activeOnly: true }),
     listEmsLevels(supabase, { activeOnly: true }),
     listEmsClearanceLevels(supabase, { activeOnly: true }),
+    listPermissionLevels(supabase),
   ]);
 
   if (
@@ -120,6 +123,7 @@ export default async function PersonnelEditPage({
   if (catalogError) throw new Error(catalogError.message);
   if (emsCatalogError) throw new Error(emsCatalogError.message);
   if (emsClearanceCatalogError) throw new Error(emsClearanceCatalogError.message);
+  if (permissionLevelsError) throw new Error(permissionLevelsError.message);
 
   const { data: allPrograms } = await supabase
     .from("programs")
@@ -156,6 +160,7 @@ export default async function PersonnelEditPage({
         allPrograms={allPrograms ?? []}
         ytdHours={ytdHours}
         ytdYear={ytdYear}
+        permissionLevels={permissionLevels}
       />
     </div>
   );

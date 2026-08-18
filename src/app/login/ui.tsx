@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
 
 const LAST_EMAIL_KEY = "training-lms:last-email";
+const LAST_CLIENT_KEY = "training-lms:last-client-code";
 const COOLDOWN_SECONDS = 60;
 
 const AUTH_ERRORS: Record<string, string> = {
@@ -21,12 +22,16 @@ const AUTH_ERRORS: Record<string, string> = {
   auth_config_missing: "Authentication is not configured. Contact your administrator.",
   account_deactivated:
     "This account has been deactivated. Contact a system administrator if you need access restored.",
+  client_required: "Enter your Client ID to sign in.",
+  invalid_client: "Invalid Client ID. Check the code from your administrator.",
+  client_mismatch: "This account does not belong to that Client ID.",
 };
 
 type SignInMethod = "magic_link" | "code" | "password";
 
 type LoginFormProps = {
   initialError?: string | null;
+  redirectTo?: string;
 };
 
 const METHODS: { id: SignInMethod; label: string }[] = [
@@ -35,9 +40,10 @@ const METHODS: { id: SignInMethod; label: string }[] = [
   { id: "password", label: "Password" },
 ];
 
-export function LoginForm({ initialError }: LoginFormProps) {
+export function LoginForm({ initialError, redirectTo = "/dashboard" }: LoginFormProps) {
   const router = useRouter();
   const [method, setMethod] = useState<SignInMethod>("magic_link");
+  const [clientCode, setClientCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -51,8 +57,10 @@ export function LoginForm({ initialError }: LoginFormProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(LAST_EMAIL_KEY);
-    if (stored) setEmail(stored);
+    const storedEmail = window.localStorage.getItem(LAST_EMAIL_KEY);
+    if (storedEmail) setEmail(storedEmail);
+    const storedClient = window.localStorage.getItem(LAST_CLIENT_KEY);
+    if (storedClient) setClientCode(storedClient);
   }, []);
 
   useEffect(() => {
@@ -68,6 +76,18 @@ export function LoginForm({ initialError }: LoginFormProps) {
     if (normalized) {
       window.localStorage.setItem(LAST_EMAIL_KEY, normalized);
     }
+  }
+
+  function rememberClientCode(value: string) {
+    const normalized = value.trim().toUpperCase();
+    if (normalized) {
+      window.localStorage.setItem(LAST_CLIENT_KEY, normalized);
+    }
+  }
+
+  function rememberCredentials() {
+    rememberEmail(email);
+    rememberClientCode(clientCode);
   }
 
   function startCooldown() {
@@ -90,10 +110,12 @@ export function LoginForm({ initialError }: LoginFormProps) {
     setSent(false);
     setLoading(true);
     try {
-      rememberEmail(email);
+      rememberCredentials();
       const result = await signInWithMagicLink({
         email,
+        clientCode,
         origin: window.location.origin,
+        next: redirectTo,
       });
       if (result.error) {
         setError(result.error);
@@ -112,8 +134,8 @@ export function LoginForm({ initialError }: LoginFormProps) {
     setError(null);
     setLoading(true);
     try {
-      rememberEmail(email);
-      const result = await sendSignInCode({ email });
+      rememberCredentials();
+      const result = await sendSignInCode({ email, clientCode });
       if (result.error) {
         setError(result.error);
         return;
@@ -137,13 +159,13 @@ export function LoginForm({ initialError }: LoginFormProps) {
     setError(null);
     setLoading(true);
     try {
-      rememberEmail(email);
-      const result = await verifySignInCode({ email, code });
+      rememberCredentials();
+      const result = await verifySignInCode({ email, code, clientCode });
       if (result.error) {
         setError(result.error);
         return;
       }
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");
@@ -157,13 +179,13 @@ export function LoginForm({ initialError }: LoginFormProps) {
     setError(null);
     setLoading(true);
     try {
-      rememberEmail(email);
-      const result = await signInWithPassword({ email, password });
+      rememberCredentials();
+      const result = await signInWithPassword({ email, password, clientCode });
       if (result.error) {
         setError(result.error);
         return;
       }
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");
@@ -177,9 +199,10 @@ export function LoginForm({ initialError }: LoginFormProps) {
     setResetSent(false);
     setLoading(true);
     try {
-      rememberEmail(email);
+      rememberCredentials();
       const result = await requestPasswordReset({
         email,
+        clientCode,
         origin: window.location.origin,
       });
       if (result.error) {
@@ -194,6 +217,25 @@ export function LoginForm({ initialError }: LoginFormProps) {
       setLoading(false);
     }
   }
+
+  const clientField = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium" htmlFor="client-code">
+        Client ID
+      </label>
+      <Input
+        id="client-code"
+        type="text"
+        required
+        value={clientCode}
+        onChange={(e) => setClientCode(e.target.value.toUpperCase())}
+        suppressHydrationWarning
+        autoComplete="organization"
+        placeholder="CLIENT1"
+        className="uppercase tracking-wide"
+      />
+    </div>
+  );
 
   const emailField = (
     <div className="space-y-2">
@@ -235,9 +277,10 @@ export function LoginForm({ initialError }: LoginFormProps) {
 
       {method === "magic_link" ? (
         <form onSubmit={onMagicLinkSubmit} className="space-y-4">
+          {clientField}
           {emailField}
           <p className="text-xs text-muted-foreground">
-            First time here? Use magic link to create your account.
+            Use the Client ID from your administrator. New accounts are created by invite only.
           </p>
           <Button type="submit" disabled={loading || cooldown > 0} className="w-full">
             {loading ? "Sending link..." : cooldown > 0 ? `Wait ${cooldown}s` : "Send magic link"}
@@ -255,9 +298,10 @@ export function LoginForm({ initialError }: LoginFormProps) {
         <div className="space-y-4">
           {!codeSent ? (
             <form onSubmit={onSendCode} className="space-y-4">
+              {clientField}
               {emailField}
               <p className="text-xs text-muted-foreground">
-                Returning user? We will email a 6-digit code to sign in without clicking a link.
+                We will email a 6-digit code to sign in without clicking a link.
               </p>
               <Button type="submit" disabled={loading || cooldown > 0} className="w-full">
                 {loading ? "Sending code..." : cooldown > 0 ? `Wait ${cooldown}s` : "Send sign-in code"}
@@ -268,6 +312,7 @@ export function LoginForm({ initialError }: LoginFormProps) {
               <p className="text-sm text-green-600">
                 Check your inbox for a 6-digit code and enter it below.
               </p>
+              {clientField}
               {emailField}
               <div className="space-y-2">
                 <label className="text-sm font-medium" htmlFor="code">
@@ -309,6 +354,7 @@ export function LoginForm({ initialError }: LoginFormProps) {
 
       {method === "password" ? (
         <form onSubmit={onPasswordSubmit} className="space-y-4">
+          {clientField}
           {emailField}
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="password">
@@ -332,7 +378,7 @@ export function LoginForm({ initialError }: LoginFormProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={loading || !email || cooldown > 0}
+            disabled={loading || !email || !clientCode || cooldown > 0}
             className="w-full"
             onClick={onForgotPassword}
           >

@@ -13,7 +13,7 @@ export default async function HomePage() {
       <div className="mb-10 max-w-2xl">
         <h1 className="text-4xl font-bold tracking-tight">Kootenai Fire Tools</h1>
         <p className="mt-3 text-lg text-muted-foreground">
-          Shift Exchange is open to everyone. Training LMS requires a department sign-in.
+          Shift Exchange and Training LMS both require a department sign-in.
         </p>
       </div>
 
@@ -24,13 +24,13 @@ export default async function HomePage() {
               <ArrowLeftRight className="h-5 w-5" />
             </div>
             <CardTitle>Shift Exchange</CardTitle>
-            <CardDescription>
-              Submit station notes and mark them resolved. No login required.
-            </CardDescription>
+            <CardDescription>Submit station notes and mark them resolved for your department.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild>
-              <Link href="/shift-exchange">Open Shift Exchange</Link>
+              <Link href={isSignedIn ? "/shift-exchange" : "/login?redirectedFrom=/shift-exchange"}>
+                {isSignedIn ? "Open Shift Exchange" : "Sign in to Shift Exchange"}
+              </Link>
             </Button>
           </CardContent>
         </Card>

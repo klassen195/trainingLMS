@@ -10,7 +10,7 @@ import {
   PERSONNEL_TASKBOOK_SELECT,
   PERSONNEL_TASKBOOK_WITH_PROFILE_SELECT,
   PERSONNEL_TASKBOOK_PREREQ_CHECK_SELECT,
-  PROFILE_ORG_SELECT,
+  PROFILE_ORG_COLUMNS,
   isBattalionChiefRank,
   normalizeSwingUpRanks,
   type PersonnelCertification,
@@ -26,6 +26,7 @@ import {
   type PersonnelTrainingProgram,
 } from "@/lib/personnel-types";
 import { isMissingTrainingSessionsTable } from "@/lib/supabase/errors";
+import { attachProfilePermissionLevels, parseProfilePermissionLevels } from "@/lib/permission-levels";
 
 type SupervisorViewer = {
   id: string;
@@ -171,8 +172,10 @@ function asSingleRelation<T>(value: T | T[] | null | undefined): T | null {
 
 export function normalizePersonnelProfile(row: Record<string, unknown>): PersonnelProfile {
   const base = row as unknown as PersonnelProfile;
+  const permissionLevels = parseProfilePermissionLevels(row);
   return {
     ...base,
+    ...permissionLevels,
     is_active: base.is_active !== false,
     invited_at: (base.invited_at as string | null | undefined) ?? null,
     swing_up: normalizeSwingUpRanks(base.swing_up),
@@ -201,6 +204,10 @@ export function normalizePersonnelProfile(row: Record<string, unknown>): Personn
   };
 }
 
+async function finalizePersonnelProfiles(supabase: SupabaseClient, rows: PersonnelProfile[]) {
+  return attachProfilePermissionLevels(supabase, rows);
+}
+
 export async function fetchPersonnelDirectory(supabase: SupabaseClient) {
   const { data, error } = await supabase
     .from("profiles")
@@ -208,20 +215,25 @@ export async function fetchPersonnelDirectory(supabase: SupabaseClient) {
     .order("display_name", { ascending: true, nullsFirst: false });
 
   if (error) {
-    // Fallback if org join columns not migrated yet
     const fallback = await supabase
       .from("profiles")
-      .select(PROFILE_ORG_SELECT)
+      .select(PROFILE_ORG_COLUMNS)
       .order("display_name", { ascending: true, nullsFirst: false });
     if (fallback.error) return { rows: [] as PersonnelProfile[], error };
     return {
-      rows: (fallback.data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>)),
+      rows: await finalizePersonnelProfiles(
+        supabase,
+        (fallback.data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+      ),
       error: null as PostgrestError | null,
     };
   }
 
   return {
-    rows: (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>)),
+    rows: await finalizePersonnelProfiles(
+      supabase,
+      (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+    ),
     error: null as PostgrestError | null,
   };
 }
@@ -236,21 +248,27 @@ export async function fetchPersonnelProfile(supabase: SupabaseClient, userId: st
   if (error) {
     const fallback = await supabase
       .from("profiles")
-      .select(PROFILE_ORG_SELECT)
+      .select(PROFILE_ORG_COLUMNS)
       .eq("id", userId)
       .maybeSingle();
     if (fallback.error || !fallback.data) {
       return { profile: null as PersonnelProfile | null, error: error as PostgrestError };
     }
+    const [profile] = await finalizePersonnelProfiles(supabase, [
+      normalizePersonnelProfile(fallback.data as Record<string, unknown>),
+    ]);
     return {
-      profile: normalizePersonnelProfile(fallback.data as Record<string, unknown>),
+      profile,
       error: null as PostgrestError | null,
     };
   }
 
   if (!data) return { profile: null as PersonnelProfile | null, error: null as PostgrestError | null };
+  const [profile] = await finalizePersonnelProfiles(supabase, [
+    normalizePersonnelProfile(data as Record<string, unknown>),
+  ]);
   return {
-    profile: normalizePersonnelProfile(data as Record<string, unknown>),
+    profile,
     error: null as PostgrestError | null,
   };
 }

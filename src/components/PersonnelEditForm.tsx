@@ -17,21 +17,22 @@ import type {
   PersonnelTrainingProgram,
 } from "@/lib/personnel-types";
 import {
-  permissionLevels,
-  personnelDisplayName,
-  personnelShifts,
-  personnelShiftLabel,
   isRankOnProbation,
   normalizeSwingUpRanks,
   parseFamilyKids,
+  personnelDisplayName,
+  personnelShiftLabel,
+  personnelShifts,
   serializeFamilyKids,
   type FamilyKidInput,
 } from "@/lib/personnel-types";
-import type { Profile, UserRole } from "@/lib/training-lms-types";
+import type { Profile } from "@/lib/training-lms-types";
+import type { PermissionLevel } from "@/lib/permission-levels-types";
+import { profilePermissionLevelIds } from "@/lib/permission-levels";
 import type { EmsClearanceLevel } from "@/lib/ems-clearance-levels-types";
 import type { EmsLevel } from "@/lib/ems-levels-types";
 import type { Qualification } from "@/lib/qualifications-types";
-import { fireRanks, swingUpRanks, roleLabel } from "@/lib/labels";
+import { fireRanks, swingUpRanks } from "@/lib/labels";
 import { PersonnelCertificationsPanel } from "@/components/PersonnelCertificationsPanel";
 import { PersonnelDocumentsPanel } from "@/components/PersonnelDocumentsPanel";
 import { PersonnelEmsPanel } from "@/components/PersonnelEmsPanel";
@@ -44,6 +45,7 @@ import { PersonnelQualificationsPanel } from "@/components/PersonnelQualificatio
 import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPanel";
 import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
+import { PermissionLevelPicker } from "@/components/PermissionLevelPicker";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { FieldLabel } from "@/components/ui/Field";
@@ -69,6 +71,7 @@ export function PersonnelEditForm({
   allPrograms,
   ytdHours,
   ytdYear,
+  permissionLevels,
 }: {
   person: PersonnelProfile;
   viewerId: string;
@@ -89,6 +92,7 @@ export function PersonnelEditForm({
   allPrograms: { id: string; title: string; status: string }[];
   ytdHours: number;
   ytdYear: number;
+  permissionLevels: PermissionLevel[];
 }) {
   const [firstName, setFirstName] = useState(person.first_name ?? "");
   const [lastName, setLastName] = useState(person.last_name ?? "");
@@ -111,7 +115,9 @@ export function PersonnelEditForm({
   });
   const [primaryLocationId, setPrimaryLocationId] = useState(person.primary_location_id ?? "");
   const [supervisorId, setSupervisorId] = useState(person.supervisor_id ?? "");
-  const [role, setRole] = useState<UserRole>(person.role);
+  const [permissionLevelIds, setPermissionLevelIds] = useState(() =>
+    profilePermissionLevelIds(person)
+  );
   const [isAdmin, setIsAdmin] = useState(person.is_admin);
   const [pending, startTransition] = useTransition();
   const [accountPending, startAccountTransition] = useTransition();
@@ -131,6 +137,10 @@ export function PersonnelEditForm({
     setError(null);
     startTransition(async () => {
       try {
+        if (permissionLevelIds.length === 0) {
+          setError("Assign at least one permission level.");
+          return;
+        }
         await updatePersonnelProfile({
           userId: person.id,
           firstName,
@@ -151,7 +161,7 @@ export function PersonnelEditForm({
           kidsBirthdays: serializeFamilyKids(kids),
           primaryLocationId: primaryLocationId || null,
           supervisorId: supervisorId || null,
-          role,
+          permissionLevelIds,
           isAdmin,
           section: typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : null,
         });
@@ -606,22 +616,12 @@ export function PersonnelEditForm({
         <Card>
           <CardContent className="space-y-4 pt-6">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <FieldLabel>Permission level</FieldLabel>
-                <div className="flex flex-wrap gap-2">
-                  {permissionLevels.map((level) => (
-                    <Button
-                      key={level}
-                      type="button"
-                      size="sm"
-                      variant={role === level ? "primary" : "secondary"}
-                      onClick={() => setRole(level)}
-                    >
-                      {roleLabel(level)}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+              <PermissionLevelPicker
+                levels={permissionLevels}
+                selectedIds={permissionLevelIds}
+                onChange={setPermissionLevelIds}
+                disabled={pending}
+              />
               <label className="flex items-start gap-3 text-sm">
                 <input
                   type="checkbox"

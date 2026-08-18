@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseEnv } from "@/lib/supabase/env";
+import { hasSupabaseSessionCookie } from "@/lib/supabase/session-cookie";
 
 const PUBLIC_FILE = /\.(.*)$/;
 
 function isPublicPath(pathname: string) {
   return (
     pathname === "/" ||
-    pathname.startsWith("/shift-exchange") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/_next") ||
@@ -18,8 +18,21 @@ function isPublicPath(pathname: string) {
   );
 }
 
+function redirectToLogin(request: NextRequest) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.searchParams.set("redirectedFrom", request.nextUrl.pathname);
+  return NextResponse.redirect(loginUrl);
+}
+
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next({ request });
+  const pathname = request.nextUrl.pathname;
+  const hasSessionCookie = hasSupabaseSessionCookie(request.cookies.getAll());
+
+  if (!hasSessionCookie) {
+    return isPublicPath(pathname) ? response : redirectToLogin(request);
+  }
 
   let url: string;
   let anonKey: string;
@@ -40,17 +53,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const {
-    data: claimsData,
-  } = await supabase.auth.getClaims();
+  const { data: claimsData } = await supabase.auth.getClaims();
   const isAuthenticated = Boolean(claimsData?.claims?.sub);
 
-  const pathname = request.nextUrl.pathname;
   if (!isAuthenticated && !isPublicPath(pathname)) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.searchParams.set("redirectedFrom", pathname);
-    return NextResponse.redirect(loginUrl);
+    return redirectToLogin(request);
   }
 
   return response;

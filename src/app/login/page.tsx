@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { safeAppPath } from "@/lib/auth-redirect";
 import { LoginForm } from "./ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; redirectedFrom?: string }>;
 }) {
   const params = await searchParams;
+  const redirectTo = safeAppPath(params.redirectedFrom);
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -23,7 +25,7 @@ export default async function LoginPage({
     if (profile?.is_active === false) {
       await supabase.auth.signOut();
     } else {
-      redirect("/dashboard");
+      redirect(redirectTo);
     }
   }
 
@@ -37,7 +39,7 @@ export default async function LoginPage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm initialError={params.error} />
+          <LoginForm initialError={params.error} redirectTo={redirectTo} />
         </CardContent>
       </Card>
     </div>

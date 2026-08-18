@@ -16,7 +16,7 @@ import type {
   VehicleChecklistKind,
   VehicleCheckType,
 } from "@/lib/vehicle-checks-types";
-import type { ProgramTag, UserRole } from "@/lib/training-lms-types";
+import type { ProgramTag } from "@/lib/training-lms-types";
 
 const tagLabels: Record<ProgramTag, string> = {
   fire: "Fire",
@@ -27,12 +27,6 @@ const tagLabels: Record<ProgramTag, string> = {
   administration: "Administration",
   taskbooks: "Taskbooks",
   special_operations: "Special Operations",
-};
-
-const roleLabels: Record<UserRole, string> = {
-  recruit: "Recruit",
-  firefighter: "Firefighter",
-  captain: "Captain",
 };
 
 const assetStatusLabels: Record<AssetStatus, string> = {
@@ -125,10 +119,6 @@ export function tagLabel(tag: ProgramTag) {
 /** @deprecated Prefer tagLabel */
 export function categoryLabel(category: ProgramTag) {
   return tagLabel(category);
-}
-
-export function roleLabel(role: UserRole) {
-  return roleLabels[role];
 }
 
 export const programTags = Object.keys(tagLabels) as ProgramTag[];

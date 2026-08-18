@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AppHeader } from "@/components/AppHeader";
+import { AppHeader, AppHeaderFallback } from "@/components/AppHeader";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,7 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="flex min-h-full flex-col font-sans" suppressHydrationWarning>
-        <AppHeader />
+        <Suspense fallback={<AppHeaderFallback />}>
+          <AppHeader />
+        </Suspense>
         <main className="min-h-[calc(100vh-5rem)] flex-1">{children}</main>
         <footer className="mt-auto border-t bg-muted/50 py-8">
           <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">

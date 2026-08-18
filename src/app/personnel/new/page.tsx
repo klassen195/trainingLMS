@@ -2,9 +2,14 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { InvitePersonnelForm } from "@/components/InvitePersonnelForm";
 import { Button } from "@/components/ui/Button";
+import { listPermissionLevels } from "@/lib/permission-levels";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function InvitePersonnelPage() {
   await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { rows: permissionLevels, error } = await listPermissionLevels(supabase);
+  if (error) throw error;
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
@@ -15,7 +20,7 @@ export default async function InvitePersonnelPage() {
           you are ready.
         </p>
       </div>
-      <InvitePersonnelForm />
+      <InvitePersonnelForm permissionLevels={permissionLevels} />
       <div className="mt-6">
         <Button asChild variant="secondary">
           <Link href="/personnel">Back to directory</Link>

@@ -3,6 +3,20 @@ import { getProfileCapabilities } from "@/lib/capability-access";
 import { MainNav } from "@/components/MainNav";
 import { BreadcrumbNav } from "@/components/BreadcrumbNav";
 
+export function AppHeaderFallback() {
+  return (
+    <header className="sticky top-0 z-[100] w-full overflow-visible bg-background shadow-sm">
+      <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
+        <div className="container relative mx-auto flex h-20 items-center px-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+            FD
+          </div>
+        </div>
+      </nav>
+    </header>
+  );
+}
+
 export async function AppHeader() {
   const ctx = await getAuthContext();
   const profile = ctx.kind === "authenticated" ? ctx.profile : null;

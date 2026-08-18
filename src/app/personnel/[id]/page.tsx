@@ -28,7 +28,7 @@ import {
   familyDateTitle,
   listFamilyDates,
 } from "@/lib/personnel-types";
-import { roleLabel } from "@/lib/labels";
+import { permissionLevelName } from "@/lib/permission-levels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
 import { listEmsLevels } from "@/lib/ems-levels";
@@ -208,7 +208,7 @@ export default async function PersonnelDetailPage({
   ];
 
   const securityRows = [
-    { label: "Permission level", value: roleLabel(profile.role) },
+    { label: "Permission levels", value: permissionLevelName(profile.permission_levels) },
     { label: "System admin", value: profile.is_admin ? "Yes" : "No" },
   ];
 
