@@ -12,7 +12,7 @@ Parking lot for Training LMS and Shift Exchange ideas. Capture anything useful; 
 
 ## Assets
 
--Add maintenance schedule
+-Add maintenance schedule (started 2026-08-15 — Fleet board + `asset_maintenance_schedules`)
 
 
 ## Admin & roles

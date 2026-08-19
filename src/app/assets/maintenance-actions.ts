@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { requireUserProfile } from "@/lib/auth";
-import { requireCapability } from "@/lib/capability-access";
+import { assertFleetShopAccess } from "@/lib/capability-access";
 import {
   buildMaintenancePhotoStoragePath,
   type MaintenanceRequestType,
@@ -28,6 +28,7 @@ function throwIfDbError(error: PostgrestError | null) {
 function revalidateMaintenance(assetId?: string) {
   revalidatePath("/assets", "layout");
   revalidatePath("/admin/maintenance");
+  revalidatePath("/fleet");
   if (assetId) {
     revalidatePath(`/assets/${assetId}`);
     revalidatePath(`/assets/${assetId}/maintenance/new`);
@@ -192,8 +193,9 @@ export async function deleteMaintenanceRequest(input: {
 export async function resolveMaintenanceRequest(input: {
   requestId: string;
   resolvedNote?: string;
+  returnToService?: boolean;
 }) {
-  await requireCapability("resolve_maintenance");
+  await assertFleetShopAccess();
   const supabase = await createSupabaseServerClient();
 
   const { data: existing, error: fetchError } = await supabase
@@ -215,5 +217,14 @@ export async function resolveMaintenanceRequest(input: {
     .eq("status", "open");
 
   throwIfDbError(error);
+
+  if (input.returnToService) {
+    const { error: returnError } = await supabase.rpc(
+      "maintenance_request_return_in_service",
+      { p_request_id: input.requestId }
+    );
+    throwIfDbError(returnError);
+  }
+
   revalidateMaintenance(existing.asset_id);
 }

@@ -14,6 +14,7 @@ import {
   ClipboardPen,
   Users,
   Siren,
+  Wrench,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -92,6 +93,12 @@ export function BreadcrumbNav() {
         breadcrumbs.push({ label: "Edit" });
       }
     }
+  } else if (paths[0] === "fleet") {
+    breadcrumbs.push({
+      label: "Fleet",
+      href: paths.length === 1 ? undefined : "/fleet",
+      icon: <Wrench className="h-4 w-4" />,
+    });
   } else if (paths[0] === "incidents") {
     breadcrumbs.push({
       label: "Incidents",

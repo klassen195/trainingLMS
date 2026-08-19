@@ -36,6 +36,19 @@ export async function assertCapability(capability: AppCapability): Promise<Profi
   return profile;
 }
 
+export async function assertFleetShopAccess(): Promise<Profile> {
+  const profile = await requireUserProfile();
+  if (isAdmin(profile)) return profile;
+  const matrix = await loadCapabilityMatrix();
+  if (
+    profileHasCapability(profile, "view_fleet", matrix) ||
+    profileHasCapability(profile, "resolve_maintenance", matrix)
+  ) {
+    return profile;
+  }
+  throw new Error("You do not have permission to perform this action.");
+}
+
 export async function getProfileCapabilities(profile: Profile): Promise<Record<AppCapability, boolean>> {
   if (isAdmin(profile)) {
     return Object.fromEntries(APP_CAPABILITIES.map((capability) => [capability, true])) as Record<

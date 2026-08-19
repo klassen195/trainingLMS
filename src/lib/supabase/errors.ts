@@ -76,12 +76,25 @@ export function isMissingEquipmentSubcategoriesTable(
   );
 }
 
+export function isMissingMaintenanceSchedulesTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("asset_maintenance_schedules") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
 export function isMissingMaintenanceRequestsTable(error: PostgrestError | null) {
   if (!error) return false;
   return (
     error.code === "PGRST205" ||
     error.message.includes("maintenance_requests") ||
-    error.message.includes("Could not find the table")
+    error.message.includes("assigned_to") ||
+    error.message.includes("shop_status") ||
+    error.message.includes("shop_notes") ||
+    error.message.includes("Could not find the table") ||
+    (error.message.includes("Could not find the") && error.message.includes("column"))
   );
 }
 

@@ -6,7 +6,11 @@ import {
   type AssetListRow,
   type AssetWithAssignee,
 } from "@/lib/assets-types";
-import { isMissingVehicleChecksTable } from "@/lib/supabase/errors";
+import {
+  MAINTENANCE_REQUEST_SELECT,
+  type MaintenanceRequest,
+} from "@/lib/maintenance-types";
+import { isMissingMaintenanceRequestsTable, isMissingVehicleChecksTable } from "@/lib/supabase/errors";
 
 type LatestInspection = {
   asset_id: string;
@@ -172,4 +176,35 @@ export async function fetchAssetsWithLatestInspection(
   });
 
   return { rows, error: null };
+}
+
+export async function fetchOpenMaintenanceRequestsByAssetIds(
+  supabase: SupabaseClient,
+  assetIds: string[]
+): Promise<{ byAssetId: Record<string, MaintenanceRequest[]>; error: PostgrestError | null }> {
+  if (assetIds.length === 0) return { byAssetId: {}, error: null };
+
+  const { data, error } = await supabase
+    .from("maintenance_requests")
+    .select(MAINTENANCE_REQUEST_SELECT)
+    .in("asset_id", assetIds)
+    .eq("status", "open")
+    .order("requested_at", { ascending: false });
+
+  if (isMissingMaintenanceRequestsTable(error)) return { byAssetId: {}, error: null };
+  if (error) return { byAssetId: {}, error };
+
+  const byAssetId: Record<string, MaintenanceRequest[]> = {};
+  for (const request of (data ?? []) as MaintenanceRequest[]) {
+    const list = byAssetId[request.asset_id] ?? [];
+    list.push({
+      ...request,
+      assigned_to: request.assigned_to ?? null,
+      shop_status: request.shop_status ?? "new",
+      shop_notes: request.shop_notes ?? "",
+    });
+    byAssetId[request.asset_id] = list;
+  }
+
+  return { byAssetId, error: null };
 }

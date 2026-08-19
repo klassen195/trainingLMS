@@ -17,6 +17,7 @@ import {
   Users,
   Siren,
   Lightbulb,
+  Wrench,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -43,11 +44,12 @@ import {
 
 const publicNavItems = [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }];
 
-function authNavItemsFor(showIncidents: boolean) {
+function authNavItemsFor(showIncidents: boolean, showFleet: boolean) {
   return [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/programs", label: "Programs", icon: GraduationCap },
     { href: "/assets", label: "Assets", icon: Package },
+    ...(showFleet ? [{ href: "/fleet", label: "Fleet", icon: Wrench }] : []),
     ...(showIncidents ? [{ href: "/incidents", label: "Incidents", icon: Siren }] : []),
     {
       href: "/personnel",
@@ -63,11 +65,13 @@ export function MainNav({
   showInstructor = false,
   showAdmin = false,
   showIncidents = false,
+  showFleet = false,
 }: {
   profile: Profile | null;
   showInstructor?: boolean;
   showAdmin?: boolean;
   showIncidents?: boolean;
+  showFleet?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -90,7 +94,7 @@ export function MainNav({
   }
 
   const loggedInNavItems = [
-    ...(profile ? authNavItemsFor(showIncidents) : []),
+    ...(profile ? authNavItemsFor(showIncidents, showFleet) : []),
     ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
     ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];

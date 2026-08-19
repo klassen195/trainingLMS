@@ -7,6 +7,7 @@ export const APP_CAPABILITIES = [
   "ems_qi",
   "document_training",
   "view_apparatus",
+  "view_fleet",
   "view_all_ppe",
   "submit_vehicle_checks",
   "submit_maintenance",
@@ -58,6 +59,11 @@ export const capabilityMeta: Record<
     group: "Assets & operations",
     label: "View apparatus inventory",
     description: "Browse the apparatus roster and unit pages.",
+  },
+  view_fleet: {
+    group: "Assets & operations",
+    label: "View fleet shop",
+    description: "Open the Fleet board: vehicle status, work orders, and maintenance schedules.",
   },
   view_all_ppe: {
     group: "Assets & operations",

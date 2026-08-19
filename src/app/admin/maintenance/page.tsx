@@ -42,11 +42,21 @@ export default async function AdminMaintenancePage() {
 
   const requests: MaintenanceRequestWithAsset[] = await Promise.all(
     ((data ?? []) as Record<string, unknown>[]).map(async (raw) => {
-      const { requester, asset, ...rest } = raw;
+      const { requester, assignee, asset, ...rest } = raw;
       const row = {
-        ...(rest as Omit<MaintenanceRequestWithAsset, "requester" | "asset" | "photo_url">),
+        ...(rest as Omit<
+          MaintenanceRequestWithAsset,
+          "requester" | "assignee" | "asset" | "photo_url"
+        >),
         requester: asSingleProfile(
           requester as
+            | { id: string; display_name: string | null; email: string | null }
+            | { id: string; display_name: string | null; email: string | null }[]
+            | null
+            | undefined
+        ),
+        assignee: asSingleProfile(
+          assignee as
             | { id: string; display_name: string | null; email: string | null }
             | { id: string; display_name: string | null; email: string | null }[]
             | null

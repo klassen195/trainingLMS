@@ -8,6 +8,7 @@ import type {
   MaintenanceRequestStatus,
   MaintenanceRequestType,
   MaintenanceServiceStatus,
+  MaintenanceShopStatus,
 } from "@/lib/maintenance-types";
 import type {
   VehicleCheckFieldType,
@@ -116,6 +117,13 @@ const maintenanceServiceStatusLabels: Record<MaintenanceServiceStatus, string> =
 const maintenanceRequestStatusLabels: Record<MaintenanceRequestStatus, string> = {
   open: "Open",
   resolved: "Resolved",
+};
+
+const maintenanceShopStatusLabels: Record<MaintenanceShopStatus, string> = {
+  new: "New",
+  assigned: "Assigned",
+  in_progress: "In progress",
+  on_hold: "On hold",
 };
 
 export function tagLabel(tag: ProgramTag) {
@@ -375,6 +383,23 @@ export function maintenanceRequestStatusBadgeClass(status: MaintenanceRequestSta
   }
 }
 
+export function maintenanceShopStatusLabel(status: MaintenanceShopStatus) {
+  return maintenanceShopStatusLabels[status];
+}
+
+export function maintenanceShopStatusBadgeClass(status: MaintenanceShopStatus) {
+  switch (status) {
+    case "new":
+      return "border-transparent bg-sky-100 text-sky-900";
+    case "assigned":
+      return "border-transparent bg-indigo-100 text-indigo-900";
+    case "in_progress":
+      return "border-transparent bg-amber-100 text-amber-900";
+    case "on_hold":
+      return "border-transparent bg-slate-200 text-slate-700";
+  }
+}
+
 export const assetStatuses = Object.keys(assetStatusLabels) as AssetStatus[];
 export const ppeCategories = Object.keys(ppeCategoryLabels) as PpeCategory[];
 export const apparatusTypes = Object.keys(apparatusTypeLabels) as ApparatusType[];
@@ -392,6 +417,9 @@ export const maintenanceRequestTypes = Object.keys(
 export const maintenanceServiceStatuses = Object.keys(
   maintenanceServiceStatusLabels
 ) as MaintenanceServiceStatus[];
+export const maintenanceShopStatuses = Object.keys(
+  maintenanceShopStatusLabels
+) as MaintenanceShopStatus[];
 
 export function fieldTypesForChecklistKind(kind: VehicleChecklistKind): VehicleCheckFieldType[] {
   if (kind === "swap") {

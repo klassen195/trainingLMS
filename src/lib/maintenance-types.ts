@@ -6,6 +6,8 @@ export type MaintenanceServiceStatus = "in_service" | "out_of_service";
 
 export type MaintenanceRequestStatus = "open" | "resolved";
 
+export type MaintenanceShopStatus = "new" | "assigned" | "in_progress" | "on_hold";
+
 export type MaintenanceRequest = {
   id: string;
   asset_id: string;
@@ -22,6 +24,9 @@ export type MaintenanceRequest = {
   resolved_at: string | null;
   resolved_by: string | null;
   resolved_note: string | null;
+  assigned_to: string | null;
+  shop_status: MaintenanceShopStatus;
+  shop_notes: string;
 };
 
 export type MaintenanceRequester = {
@@ -30,8 +35,11 @@ export type MaintenanceRequester = {
   email: string | null;
 };
 
+export type MaintenanceAssignee = MaintenanceRequester;
+
 export type MaintenanceRequestWithRequester = MaintenanceRequest & {
   requester?: MaintenanceRequester | null;
+  assignee?: MaintenanceAssignee | null;
   photo_url?: string | null;
 };
 
@@ -49,9 +57,9 @@ export type MaintenanceRequestWithAsset = MaintenanceRequestWithRequester & {
 };
 
 export const MAINTENANCE_REQUEST_SELECT =
-  "id, asset_id, requested_by, requested_at, service_status, request_type, title, description, photo_storage_path, photo_file_name, vehicle_check_id, status, resolved_at, resolved_by, resolved_note";
+  "id, asset_id, requested_by, requested_at, service_status, request_type, title, description, photo_storage_path, photo_file_name, vehicle_check_id, status, resolved_at, resolved_by, resolved_note, assigned_to, shop_status, shop_notes";
 
-export const MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT = `${MAINTENANCE_REQUEST_SELECT}, requester:profiles!requested_by(id, display_name, email)`;
+export const MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT = `${MAINTENANCE_REQUEST_SELECT}, requester:profiles!requested_by(id, display_name, email), assignee:profiles!assigned_to(id, display_name, email)`;
 
 export const MAINTENANCE_PHOTO_BUCKET = "maintenance-photos";
 

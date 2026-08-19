@@ -14,6 +14,7 @@ export async function AppHeader() {
         profile={profile}
         showInstructor={Boolean(capabilities?.author_training)}
         showIncidents={Boolean(capabilities?.manage_incidents)}
+        showFleet={Boolean(capabilities?.view_fleet)}
         showAdmin={Boolean(
           profile?.is_admin ||
             capabilities?.manage_users ||

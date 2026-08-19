@@ -3,11 +3,14 @@ import Link from "next/link";
 import { Plus, Truck } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
 import { getProfileCapabilities } from "@/lib/capability-access";
-import { fetchAssetsWithLatestInspection } from "@/lib/assets";
+import {
+  fetchAssetsWithLatestInspection,
+  fetchOpenMaintenanceRequestsByAssetIds,
+} from "@/lib/assets";
 import { listLocations } from "@/lib/locations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
-import { AssetList } from "@/components/AssetList";
+import { ApparatusTable } from "@/components/ApparatusTable";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { AssetsSectionNav } from "@/components/AssetsSectionNav";
 import { Button } from "@/components/ui/Button";
@@ -42,22 +45,29 @@ export default async function AssetsApparatusPage({
   if (isMissingAssetsTable(error)) return <AssetsDatabaseSetup />;
   if (error) throw error;
 
+  const { byAssetId: openRequestsByAssetId, error: maintenanceError } =
+    await fetchOpenMaintenanceRequestsByAssetIds(
+      supabase,
+      rows.map((asset) => asset.id)
+    );
+  if (maintenanceError) throw maintenanceError;
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div className="container mx-auto px-4 py-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="mb-2 flex items-center gap-3">
-            <Truck className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold">Apparatus</h1>
+          <div className="mb-1 flex items-center gap-2">
+            <Truck className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold">Apparatus</h1>
           </div>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Unit roster, status, and latest vehicle checks by location.
           </p>
         </div>
         {admin ? (
-          <Button asChild>
+          <Button asChild size="sm">
             <Link href="/assets/new?kind=apparatus">
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-1.5 h-4 w-4" />
               Add apparatus
             </Link>
           </Button>
@@ -66,7 +76,7 @@ export default async function AssetsApparatusPage({
 
       <AssetsSectionNav />
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-1.5">
         <Link
           href="/assets/apparatus"
           className={cn(
@@ -94,10 +104,9 @@ export default async function AssetsApparatusPage({
         ))}
       </div>
 
-      <AssetList
+      <ApparatusTable
         rows={rows}
-        kind="apparatus"
-        isAdmin={admin}
+        openRequestsByAssetId={openRequestsByAssetId}
         emptyMessage={
           station
             ? `No apparatus recorded for ${station}.`
