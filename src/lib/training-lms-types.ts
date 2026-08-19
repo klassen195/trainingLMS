@@ -1,5 +1,3 @@
-export type UserRole = "recruit" | "firefighter" | "captain";
-
 export type ProgramTag =
   | "fire"
   | "engineer"
@@ -19,6 +17,7 @@ export type EnrollmentStatus = "active" | "completed";
 
 export type Profile = {
   id: string;
+  client_id: string;
   display_name: string | null;
   first_name?: string | null;
   last_name?: string | null;
@@ -26,7 +25,8 @@ export type Profile = {
   rank: string | null;
   swing_up?: string[] | null;
   rank_promoted_on?: string | null;
-  role: UserRole;
+  permission_level_ids: string[];
+  permission_levels?: { id: string; name: string }[];
   is_admin: boolean;
   is_active?: boolean;
   invited_at?: string | null;

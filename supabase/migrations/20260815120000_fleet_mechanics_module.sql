@@ -26,12 +26,32 @@ alter table public.permission_level_capabilities
     )
   );
 
-insert into public.permission_level_capabilities (role, capability, enabled)
-values
-  ('recruit', 'view_fleet', false),
-  ('firefighter', 'view_fleet', false),
-  ('captain', 'view_fleet', false)
-on conflict (role, capability) do nothing;
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'permission_level_capabilities'
+      and column_name = 'role'
+  ) then
+    insert into public.permission_level_capabilities (role, capability, enabled)
+    values
+      ('recruit', 'view_fleet', false),
+      ('firefighter', 'view_fleet', false),
+      ('captain', 'view_fleet', false)
+    on conflict do nothing;
+  elsif exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'permission_level_capabilities'
+      and column_name = 'permission_level_id'
+  ) then
+    insert into public.permission_level_capabilities (client_id, permission_level_id, capability, enabled)
+    select pl.client_id, pl.id, 'view_fleet', false
+    from public.permission_levels pl
+    on conflict (permission_level_id, capability) do nothing;
+  end if;
+end $$;
 
 drop policy if exists "assets_select_visible" on public.assets;
 create policy "assets_select_visible"

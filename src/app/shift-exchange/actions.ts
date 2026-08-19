@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
+import { requireUserProfile } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingShiftExchangeTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type { ShiftExchangeCategory } from "@/lib/shift-exchange-types";
@@ -31,9 +32,11 @@ export async function createShiftExchangeRequest(input: {
   shiftDate: string; // YYYY-MM-DD
   requestNotes: string;
 }) {
+  const profile = await requireUserProfile();
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.from("shift_exchange_requests").insert({
+    client_id: profile.client_id,
     category: input.category,
     shift_color: shiftColorForShiftDay(input.shiftDate),
     shift_date: input.shiftDate,
@@ -46,7 +49,9 @@ export async function createShiftExchangeRequest(input: {
 }
 
 export async function resolveShiftExchangeRequest(input: { id: string; resolvedNote?: string }) {
+  await requireUserProfile();
   const supabase = await createSupabaseServerClient();
+
   const { error } = await supabase
     .from("shift_exchange_requests")
     .update({

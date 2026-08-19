@@ -1,8 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeftRight } from "lucide-react";
+import { getAuthContext } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingShiftExchangeTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { defaultShiftDateIso } from "@/lib/dates";
+import { DatabaseSetup } from "@/components/DatabaseSetup";
+import { MissingProfileSetup } from "@/components/MissingProfileSetup";
 import { ShiftExchangeDatabaseSetup } from "@/components/ShiftExchangeDatabaseSetup";
 import { RequestList, type ShiftExchangeRequestRow } from "@/components/RequestList";
 import { ShiftExchangeForm } from "@/components/ShiftExchangeForm";
@@ -18,17 +21,22 @@ function stationLabel(stationNumber: number) {
   return `Station ${stationNumber}`;
 }
 
-export default async function ShiftExchangeStationPage({ params }: { params: Promise<{ station: string }> }) {
+export default async function ShiftExchangeStationPage({
+  params,
+}: {
+  params: Promise<{ station: string }>;
+}) {
+  const auth = await getAuthContext();
+  if (auth.kind === "unauthenticated") redirect("/login");
+  if (auth.kind === "missing_tables") return <DatabaseSetup />;
+  if (auth.kind === "missing_profile") return <MissingProfileSetup userId={auth.userId} />;
+
   const { station } = await params;
   const stationNumber = parseStation(station);
   if (!stationNumber) notFound();
 
   const supabase = await createSupabaseServerClient();
   const label = stationLabel(stationNumber);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { data: rows, error } = await supabase
     .from("shift_exchange_requests")
@@ -51,7 +59,7 @@ export default async function ShiftExchangeStationPage({ params }: { params: Pro
           <h1 className="text-3xl font-bold">Shift Exchange</h1>
         </div>
         <p className="max-w-2xl text-muted-foreground">
-          Submit notes and mark resolutions for {label}. No sign-in required.
+          Submit notes and mark resolutions for {label}.
         </p>
       </div>
 
@@ -64,7 +72,7 @@ export default async function ShiftExchangeStationPage({ params }: { params: Pro
 
       <div className="grid gap-6 xl:grid-cols-[420px_1fr] xl:items-start">
         <ShiftExchangeForm stationLabel={label} defaultShiftDate={defaultShiftDateIso()} />
-        <RequestList rows={(rows ?? []) as ShiftExchangeRequestRow[]} currentUserId={user?.id ?? null} />
+        <RequestList rows={(rows ?? []) as ShiftExchangeRequestRow[]} currentUserId={auth.profile.id} />
       </div>
     </div>
   );

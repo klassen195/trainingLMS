@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  Building2,
   ChevronRight,
   ClipboardCheck,
   Cross,
@@ -14,7 +15,7 @@ import {
   ListTree,
 } from "lucide-react";
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth";
+import { getAuthContext, requireAdmin } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
@@ -43,7 +44,7 @@ const ADMIN_GROUPS: AdminGroup[] = [
       {
         href: "/admin/permissions",
         label: "Permissions",
-        description: "Role capability matrix",
+        description: "Named levels and capability matrix",
         icon: Shield,
       },
       {
@@ -116,6 +117,25 @@ const ADMIN_GROUPS: AdminGroup[] = [
 
 export default async function AdminPage() {
   await requireAdmin();
+  const ctx = await getAuthContext();
+  const isPlatformAdmin = ctx.kind === "authenticated" && ctx.isPlatformAdmin;
+
+  const groups = isPlatformAdmin
+    ? [
+        {
+          title: "Platform",
+          items: [
+            {
+              href: "/admin/clients",
+              label: "Clients",
+              description: "Client ID codes and tenant silos",
+              icon: Building2,
+            },
+          ],
+        },
+        ...ADMIN_GROUPS,
+      ]
+    : ADMIN_GROUPS;
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -130,7 +150,7 @@ export default async function AdminPage() {
       </div>
 
       <div className="space-y-6">
-        {ADMIN_GROUPS.map((group) => (
+        {groups.map((group) => (
           <Card key={group.title}>
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold tracking-tight text-muted-foreground">

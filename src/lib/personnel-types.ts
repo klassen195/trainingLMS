@@ -1,5 +1,6 @@
-import type { Profile, UserRole } from "@/lib/training-lms-types";
+import type { Profile } from "@/lib/training-lms-types";
 import { swingUpRanks } from "@/lib/labels";
+import { PROFILE_PERMISSION_LEVELS_EMBED } from "@/lib/permission-levels-types";
 
 export type ProfileSummary = {
   id: string;
@@ -203,8 +204,10 @@ export type PersonnelTrainingProgram = {
   completed_count: number;
 };
 
-export const PROFILE_ORG_SELECT =
-  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, role, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays, primary_location_id, supervisor_id, ems_cleared_level_id";
+export const PROFILE_ORG_COLUMNS =
+  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays, primary_location_id, supervisor_id, ems_cleared_level_id";
+
+export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_LEVELS_EMBED}`;
 
 export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!primary_location_id(id, name), supervisor:profiles!supervisor_id(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!ems_cleared_level_id(id, name)`;
 
@@ -758,5 +761,3 @@ export function formatTrainingHours(hours: number) {
   if (Number.isInteger(rounded)) return String(rounded);
   return String(rounded);
 }
-
-export const permissionLevels: UserRole[] = ["recruit", "firefighter", "captain"];

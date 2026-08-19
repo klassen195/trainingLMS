@@ -3,13 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formatAuthError, normalizeAuthEmail } from "@/lib/auth-messages";
+import { safeAppPath } from "@/lib/auth-redirect";
+import { normalizeClientCode } from "@/lib/clients";
+import { assertClientMembership, resolveClientIdByCode } from "@/lib/clients-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { programTags } from "@/lib/labels";
-import type { ProgramStatus, ProgramTag, UserRole } from "@/lib/training-lms-types";
+import type { ProgramStatus, ProgramTag } from "@/lib/training-lms-types";
 import { buildModuleResourceStoragePath, normalizeWebsiteUrl, parseYouTubeVideoId } from "@/lib/module-resources";
 import { scorePercent, shuffleArray } from "@/lib/quiz";
 import { assertCapability } from "@/lib/capability-access";
+import { replaceProfilePermissionLevels } from "@/lib/permission-levels";
 import type { ModuleResourceType } from "@/lib/training-lms-types";
 
 function throwIfDbError(error: import("@supabase/supabase-js").PostgrestError | null) {
@@ -92,19 +96,70 @@ function parseAuthOrigin(origin: string) {
   }
 }
 
-export async function signInWithMagicLink(input: { email: string; origin: string }) {
+function parseClientCode(clientCode: string) {
+  const normalized = normalizeClientCode(clientCode);
+  if (!normalized) {
+    return { error: "Enter your Client ID." as const };
+  }
+  return { clientCode: normalized };
+}
+
+async function ensureSessionMatchesClient(clientCode: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Sign-in failed. Try again." as const };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("client_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const membership = await assertClientMembership({
+    profileClientId: profile?.client_id,
+    clientCode,
+  });
+  if ("error" in membership) {
+    await supabase.auth.signOut();
+    return { error: membership.error };
+  }
+  return { success: true as const, clientId: membership.clientId };
+}
+
+export async function signInWithMagicLink(input: {
+  email: string;
+  origin: string;
+  clientCode: string;
+  next?: string;
+}) {
   const emailResult = parseAuthEmail(input.email);
   if ("error" in emailResult) return emailResult;
 
   const originResult = parseAuthOrigin(input.origin);
   if ("error" in originResult) return originResult;
 
+  const codeResult = parseClientCode(input.clientCode);
+  if ("error" in codeResult) return codeResult;
+
+  const clientId = await resolveClientIdByCode(codeResult.clientCode);
+  if (!clientId) {
+    return { error: "Invalid Client ID. Check the code from your administrator." };
+  }
+
   const supabase = await createSupabaseServerClient();
+  const redirect = new URL("/auth/callback", originResult.origin.origin);
+  redirect.searchParams.set("next", safeAppPath(input.next));
+  redirect.searchParams.set("client", codeResult.clientCode);
+
   const { error } = await supabase.auth.signInWithOtp({
     email: emailResult.email,
     options: {
-      emailRedirectTo: `${originResult.origin.origin}/auth/callback?next=/dashboard`,
-      shouldCreateUser: true,
+      emailRedirectTo: redirect.toString(),
+      shouldCreateUser: false,
     },
   });
 
@@ -115,9 +170,17 @@ export async function signInWithMagicLink(input: { email: string; origin: string
   return { success: true as const };
 }
 
-export async function sendSignInCode(input: { email: string }) {
+export async function sendSignInCode(input: { email: string; clientCode: string }) {
   const emailResult = parseAuthEmail(input.email);
   if ("error" in emailResult) return emailResult;
+
+  const codeResult = parseClientCode(input.clientCode);
+  if ("error" in codeResult) return codeResult;
+
+  const clientId = await resolveClientIdByCode(codeResult.clientCode);
+  if (!clientId) {
+    return { error: "Invalid Client ID. Check the code from your administrator." };
+  }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithOtp({
@@ -134,9 +197,12 @@ export async function sendSignInCode(input: { email: string }) {
   return { success: true as const };
 }
 
-export async function verifySignInCode(input: { email: string; code: string }) {
+export async function verifySignInCode(input: { email: string; code: string; clientCode: string }) {
   const emailResult = parseAuthEmail(input.email);
   if ("error" in emailResult) return emailResult;
+
+  const codeResult = parseClientCode(input.clientCode);
+  if ("error" in codeResult) return codeResult;
 
   const token = input.code.trim();
   if (!/^\d{6}$/.test(token)) {
@@ -154,12 +220,19 @@ export async function verifySignInCode(input: { email: string; code: string }) {
     return { error: formatAuthError(error.message) };
   }
 
-  return { success: true as const };
+  return ensureSessionMatchesClient(codeResult.clientCode);
 }
 
-export async function signInWithPassword(input: { email: string; password: string }) {
+export async function signInWithPassword(input: {
+  email: string;
+  password: string;
+  clientCode: string;
+}) {
   const emailResult = parseAuthEmail(input.email);
   if ("error" in emailResult) return emailResult;
+
+  const codeResult = parseClientCode(input.clientCode);
+  if ("error" in codeResult) return codeResult;
 
   if (!input.password) {
     return { error: "Enter your password." };
@@ -175,19 +248,35 @@ export async function signInWithPassword(input: { email: string; password: strin
     return { error: formatAuthError(error.message) };
   }
 
-  return { success: true as const };
+  return ensureSessionMatchesClient(codeResult.clientCode);
 }
 
-export async function requestPasswordReset(input: { email: string; origin: string }) {
+export async function requestPasswordReset(input: {
+  email: string;
+  origin: string;
+  clientCode: string;
+}) {
   const emailResult = parseAuthEmail(input.email);
   if ("error" in emailResult) return emailResult;
 
   const originResult = parseAuthOrigin(input.origin);
   if ("error" in originResult) return originResult;
 
+  const codeResult = parseClientCode(input.clientCode);
+  if ("error" in codeResult) return codeResult;
+
+  const clientId = await resolveClientIdByCode(codeResult.clientCode);
+  if (!clientId) {
+    return { error: "Invalid Client ID. Check the code from your administrator." };
+  }
+
   const supabase = await createSupabaseServerClient();
+  const redirect = new URL("/auth/callback", originResult.origin.origin);
+  redirect.searchParams.set("next", "/account");
+  redirect.searchParams.set("client", codeResult.clientCode);
+
   const { error } = await supabase.auth.resetPasswordForEmail(emailResult.email, {
-    redirectTo: `${originResult.origin.origin}/auth/callback?next=/account`,
+    redirectTo: redirect.toString(),
   });
 
   if (error) {
@@ -770,7 +859,7 @@ export async function deleteModuleResource(input: {
 
 export async function updateUserAccess(input: {
   userId: string;
-  role: UserRole;
+  permissionLevelIds: string[];
   isAdmin: boolean;
 }) {
   const { supabase, userId } = await requireAdminUser();
@@ -779,21 +868,41 @@ export async function updateUserAccess(input: {
     throw new Error("You cannot remove your own system admin access.");
   }
 
-  const { error } = await supabase
+  const { data: target, error: targetError } = await supabase
     .from("profiles")
-    .update({ role: input.role, is_admin: input.isAdmin })
-    .eq("id", input.userId);
+    .select("id, client_id")
+    .eq("id", input.userId)
+    .maybeSingle();
+  if (targetError) throwIfDbError(targetError);
+  if (!target?.client_id) throw new Error("User not found.");
+
+  const { error } = await supabase.from("profiles").update({ is_admin: input.isAdmin }).eq("id", input.userId);
   throwIfDbError(error);
+  await replaceProfilePermissionLevels(supabase, {
+    profileId: input.userId,
+    clientId: target.client_id,
+    permissionLevelIds: input.permissionLevelIds,
+  });
   revalidatePath("/admin");
   revalidatePath("/personnel");
   revalidatePath(`/personnel/${input.userId}`);
 }
 
 /** @deprecated Prefer updateUserAccess */
-export async function updateUserRole(input: { userId: string; role: UserRole }) {
+export async function updateUserRole(input: { userId: string; permissionLevelIds: string[] }) {
   const { supabase } = await requireAdminUser();
-  const { error } = await supabase.from("profiles").update({ role: input.role }).eq("id", input.userId);
-  throwIfDbError(error);
+  const { data: target, error: targetError } = await supabase
+    .from("profiles")
+    .select("id, client_id")
+    .eq("id", input.userId)
+    .maybeSingle();
+  if (targetError) throwIfDbError(targetError);
+  if (!target?.client_id) throw new Error("User not found.");
+  await replaceProfilePermissionLevels(supabase, {
+    profileId: input.userId,
+    clientId: target.client_id,
+    permissionLevelIds: input.permissionLevelIds,
+  });
   revalidatePath("/admin");
 }
 

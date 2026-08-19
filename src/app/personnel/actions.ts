@@ -24,9 +24,9 @@ import {
 import { listShiftBattalionChiefIds, personHasSupervisorCoverage } from "@/lib/personnel";
 import { autoIssuedTaskbooks, swingUpRanks, taskbookRanks, getTaskbookPrerequisites } from "@/lib/labels";
 import { isRecognitionAwardId } from "@/lib/recognition-awards";
-import type { UserRole } from "@/lib/training-lms-types";
 import { normalizeAuthEmail } from "@/lib/auth-messages";
 import { isAdmin } from "@/lib/permissions";
+import { replaceProfilePermissionLevels } from "@/lib/permission-levels";
 
 function throwIfDbError(error: PostgrestError | null) {
   if (!error) return;
@@ -56,9 +56,9 @@ export async function createPersonnelMember(input: {
   email: string;
   firstName?: string;
   lastName?: string;
-  role?: UserRole;
+  permissionLevelIds?: string[];
 }) {
-  await requireAdmin();
+  const adminProfile = await requireAdmin();
 
   const email = normalizeAuthEmail(input.email);
   if (!email) throw new Error("Enter a valid email address.");
@@ -66,7 +66,28 @@ export async function createPersonnelMember(input: {
   const firstName = input.firstName?.trim() || null;
   const lastName = input.lastName?.trim() || null;
   const displayName = composePersonnelDisplayName(firstName, lastName);
-  const role = input.role ?? "firefighter";
+  const clientId = adminProfile.client_id;
+  const supabase = await createSupabaseServerClient();
+  let permissionLevelIds = [...new Set((input.permissionLevelIds ?? []).map((id) => id.trim()).filter(Boolean))];
+  if (permissionLevelIds.length === 0) {
+    const { data: defaultLevel, error: defaultError } = await supabase
+      .from("permission_levels")
+      .select("id")
+      .order("is_default", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (defaultError) throw new Error(defaultError.message);
+    if (defaultLevel?.id) permissionLevelIds = [defaultLevel.id];
+  }
+  if (permissionLevelIds.length === 0) throw new Error("Create a permission level before adding members.");
+
+  const { data: levels, error: levelError } = await supabase
+    .from("permission_levels")
+    .select("id")
+    .in("id", permissionLevelIds);
+  if (levelError) throw new Error(levelError.message);
+  if ((levels?.length ?? 0) !== permissionLevelIds.length) throw new Error("Permission level not found.");
 
   const admin = createSupabaseServiceClient();
 
@@ -74,6 +95,7 @@ export async function createPersonnelMember(input: {
   const { data, error } = await admin.auth.admin.createUser({
     email,
     email_confirm: false,
+    app_metadata: { client_id: clientId },
     user_metadata:
       firstName || lastName || displayName
         ? {
@@ -100,7 +122,7 @@ export async function createPersonnelMember(input: {
     first_name: firstName,
     last_name: lastName,
     email,
-    role,
+    client_id: clientId,
     invited_at: null as string | null,
   };
 
@@ -117,10 +139,17 @@ export async function createPersonnelMember(input: {
     if (upsertError) throw new Error(upsertError.message);
   }
 
+  await replaceProfilePermissionLevels(admin, {
+    profileId: userId,
+    clientId,
+    permissionLevelIds,
+  });
+
   const approvedOn = new Date().toISOString().slice(0, 10);
   const dueOn = addYearsToDate(approvedOn, 1);
   const { error: taskbookError } = await admin.from("personnel_taskbooks").insert({
     profile_id: userId,
+    client_id: clientId,
     rank: "Firefighter",
     status: "active",
     approved_on: approvedOn,
@@ -210,7 +239,7 @@ export async function updatePersonnelProfile(input: {
   kidsBirthdays: string | null;
   primaryLocationId: string | null;
   supervisorId: string | null;
-  role: UserRole;
+  permissionLevelIds: string[];
   isAdmin: boolean;
   section?: string | null;
 }) {
@@ -256,12 +285,16 @@ export async function updatePersonnelProfile(input: {
       kids_birthdays: input.kidsBirthdays?.trim() || null,
       primary_location_id: input.primaryLocationId || null,
       supervisor_id: input.supervisorId || null,
-      role: input.role,
       is_admin: input.isAdmin,
     })
     .eq("id", input.userId);
 
   throwIfDbError(error);
+  await replaceProfilePermissionLevels(supabase, {
+    profileId: input.userId,
+    clientId: admin.client_id,
+    permissionLevelIds: input.permissionLevelIds,
+  });
   revalidatePersonnel(input.userId);
   redirect(personnelFilePath(input.userId, input.section));
 }

@@ -19,7 +19,13 @@ const categories: { value: ShiftExchangeCategory; label: string }[] = [
   { value: "ems", label: "EMS" },
 ];
 
-export function ShiftExchangeForm({ stationLabel, defaultShiftDate }: { stationLabel: string; defaultShiftDate: string }) {
+export function ShiftExchangeForm({
+  stationLabel,
+  defaultShiftDate,
+}: {
+  stationLabel: string;
+  defaultShiftDate: string;
+}) {
   const [category, setCategory] = useState<ShiftExchangeCategory>("station");
   const [shiftDate, setShiftDate] = useState(defaultShiftDate);
   const [requestNotes, setRequestNotes] = useState("");

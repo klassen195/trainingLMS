@@ -22,7 +22,7 @@ import {
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
 import type { Profile } from "@/lib/training-lms-types";
-import { roleLabel } from "@/lib/labels";
+import { permissionLevelName } from "@/lib/permission-levels";
 import { Button } from "@/components/ui/Button";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
 import {
@@ -42,11 +42,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/Sheet";
 
-const publicNavItems = [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }];
-
 function authNavItemsFor(showIncidents: boolean, showFleet: boolean) {
   return [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight },
     { href: "/programs", label: "Programs", icon: GraduationCap },
     { href: "/assets", label: "Assets", icon: Package },
     ...(showFleet ? [{ href: "/fleet", label: "Fleet", icon: Wrench }] : []),
@@ -81,7 +80,9 @@ export function MainNav({
   const displayName = profile?.display_name ?? profile?.email ?? "Member";
   const initials = displayName.charAt(0).toUpperCase();
   const accessLabel = profile
-    ? [roleLabel(profile.role), profile.is_admin ? "Admin" : null].filter(Boolean).join(" · ")
+    ? [permissionLevelName(profile.permission_levels), profile.is_admin ? "Admin" : null]
+        .filter(Boolean)
+        .join(" · ")
     : null;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
@@ -99,7 +100,7 @@ export function MainNav({
     ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
   ];
 
-  const allNavItems = [...publicNavItems, ...(profile ? loggedInNavItems : [])];
+  const allNavItems = profile ? loggedInNavItems : [];
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">

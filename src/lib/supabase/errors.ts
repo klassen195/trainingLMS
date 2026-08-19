@@ -2,10 +2,12 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 export function isMissingTrainingLmsTables(error: PostgrestError | null) {
   if (!error) return false;
+  if (error.code === "PGRST205") return true;
+  const message = error.message;
+  if (message.includes("Could not find a relationship")) return false;
   return (
-    error.code === "PGRST205" ||
-    error.message.includes("profiles") ||
-    error.message.includes("Could not find the table")
+    message.includes("Could not find the table") ||
+    /could not find the ['`]?profiles['`]? table/i.test(message)
   );
 }
 

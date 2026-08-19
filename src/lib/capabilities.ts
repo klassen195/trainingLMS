@@ -1,4 +1,5 @@
-import type { Profile, UserRole } from "@/lib/training-lms-types";
+import type { Profile } from "@/lib/training-lms-types";
+import { profilePermissionLevelIds } from "@/lib/permission-levels";
 
 export const APP_CAPABILITIES = [
   "browse_program_catalog",
@@ -22,9 +23,7 @@ export const APP_CAPABILITIES = [
 
 export type AppCapability = (typeof APP_CAPABILITIES)[number];
 
-export const PERMISSION_LEVELS: UserRole[] = ["recruit", "firefighter", "captain"];
-
-export type CapabilityMatrix = Record<UserRole, Record<AppCapability, boolean>>;
+export type CapabilityMatrix = Record<string, Record<AppCapability, boolean>>;
 
 export const capabilityMeta: Record<
   AppCapability,
@@ -124,12 +123,8 @@ export function emptyCapabilityRow(): Record<AppCapability, boolean> {
   >;
 }
 
-export function emptyCapabilityMatrix(): CapabilityMatrix {
-  return {
-    recruit: emptyCapabilityRow(),
-    firefighter: emptyCapabilityRow(),
-    captain: emptyCapabilityRow(),
-  };
+export function emptyCapabilityMatrix(levelIds: string[]): CapabilityMatrix {
+  return Object.fromEntries(levelIds.map((id) => [id, emptyCapabilityRow()])) as CapabilityMatrix;
 }
 
 export function profileHasCapability(
@@ -138,7 +133,7 @@ export function profileHasCapability(
   matrix: CapabilityMatrix
 ) {
   if (profile.is_admin) return true;
-  return Boolean(matrix[profile.role]?.[capability]);
+  return profilePermissionLevelIds(profile).some((levelId) => Boolean(matrix[levelId]?.[capability]));
 }
 
 export function capabilityGroups() {

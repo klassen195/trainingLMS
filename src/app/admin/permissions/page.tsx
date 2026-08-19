@@ -7,7 +7,7 @@ import { PermissionMatrixEditor } from "./ui";
 
 export default async function AdminPermissionsPage() {
   await requireAdmin();
-  const matrix = await loadCapabilityMatrix();
+  const { levels, matrix } = await loadCapabilityMatrix();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -20,12 +20,12 @@ export default async function AdminPermissionsPage() {
           <h1 className="text-4xl font-bold">Permission capabilities</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          Choose what Recruit, Firefighter, and Captain can access. Changes apply immediately for signed-in
-          members.
+          Create named permission levels for this department, then choose what each level can access.
+          System admins always have every capability.
         </p>
       </div>
 
-      <PermissionMatrixEditor initialMatrix={matrix} />
+      <PermissionMatrixEditor levels={levels} initialMatrix={matrix} />
     </div>
   );
 }

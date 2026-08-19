@@ -2,18 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { createPersonnelMember } from "@/app/personnel/actions";
-import type { UserRole } from "@/lib/training-lms-types";
-import { permissionLevels } from "@/lib/personnel-types";
-import { roleLabel } from "@/lib/labels";
+import { defaultPermissionLevelId } from "@/lib/permission-levels";
+import type { PermissionLevel } from "@/lib/permission-levels-types";
+import { PermissionLevelPicker } from "@/components/PermissionLevelPicker";
 import { Button } from "@/components/ui/Button";
-import { FieldLabel } from "@/components/ui/Field";
-import { Input, Select } from "@/components/ui/Input";
+import { FieldError, FieldLabel } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
-export function InvitePersonnelForm() {
+export function InvitePersonnelForm({ permissionLevels }: { permissionLevels: PermissionLevel[] }) {
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [role, setRole] = useState<UserRole>("firefighter");
+  const [permissionLevelIds, setPermissionLevelIds] = useState(() => {
+    const defaultId = defaultPermissionLevelId(permissionLevels);
+    return defaultId ? [defaultId] : [];
+  });
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +32,7 @@ export function InvitePersonnelForm() {
               email,
               firstName: firstName || undefined,
               lastName: lastName || undefined,
-              role,
+              permissionLevelIds,
             });
           } catch (err) {
             if (
@@ -81,24 +84,17 @@ export function InvitePersonnelForm() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <FieldLabel htmlFor="invite-role">Permission level</FieldLabel>
-        <Select
-          id="invite-role"
-          value={role}
-          onChange={(e) => setRole(e.target.value as UserRole)}
-        >
-          {permissionLevels.map((level) => (
-            <option key={level} value={level}>
-              {roleLabel(level)}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <PermissionLevelPicker
+        id="invite-roles"
+        levels={permissionLevels}
+        selectedIds={permissionLevelIds}
+        onChange={setPermissionLevelIds}
+        disabled={pending}
+      />
 
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {error ? <FieldError>{error}</FieldError> : null}
 
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending || permissionLevelIds.length === 0}>
         {pending ? "Adding…" : "Add member"}
       </Button>
     </form>

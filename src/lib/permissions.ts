@@ -1,7 +1,9 @@
-import type { Profile, UserRole } from "@/lib/training-lms-types";
+import type { Profile } from "@/lib/training-lms-types";
+import { profilePermissionLevelIds } from "@/lib/permission-levels";
 
-export function hasRole(profile: Profile, roles: UserRole[]) {
-  return roles.includes(profile.role);
+export function hasRole(profile: Profile, permissionLevelIds: string[]) {
+  const assigned = new Set(profilePermissionLevelIds(profile));
+  return permissionLevelIds.some((id) => assigned.has(id));
 }
 
 export function isAdmin(profile: Profile) {
@@ -9,9 +11,9 @@ export function isAdmin(profile: Profile) {
 }
 
 export function canAuthorTraining(profile: Profile) {
-  return profile.is_admin || profile.role === "captain";
+  return profile.is_admin;
 }
 
-export function isRecruit(profile: Profile) {
-  return profile.role === "recruit" && !profile.is_admin;
+export function isRecruit(_profile: Profile) {
+  return false;
 }
