@@ -3,9 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { formatAuthError, normalizeAuthEmail } from "@/lib/auth-messages";
-import { safeAppPath } from "@/lib/auth-redirect";
+import {
+  userMustChangePassword,
+  validateNewPassword,
+  withMustChangePassword,
+} from "@/lib/auth-password";
 import { normalizeClientCode } from "@/lib/clients";
 import { assertClientMembership, resolveClientIdByCode } from "@/lib/clients-server";
+import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { programTags } from "@/lib/labels";
@@ -34,6 +39,9 @@ async function requireAuthUserId() {
   } = await supabase.auth.getUser();
   if (error) throw error;
   if (!user) throw new Error("Not authenticated");
+  if (userMustChangePassword(user)) {
+    throw new Error("Set a new password before continuing.");
+  }
   return { supabase, userId: user.id };
 }
 
@@ -127,100 +135,11 @@ async function ensureSessionMatchesClient(clientCode: string) {
     await supabase.auth.signOut();
     return { error: membership.error };
   }
-  return { success: true as const, clientId: membership.clientId };
-}
-
-export async function signInWithMagicLink(input: {
-  email: string;
-  origin: string;
-  clientCode: string;
-  next?: string;
-}) {
-  const emailResult = parseAuthEmail(input.email);
-  if ("error" in emailResult) return emailResult;
-
-  const originResult = parseAuthOrigin(input.origin);
-  if ("error" in originResult) return originResult;
-
-  const codeResult = parseClientCode(input.clientCode);
-  if ("error" in codeResult) return codeResult;
-
-  const clientId = await resolveClientIdByCode(codeResult.clientCode);
-  if (!clientId) {
-    return { error: "Invalid Client ID. Check the code from your administrator." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const redirect = new URL("/auth/callback", originResult.origin.origin);
-  redirect.searchParams.set("next", safeAppPath(input.next));
-  redirect.searchParams.set("client", codeResult.clientCode);
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email: emailResult.email,
-    options: {
-      emailRedirectTo: redirect.toString(),
-      shouldCreateUser: false,
-    },
-  });
-
-  if (error) {
-    return { error: formatAuthError(error.message) };
-  }
-
-  return { success: true as const };
-}
-
-export async function sendSignInCode(input: { email: string; clientCode: string }) {
-  const emailResult = parseAuthEmail(input.email);
-  if ("error" in emailResult) return emailResult;
-
-  const codeResult = parseClientCode(input.clientCode);
-  if ("error" in codeResult) return codeResult;
-
-  const clientId = await resolveClientIdByCode(codeResult.clientCode);
-  if (!clientId) {
-    return { error: "Invalid Client ID. Check the code from your administrator." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email: emailResult.email,
-    options: {
-      shouldCreateUser: false,
-    },
-  });
-
-  if (error) {
-    return { error: formatAuthError(error.message) };
-  }
-
-  return { success: true as const };
-}
-
-export async function verifySignInCode(input: { email: string; code: string; clientCode: string }) {
-  const emailResult = parseAuthEmail(input.email);
-  if ("error" in emailResult) return emailResult;
-
-  const codeResult = parseClientCode(input.clientCode);
-  if ("error" in codeResult) return codeResult;
-
-  const token = input.code.trim();
-  if (!/^\d{6}$/.test(token)) {
-    return { error: "Enter the 6-digit code from your email." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.verifyOtp({
-    email: emailResult.email,
-    token,
-    type: "email",
-  });
-
-  if (error) {
-    return { error: formatAuthError(error.message) };
-  }
-
-  return ensureSessionMatchesClient(codeResult.clientCode);
+  return {
+    success: true as const,
+    clientId: membership.clientId,
+    mustChangePassword: userMustChangePassword(user),
+  };
 }
 
 export async function signInWithPassword(input: {
@@ -287,13 +206,8 @@ export async function requestPasswordReset(input: {
 }
 
 export async function setAccountPassword(input: { password: string; confirmPassword: string }) {
-  if (!input.password || input.password.length < 8) {
-    return { error: "Password must be at least 8 characters." };
-  }
-
-  if (input.password !== input.confirmPassword) {
-    return { error: "Passwords do not match." };
-  }
+  const passwordError = validateNewPassword(input.password, input.confirmPassword);
+  if (passwordError) return { error: passwordError };
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -308,7 +222,17 @@ export async function setAccountPassword(input: { password: string; confirmPassw
     return { error: formatAuthError(error.message) };
   }
 
+  if (userMustChangePassword(user)) {
+    const admin = createSupabaseServiceClient();
+    const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
+      app_metadata: withMustChangePassword(user.app_metadata, false),
+    });
+    if (metaError) return { error: formatAuthError(metaError.message) };
+    await supabase.auth.refreshSession();
+  }
+
   revalidatePath("/account");
+  revalidatePath("/account/change-password");
   return { success: true as const };
 }
 
@@ -324,7 +248,7 @@ export async function enrollInModule(input: { programId: string; moduleId: strin
     { onConflict: "module_id,user_id" }
   );
   throwIfDbError(error);
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidateModuleViews(input.programId, input.moduleId);
@@ -356,7 +280,7 @@ export async function enrollInProgram(input: { programId: string }) {
   );
   throwIfDbError(error);
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   for (const moduleId of moduleIds) {
@@ -372,7 +296,7 @@ export async function unenrollFromModule(input: { programId: string; moduleId: s
     .eq("module_id", input.moduleId)
     .eq("user_id", userId);
   throwIfDbError(error);
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidateModuleViews(input.programId, input.moduleId);
@@ -397,7 +321,7 @@ export async function unenrollFromProgram(input: { programId: string }) {
     .in("module_id", moduleIds);
   throwIfDbError(error);
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   for (const moduleId of moduleIds) {
@@ -432,7 +356,7 @@ export async function setModuleComplete(input: {
     throwIfDbError(error);
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidateModuleViews(input.programId, input.moduleId);
 }
@@ -500,7 +424,7 @@ export async function setResourceComplete(input: {
     }
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidateModuleViews(input.programId, input.moduleId);
 }
@@ -1229,7 +1153,7 @@ export async function setChecklistItemComplete(input: {
     });
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidateModuleViews(input.programId, input.moduleId);
 }
@@ -1406,7 +1330,7 @@ export async function toggleProgramHighlight(input: { programId: string }) {
     throwIfDbError(error);
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
 }
@@ -1433,7 +1357,7 @@ export async function toggleModuleHighlight(input: { moduleId: string; programId
     throwIfDbError(error);
   }
 
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
   revalidatePath(`/programs/${input.programId}/modules/${input.moduleId}`);
 }

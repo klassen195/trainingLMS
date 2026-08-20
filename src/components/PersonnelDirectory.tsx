@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PersonnelProfile } from "@/lib/personnel-types";
-import { personnelDisplayName, personnelShiftLabel, isRankOnProbation } from "@/lib/personnel-types";
+import { personnelDisplayName, personnelShiftLabel, isRankOnProbation, rankHasTitle } from "@/lib/personnel-types";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 
@@ -43,6 +43,7 @@ export function PersonnelDirectory({
         person.display_name,
         person.email,
         person.rank,
+        person.job_title,
         person.shift,
         person.employee_number,
         person.primary_location?.name,
@@ -105,7 +106,7 @@ export function PersonnelDirectory({
                 const canOpen = canOpenAllFiles || person.id === viewerId;
                 const expired = expiredCertCountByUser[person.id] ?? 0;
                 const inactive = person.is_active === false;
-                const onProbation = Boolean(person.rank) && isRankOnProbation(person.rank_promoted_on);
+                const onProbation = isRankOnProbation(person.rank, person.rank_promoted_on);
                 const nameContent = (
                   <>
                     <span className="font-medium">{personnelDisplayName(person)}</span>
@@ -151,7 +152,12 @@ export function PersonnelDirectory({
                     </td>
                     <td className="hidden px-3 py-2 text-muted-foreground sm:table-cell">
                       <span className="inline-flex flex-wrap items-center gap-1.5">
-                        <span>{person.rank || "—"}</span>
+                        <span>
+                          {person.rank || "—"}
+                          {rankHasTitle(person.rank) && person.job_title
+                            ? ` · ${person.job_title}`
+                            : ""}
+                        </span>
                         {onProbation ? (
                           <Badge
                             variant="outline"
@@ -172,7 +178,7 @@ export function PersonnelDirectory({
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         {inactive ? <Badge variant="outline">Inactive</Badge> : null}
                         {!person.invited_at && !inactive ? (
-                          <Badge variant="outline">Not invited</Badge>
+                          <Badge variant="outline">No password</Badge>
                         ) : null}
                         {person.is_admin ? <Badge variant="outline">Admin</Badge> : null}
                         {expired > 0 ? (

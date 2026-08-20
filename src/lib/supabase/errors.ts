@@ -184,6 +184,28 @@ export function isMissingEmsClearanceLevelsTable(
   );
 }
 
+export function isMissingHomeDashboardTables(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("home_dashboard_layouts") ||
+    error.message.includes("client_ops_settings") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
+export function isMissingApprovalTrackerTables(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("approval_documents") ||
+    error.message.includes("approval_stage_members") ||
+    error.message.includes("approval_document_holders") ||
+    error.message.includes("approval_document_events") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
 export function supabaseErrorMessage(error: PostgrestError) {
   return error.message || `Database error (${error.code})`;
 }

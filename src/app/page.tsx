@@ -1,59 +1,41 @@
 import Link from "next/link";
-import { ArrowLeftRight, GraduationCap } from "lucide-react";
+import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
+import { CHANGE_PASSWORD_PATH } from "@/lib/auth-password";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { loadHomeDashboard } from "@/lib/home-dashboard";
+import { DatabaseSetup } from "@/components/DatabaseSetup";
+import { MissingProfileSetup } from "@/components/MissingProfileSetup";
+import { HomeDashboard } from "@/components/HomeDashboard";
 import { Button } from "@/components/ui/Button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 
 export default async function HomePage() {
   const auth = await getAuthContext();
-  const isSignedIn = auth.kind === "authenticated";
+  if (auth.kind === "missing_tables") return <DatabaseSetup />;
+  if (auth.kind === "missing_profile") return <MissingProfileSetup userId={auth.userId} />;
+
+  if (auth.kind === "authenticated") {
+    if (auth.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
+    const supabase = await createSupabaseServerClient();
+    const capabilities = await getProfileCapabilities(auth.profile);
+    const payload = await loadHomeDashboard({
+      profile: auth.profile,
+      capabilities,
+      supabase,
+    });
+    return <HomeDashboard payload={payload} />;
+  }
 
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="mb-10 max-w-2xl">
-        <h1 className="text-4xl font-bold tracking-tight">Kootenai Fire Tools</h1>
-        <p className="mt-3 text-lg text-muted-foreground">
-          Shift Exchange and Training LMS both require a department sign-in.
-        </p>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-              <ArrowLeftRight className="h-5 w-5" />
-            </div>
-            <CardTitle>Shift Exchange</CardTitle>
-            <CardDescription>Submit station notes and mark them resolved for your department.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href={isSignedIn ? "/shift-exchange" : "/login?redirectedFrom=/shift-exchange"}>
-                {isSignedIn ? "Open Shift Exchange" : "Sign in to Shift Exchange"}
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-              <GraduationCap className="h-5 w-5" />
-            </div>
-            <CardTitle>Training LMS</CardTitle>
-            <CardDescription>
-              Programs, modules, quizzes, and instructor tools for department training.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant={isSignedIn ? "default" : "outline"}>
-              <Link href={isSignedIn ? "/dashboard" : "/login"}>
-                {isSignedIn ? "Go to Dashboard" : "Sign in to Training"}
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="container mx-auto flex min-h-[calc(100vh-12rem)] flex-col items-start justify-center px-4 py-12">
+      <h1 className="text-4xl font-bold tracking-tight">Anchor Point</h1>
+      <p className="mt-3 max-w-xl text-lg text-muted-foreground">
+        Department operations, training, and personnel tools. Sign in to open your home dashboard.
+      </p>
+      <Button asChild className="mt-6">
+        <Link href="/login">Sign in</Link>
+      </Button>
     </div>
   );
 }

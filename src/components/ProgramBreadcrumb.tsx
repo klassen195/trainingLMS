@@ -29,9 +29,9 @@ export function ProgramBreadcrumb({
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href="/dashboard" className="flex items-center gap-2 hover:underline">
+                <Link href="/" className="flex items-center gap-2 hover:underline">
                   <Home className="h-4 w-4" />
-                  Home
+                  Dashboard
                 </Link>
               </BreadcrumbLink>
             </BreadcrumbItem>

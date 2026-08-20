@@ -7,6 +7,7 @@ import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { ProgramCard } from "@/components/ProgramCard";
 import { ProgramCategoryGrid } from "@/components/ProgramCategoryGrid";
+import { TrainingProgressOverview } from "@/components/TrainingProgressOverview";
 import { tagLabel, programTags } from "@/lib/labels";
 import { loadBulkProgramProgress } from "@/lib/program-module-progress";
 import {
@@ -54,16 +55,20 @@ export default async function ProgramsPage({
           <p className="text-lg text-muted-foreground">
             {limitedCatalog
               ? "Programs you have been enrolled in by an instructor or admin."
-              : "Browse training by division."}
+              : "Your training progress and the published program catalog."}
           </p>
         </div>
+        <TrainingProgressOverview supabase={supabase} profileId={profile.id} programs={programList} />
         {programList.length === 0 && limitedCatalog ? (
           <div className="rounded-lg border py-12 text-center">
             <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
             <p className="text-muted-foreground">No assigned programs yet.</p>
           </div>
         ) : (
-          <ProgramCategoryGrid programCounts={tagCounts} />
+          <section>
+            <h2 className="mb-6 text-2xl font-bold">Catalog</h2>
+            <ProgramCategoryGrid programCounts={tagCounts} />
+          </section>
         )}
       </div>
     );

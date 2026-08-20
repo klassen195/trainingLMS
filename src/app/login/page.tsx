@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { CHANGE_PASSWORD_PATH, userMustChangePassword } from "@/lib/auth-password";
 import { safeAppPath } from "@/lib/auth-redirect";
 import { LoginForm } from "./ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -24,6 +25,10 @@ export default async function LoginPage({
       .maybeSingle();
     if (profile?.is_active === false) {
       await supabase.auth.signOut();
+    } else if (userMustChangePassword(user)) {
+      const changeUrl = new URL(CHANGE_PASSWORD_PATH, "http://local");
+      if (redirectTo && redirectTo !== "/") changeUrl.searchParams.set("next", redirectTo);
+      redirect(`${changeUrl.pathname}${changeUrl.search}`);
     } else {
       redirect(redirectTo);
     }
@@ -35,7 +40,7 @@ export default async function LoginPage({
         <CardHeader>
           <CardTitle>TrainingLMS</CardTitle>
           <CardDescription>
-            Sign in with a magic link, email code, or password. First-time users should start with magic link.
+            Sign in with your email and password.
           </CardDescription>
         </CardHeader>
         <CardContent>

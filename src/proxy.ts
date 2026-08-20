@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { CHANGE_PASSWORD_PATH, claimsMustChangePassword, userMustChangePassword } from "@/lib/auth-password";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import { hasSupabaseSessionCookie } from "@/lib/supabase/session-cookie";
 
@@ -58,6 +59,29 @@ export async function proxy(request: NextRequest) {
 
   if (!isAuthenticated && !isPublicPath(pathname)) {
     return redirectToLogin(request);
+  }
+
+  if (isAuthenticated && pathname !== CHANGE_PASSWORD_PATH && !pathname.startsWith("/auth")) {
+    let mustChange = claimsMustChangePassword(claimsData?.claims as Record<string, unknown> | undefined);
+    if (mustChange) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      mustChange = userMustChangePassword(user);
+    }
+    if (mustChange) {
+      const changeUrl = request.nextUrl.clone();
+      changeUrl.pathname = CHANGE_PASSWORD_PATH;
+      changeUrl.search = "";
+      if (!isPublicPath(pathname)) {
+        changeUrl.searchParams.set("next", pathname);
+      }
+      const redirect = NextResponse.redirect(changeUrl);
+      response.cookies.getAll().forEach((cookie) => {
+        redirect.cookies.set(cookie);
+      });
+      return redirect;
+    }
   }
 
   return response;

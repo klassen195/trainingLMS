@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Home,
-  LayoutDashboard,
   GraduationCap,
   BookOpen,
   Shield,
@@ -15,6 +14,7 @@ import {
   Users,
   Siren,
   Wrench,
+  ListChecks,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -37,7 +37,7 @@ export function BreadcrumbNav() {
     return null;
   }
 
-  const breadcrumbs: Crumb[] = [{ label: "Home", href: "/", icon: <Home className="h-4 w-4" /> }];
+  const breadcrumbs: Crumb[] = [{ label: "Dashboard", href: "/", icon: <Home className="h-4 w-4" /> }];
 
   if (paths[0] === "shift-exchange") {
     breadcrumbs.push({
@@ -110,6 +110,17 @@ export function BreadcrumbNav() {
     } else if (paths[1]) {
       breadcrumbs.push({ label: "Board" });
     }
+  } else if (paths[0] === "approval-tracker") {
+    breadcrumbs.push({
+      label: "Policy Tracker",
+      href: paths.length === 1 ? undefined : "/approval-tracker",
+      icon: <ListChecks className="h-4 w-4" />,
+    });
+    if (paths[1] === "new") {
+      breadcrumbs.push({ label: "New" });
+    } else if (paths[1]) {
+      breadcrumbs.push({ label: "Document" });
+    }
   } else {
     paths.forEach((path, index) => {
       const currentPath = `/${paths.slice(0, index + 1).join("/")}`;
@@ -117,9 +128,9 @@ export function BreadcrumbNav() {
 
       if (path === "dashboard") {
         breadcrumbs.push({
-          label: "Dashboard",
-          href: isLast ? undefined : "/dashboard",
-          icon: <LayoutDashboard className="h-4 w-4" />,
+          label: "Programs",
+          href: isLast ? undefined : "/programs",
+          icon: <GraduationCap className="h-4 w-4" />,
         });
       } else if (path === "programs") {
         breadcrumbs.push({
@@ -150,6 +161,12 @@ export function BreadcrumbNav() {
           label: "Document Training",
           href: isLast ? undefined : "/document-training",
           icon: <ClipboardPen className="h-4 w-4" />,
+        });
+      } else if (path === "approval-tracker") {
+        breadcrumbs.push({
+          label: "Policy Tracker",
+          href: isLast ? undefined : "/admin/approval-tracker",
+          icon: <ListChecks className="h-4 w-4" />,
         });
       } else if (path === "new" && paths[index - 1] === "document-training") {
         breadcrumbs.push({

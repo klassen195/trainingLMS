@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { CHANGE_PASSWORD_PATH, userMustChangePassword } from "@/lib/auth-password";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import { normalizeClientCode } from "@/lib/clients";
 import { safeAppPath } from "@/lib/auth-redirect";
@@ -75,6 +76,18 @@ export async function GET(request: NextRequest) {
   if (!profile?.client_id || profile.client_id !== clientId) {
     await supabase.auth.signOut();
     return loginRedirect(origin, "client_mismatch");
+  }
+
+  if (userMustChangePassword(user)) {
+    const changeUrl = new URL(CHANGE_PASSWORD_PATH, origin);
+    if (next && next !== "/" && next !== CHANGE_PASSWORD_PATH) {
+      changeUrl.searchParams.set("next", next);
+    }
+    const redirected = NextResponse.redirect(changeUrl);
+    response.cookies.getAll().forEach((cookie) => {
+      redirected.cookies.set(cookie);
+    });
+    return redirected;
   }
 
   return response;

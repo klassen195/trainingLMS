@@ -1,24 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import {
-  requestPasswordReset,
-  sendSignInCode,
-  signInWithMagicLink,
-  signInWithPassword,
-  verifySignInCode,
-} from "@/app/actions";
+import { requestPasswordReset, signInWithPassword } from "@/app/actions";
+import { CHANGE_PASSWORD_PATH } from "@/lib/auth-password";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { cn } from "@/lib/cn";
 
 const LAST_EMAIL_KEY = "training-lms:last-email";
 const LAST_CLIENT_KEY = "training-lms:last-client-code";
 const COOLDOWN_SECONDS = 60;
 
 const AUTH_ERRORS: Record<string, string> = {
-  auth_callback_failed: "Sign-in link expired or was already used. Request a new magic link or use a sign-in code.",
+  auth_callback_failed: "Password reset link expired or was already used. Request a new one.",
   auth_config_missing: "Authentication is not configured. Contact your administrator.",
   account_deactivated:
     "This account has been deactivated. Contact a system administrator if you need access restored.",
@@ -27,41 +21,42 @@ const AUTH_ERRORS: Record<string, string> = {
   client_mismatch: "This account does not belong to that Client ID.",
 };
 
-type SignInMethod = "magic_link" | "code" | "password";
-
 type LoginFormProps = {
   initialError?: string | null;
   redirectTo?: string;
 };
 
-const METHODS: { id: SignInMethod; label: string }[] = [
-  { id: "magic_link", label: "Magic link" },
-  { id: "code", label: "Email code" },
-  { id: "password", label: "Password" },
-];
+function subscribeToStorage(key: string) {
+  return (onStoreChange: () => void) => {
+    function onStorage(event: StorageEvent) {
+      if (event.key === key || event.key === null) onStoreChange();
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  };
+}
 
-export function LoginForm({ initialError, redirectTo = "/dashboard" }: LoginFormProps) {
+function useStoredValue(key: string) {
+  const stored = useSyncExternalStore(
+    subscribeToStorage(key),
+    () => window.localStorage.getItem(key) ?? "",
+    () => ""
+  );
+  const [draft, setDraft] = useState<string | null>(null);
+  return [draft ?? stored, setDraft] as const;
+}
+
+export function LoginForm({ initialError, redirectTo = "/" }: LoginFormProps) {
   const router = useRouter();
-  const [method, setMethod] = useState<SignInMethod>("magic_link");
-  const [clientCode, setClientCode] = useState("");
-  const [email, setEmail] = useState("");
+  const [clientCode, setClientCode] = useStoredValue(LAST_CLIENT_KEY);
+  const [email, setEmail] = useStoredValue(LAST_EMAIL_KEY);
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
-  const [sent, setSent] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState<string | null>(
     initialError ? (AUTH_ERRORS[initialError] ?? "Sign-in failed. Try again.") : null
   );
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const storedEmail = window.localStorage.getItem(LAST_EMAIL_KEY);
-    if (storedEmail) setEmail(storedEmail);
-    const storedClient = window.localStorage.getItem(LAST_CLIENT_KEY);
-    if (storedClient) setClientCode(storedClient);
-  }, []);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -71,107 +66,11 @@ export function LoginForm({ initialError, redirectTo = "/dashboard" }: LoginForm
     return () => window.clearInterval(timer);
   }, [cooldown]);
 
-  function rememberEmail(value: string) {
-    const normalized = value.trim().toLowerCase();
-    if (normalized) {
-      window.localStorage.setItem(LAST_EMAIL_KEY, normalized);
-    }
-  }
-
-  function rememberClientCode(value: string) {
-    const normalized = value.trim().toUpperCase();
-    if (normalized) {
-      window.localStorage.setItem(LAST_CLIENT_KEY, normalized);
-    }
-  }
-
   function rememberCredentials() {
-    rememberEmail(email);
-    rememberClientCode(clientCode);
-  }
-
-  function startCooldown() {
-    setCooldown(COOLDOWN_SECONDS);
-  }
-
-  function switchMethod(next: SignInMethod) {
-    setMethod(next);
-    setError(null);
-    setSent(false);
-    setCodeSent(false);
-    setResetSent(false);
-    setCode("");
-    setPassword("");
-  }
-
-  async function onMagicLinkSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSent(false);
-    setLoading(true);
-    try {
-      rememberCredentials();
-      const result = await signInWithMagicLink({
-        email,
-        clientCode,
-        origin: window.location.origin,
-        next: redirectTo,
-      });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setSent(true);
-      startCooldown();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function sendCode() {
-    setError(null);
-    setLoading(true);
-    try {
-      rememberCredentials();
-      const result = await sendSignInCode({ email, clientCode });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setCodeSent(true);
-      startCooldown();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send code");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onSendCode(e: React.FormEvent) {
-    e.preventDefault();
-    await sendCode();
-  }
-
-  async function onVerifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      rememberCredentials();
-      const result = await verifySignInCode({ email, code, clientCode });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      router.push(redirectTo);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed");
-    } finally {
-      setLoading(false);
-    }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail) window.localStorage.setItem(LAST_EMAIL_KEY, normalizedEmail);
+    const normalizedClient = clientCode.trim().toUpperCase();
+    if (normalizedClient) window.localStorage.setItem(LAST_CLIENT_KEY, normalizedClient);
   }
 
   async function onPasswordSubmit(e: React.FormEvent) {
@@ -185,7 +84,15 @@ export function LoginForm({ initialError, redirectTo = "/dashboard" }: LoginForm
         setError(result.error);
         return;
       }
-      router.push(redirectTo);
+      if ("mustChangePassword" in result && result.mustChangePassword) {
+        const next =
+          redirectTo && redirectTo !== "/"
+            ? `?next=${encodeURIComponent(redirectTo)}`
+            : "";
+        router.push(`${CHANGE_PASSWORD_PATH}${next}`);
+      } else {
+        router.push(redirectTo);
+      }
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");
@@ -210,7 +117,7 @@ export function LoginForm({ initialError, redirectTo = "/dashboard" }: LoginForm
         return;
       }
       setResetSent(true);
-      startCooldown();
+      setCooldown(COOLDOWN_SECONDS);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send reset email");
     } finally {
@@ -218,185 +125,72 @@ export function LoginForm({ initialError, redirectTo = "/dashboard" }: LoginForm
     }
   }
 
-  const clientField = (
-    <div className="space-y-2">
-      <label className="text-sm font-medium" htmlFor="client-code">
-        Client ID
-      </label>
-      <Input
-        id="client-code"
-        type="text"
-        required
-        value={clientCode}
-        onChange={(e) => setClientCode(e.target.value.toUpperCase())}
-        suppressHydrationWarning
-        autoComplete="organization"
-        placeholder="CLIENT1"
-        className="uppercase tracking-wide"
-      />
-    </div>
-  );
-
-  const emailField = (
-    <div className="space-y-2">
-      <label className="text-sm font-medium" htmlFor="email">
-        Email
-      </label>
-      <Input
-        id="email"
-        type="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        suppressHydrationWarning
-        autoComplete="email"
-        placeholder="name@example.com"
-      />
-    </div>
-  );
-
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
-        {METHODS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => switchMethod(item.id)}
-            className={cn(
-              "rounded-md px-2 py-2 text-xs font-medium transition-colors sm:text-sm",
-              method === item.id
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
+    <form onSubmit={onPasswordSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="client-code">
+          Client ID
+        </label>
+        <Input
+          id="client-code"
+          type="text"
+          required
+          value={clientCode}
+          onChange={(e) => setClientCode(e.target.value.toUpperCase())}
+          suppressHydrationWarning
+          autoComplete="organization"
+          placeholder="CLIENT1"
+          className="uppercase tracking-wide"
+        />
       </div>
-
-      {method === "magic_link" ? (
-        <form onSubmit={onMagicLinkSubmit} className="space-y-4">
-          {clientField}
-          {emailField}
-          <p className="text-xs text-muted-foreground">
-            Use the Client ID from your administrator. New accounts are created by invite only.
-          </p>
-          <Button type="submit" disabled={loading || cooldown > 0} className="w-full">
-            {loading ? "Sending link..." : cooldown > 0 ? `Wait ${cooldown}s` : "Send magic link"}
-          </Button>
-          {sent ? (
-            <p className="text-sm text-green-600">
-              Check your inbox for the sign-in link. If it does not arrive within a minute, check spam or try the
-              email code option.
-            </p>
-          ) : null}
-        </form>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="email">
+          Email
+        </label>
+        <Input
+          id="email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          suppressHydrationWarning
+          autoComplete="email"
+          placeholder="name@example.com"
+        />
+      </div>
+      <div className="space-y-2">
+        <label className="text-sm font-medium" htmlFor="password">
+          Password
+        </label>
+        <Input
+          id="password"
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Use the Client ID from your administrator. New accounts receive a temporary password from
+        personnel.
+      </p>
+      <Button type="submit" disabled={loading} className="w-full">
+        {loading ? "Signing in..." : "Sign in"}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={loading || !email || !clientCode || cooldown > 0}
+        className="w-full"
+        onClick={onForgotPassword}
+      >
+        {resetSent ? "Reset email sent" : cooldown > 0 ? `Wait ${cooldown}s` : "Forgot password?"}
+      </Button>
+      {resetSent ? (
+        <p className="text-sm text-green-600">Check your inbox for a password reset link.</p>
       ) : null}
-
-      {method === "code" ? (
-        <div className="space-y-4">
-          {!codeSent ? (
-            <form onSubmit={onSendCode} className="space-y-4">
-              {clientField}
-              {emailField}
-              <p className="text-xs text-muted-foreground">
-                We will email a 6-digit code to sign in without clicking a link.
-              </p>
-              <Button type="submit" disabled={loading || cooldown > 0} className="w-full">
-                {loading ? "Sending code..." : cooldown > 0 ? `Wait ${cooldown}s` : "Send sign-in code"}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={onVerifyCode} className="space-y-4">
-              <p className="text-sm text-green-600">
-                Check your inbox for a 6-digit code and enter it below.
-              </p>
-              {clientField}
-              {emailField}
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="code">
-                  Sign-in code
-                </label>
-                <Input
-                  id="code"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="\d{6}"
-                  maxLength={6}
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="123456"
-                  className="tracking-[0.3em]"
-                />
-              </div>
-              <Button type="submit" disabled={loading || code.length !== 6} className="w-full">
-                {loading ? "Signing in..." : "Sign in with code"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading || cooldown > 0}
-                className="w-full"
-                onClick={() => {
-                  setCode("");
-                  void sendCode();
-                }}
-              >
-                {cooldown > 0 ? `Resend in ${cooldown}s` : "Send a new code"}
-              </Button>
-            </form>
-          )}
-        </div>
-      ) : null}
-
-      {method === "password" ? (
-        <form onSubmit={onPasswordSubmit} className="space-y-4">
-          {clientField}
-          {emailField}
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="password">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Set a password from Account after your first magic-link sign-in.
-          </p>
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Signing in..." : "Sign in with password"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={loading || !email || !clientCode || cooldown > 0}
-            className="w-full"
-            onClick={onForgotPassword}
-          >
-            {resetSent
-              ? "Reset email sent"
-              : cooldown > 0
-                ? `Wait ${cooldown}s`
-                : "Forgot password?"}
-          </Button>
-          {resetSent ? (
-            <p className="text-sm text-green-600">
-              Check your inbox for a password reset link.
-            </p>
-          ) : null}
-        </form>
-      ) : null}
-
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
-    </div>
+    </form>
   );
 }

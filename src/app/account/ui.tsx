@@ -1,13 +1,28 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { setAccountPassword } from "@/app/actions";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth-password";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldHint, FieldLabel, FieldSuccess } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 
-export function AccountPasswordForm() {
+export function AccountPasswordForm({
+  title = "Password",
+  description = "Update the password you use to sign in.",
+  submitLabel = "Save password",
+  successMessage = "Password saved.",
+  redirectTo,
+}: {
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+  successMessage?: string;
+  redirectTo?: string;
+}) {
+  const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +43,10 @@ export function AccountPasswordForm() {
         setPassword("");
         setConfirmPassword("");
         setSaved(true);
+        if (redirectTo) {
+          router.push(redirectTo);
+          router.refresh();
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to save password");
       }
@@ -37,10 +56,8 @@ export function AccountPasswordForm() {
   return (
     <Card className="max-w-lg">
       <CardHeader>
-        <CardTitle>Password sign-in</CardTitle>
-        <CardDescription>
-          Set a password to sign in without waiting for email. You can still use magic link or email code anytime.
-        </CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4">
@@ -50,12 +67,12 @@ export function AccountPasswordForm() {
               id="new-password"
               type="password"
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
             />
-            <FieldHint>At least 8 characters.</FieldHint>
+            <FieldHint>At least {MIN_PASSWORD_LENGTH} characters.</FieldHint>
           </div>
           <div className="space-y-2">
             <FieldLabel htmlFor="confirm-password">Confirm password</FieldLabel>
@@ -63,16 +80,16 @@ export function AccountPasswordForm() {
               id="confirm-password"
               type="password"
               required
-              minLength={8}
+              minLength={MIN_PASSWORD_LENGTH}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               autoComplete="new-password"
             />
           </div>
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving..." : "Save password"}
+            {pending ? "Saving..." : submitLabel}
           </Button>
-          {saved ? <FieldSuccess>Password saved. You can sign in with the Password tab next time.</FieldSuccess> : null}
+          {saved && !redirectTo ? <FieldSuccess>{successMessage}</FieldSuccess> : null}
           {error ? <FieldError>{error}</FieldError> : null}
         </form>
       </CardContent>

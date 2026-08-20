@@ -204,8 +204,33 @@ export function normalizePersonnelProfile(row: Record<string, unknown>): Personn
   };
 }
 
+async function attachSupervisors(supabase: SupabaseClient, rows: PersonnelProfile[]) {
+  const missingIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.supervisor_id && !row.supervisor)
+        .map((row) => row.supervisor_id as string)
+    ),
+  ];
+  if (missingIds.length === 0) return rows;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, first_name, last_name, email")
+    .in("id", missingIds);
+  if (error || !data?.length) return rows;
+
+  const byId = new Map(data.map((row) => [row.id as string, row]));
+  return rows.map((row) => {
+    if (row.supervisor || !row.supervisor_id) return row;
+    const supervisor = byId.get(row.supervisor_id);
+    return supervisor ? { ...row, supervisor } : row;
+  });
+}
+
 async function finalizePersonnelProfiles(supabase: SupabaseClient, rows: PersonnelProfile[]) {
-  return attachProfilePermissionLevels(supabase, rows);
+  const withPermissions = await attachProfilePermissionLevels(supabase, rows);
+  return attachSupervisors(supabase, withPermissions);
 }
 
 export async function fetchPersonnelDirectory(supabase: SupabaseClient) {

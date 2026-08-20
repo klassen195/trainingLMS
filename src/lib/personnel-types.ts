@@ -1,6 +1,8 @@
 import type { Profile } from "@/lib/training-lms-types";
-import { swingUpRanks } from "@/lib/labels";
+import { rankHasTitle, ranksWithoutProbation, swingUpRanks } from "@/lib/labels";
 import { PROFILE_PERMISSION_LEVELS_EMBED } from "@/lib/permission-levels-types";
+
+export { rankHasTitle };
 
 export type ProfileSummary = {
   id: string;
@@ -209,7 +211,9 @@ export const PROFILE_ORG_COLUMNS =
 
 export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_LEVELS_EMBED}`;
 
-export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!primary_location_id(id, name), supervisor:profiles!supervisor_id(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!ems_cleared_level_id(id, name)`;
+// Use the FK constraint name — `profiles!supervisor_id` is ambiguous on self-joins
+// and can resolve as "reports" (empty) instead of the assigned supervisor.
+export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!primary_location_id(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!ems_cleared_level_id(id, name)`;
 
 export const PERSONNEL_CERTIFICATION_SELECT =
   "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, created_by, created_at";
@@ -699,8 +703,13 @@ export function formatSwingUpRanks(ranks: string[] | null | undefined) {
 }
 
 /** True during the first year after promotion into the current rank. */
-export function isRankOnProbation(rankPromotedOn: string | null | undefined, now = new Date()) {
-  if (!rankPromotedOn) return false;
+export function isRankOnProbation(
+  rank: string | null | undefined,
+  rankPromotedOn: string | null | undefined,
+  now = new Date()
+) {
+  if (!rank || !rankPromotedOn) return false;
+  if ((ranksWithoutProbation as readonly string[]).includes(rank)) return false;
   const start = new Date(`${rankPromotedOn}T00:00:00`);
   if (Number.isNaN(start.getTime())) return false;
   const end = new Date(start);

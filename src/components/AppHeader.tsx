@@ -20,15 +20,19 @@ export function AppHeaderFallback() {
 export async function AppHeader() {
   const ctx = await getAuthContext();
   const profile = ctx.kind === "authenticated" ? ctx.profile : null;
-  const capabilities = profile ? await getProfileCapabilities(profile) : null;
+  const mustChangePassword = ctx.kind === "authenticated" && ctx.mustChangePassword;
+  const capabilities =
+    profile && !mustChangePassword ? await getProfileCapabilities(profile) : null;
 
   return (
     <header className="sticky top-0 z-[100] w-full overflow-visible bg-background shadow-sm">
       <MainNav
         profile={profile}
+        mustChangePassword={mustChangePassword}
         showInstructor={Boolean(capabilities?.author_training)}
         showIncidents={Boolean(capabilities?.manage_incidents)}
         showFleet={Boolean(capabilities?.view_fleet)}
+        showApprovals={Boolean(capabilities?.approval_tracker)}
         showAdmin={Boolean(
           profile?.is_admin ||
             capabilities?.manage_users ||

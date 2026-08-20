@@ -13,6 +13,7 @@ import {
   isTaskbookOverdue,
   personnelDisplayName,
   personnelShiftLabel,
+  rankHasTitle,
   taskbookStatusLabel,
   taskbookTimeLeftLabel,
   upcomingFamilyDates,
@@ -57,7 +58,7 @@ export function SupervisorDashboard({
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-4">
       {rows.map((person) => {
-        const onProbation = Boolean(person.rank) && isRankOnProbation(person.rank_promoted_on);
+        const onProbation = isRankOnProbation(person.rank, person.rank_promoted_on);
         const station = person.primary_location?.name || "—";
         const shift = personnelShiftLabel(person.shift);
         const openBooks = taskbooksByProfile[person.id] ?? [];
@@ -116,6 +117,9 @@ export function SupervisorDashboard({
                 <div>
                   <dt className="text-xs text-muted-foreground">Rank</dt>
                   <dd className="mt-0.5 font-medium">{person.rank || "—"}</dd>
+                  {rankHasTitle(person.rank) && person.job_title ? (
+                    <dd className="text-xs text-muted-foreground">{person.job_title}</dd>
+                  ) : null}
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Swing-up</dt>

@@ -18,6 +18,7 @@ import {
   Siren,
   Lightbulb,
   Wrench,
+  ListChecks,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
@@ -42,9 +43,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/Sheet";
 
-function authNavItemsFor(showIncidents: boolean, showFleet: boolean) {
+function authNavItemsFor(showIncidents: boolean, showFleet: boolean, showApprovals: boolean) {
   return [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight },
     { href: "/programs", label: "Programs", icon: GraduationCap },
     { href: "/assets", label: "Assets", icon: Package },
@@ -56,21 +57,26 @@ function authNavItemsFor(showIncidents: boolean, showFleet: boolean) {
       icon: Users,
     },
     { href: "/document-training", label: "Training", icon: ClipboardPen },
+    ...(showApprovals ? [{ href: "/approval-tracker", label: "Policy Tracker", icon: ListChecks }] : []),
   ];
 }
 
 export function MainNav({
   profile,
+  mustChangePassword = false,
   showInstructor = false,
   showAdmin = false,
   showIncidents = false,
   showFleet = false,
+  showApprovals = false,
 }: {
   profile: Profile | null;
+  mustChangePassword?: boolean;
   showInstructor?: boolean;
   showAdmin?: boolean;
   showIncidents?: boolean;
   showFleet?: boolean;
+  showApprovals?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -85,7 +91,8 @@ export function MainNav({
         .join(" · ")
     : null;
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
   function handleSignOut() {
     startTransition(async () => {
@@ -94,18 +101,23 @@ export function MainNav({
     });
   }
 
-  const loggedInNavItems = [
-    ...(profile ? authNavItemsFor(showIncidents, showFleet) : []),
-    ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
-    ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
-  ];
+  const loggedInNavItems = mustChangePassword
+    ? []
+    : [
+        ...(profile ? authNavItemsFor(showIncidents, showFleet, showApprovals) : []),
+        ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
+        ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
+      ];
 
   const allNavItems = profile ? loggedInNavItems : [];
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
       <div className="container relative mx-auto flex h-20 items-center px-4">
-        <Link href="/" className="relative z-10 flex shrink-0 items-center gap-3 hover:opacity-80 transition-opacity">
+        <Link
+          href={mustChangePassword ? "/account/change-password" : "/"}
+          className="relative z-10 flex shrink-0 items-center gap-3 hover:opacity-80 transition-opacity"
+        >
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
             FD
           </div>
@@ -160,25 +172,29 @@ export function MainNav({
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/account">
-                    <UserRound className="mr-2 h-4 w-4" />
-                    Account
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/ideas">
-                    <Lightbulb className="mr-2 h-4 w-4" />
-                    Ideas
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/personnel">
-                    <Users className="mr-2 h-4 w-4" />
-                    Personnel
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {mustChangePassword ? null : (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/account">
+                        <UserRound className="mr-2 h-4 w-4" />
+                        Account
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/ideas">
+                        <Lightbulb className="mr-2 h-4 w-4" />
+                        Ideas
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/personnel">
+                        <Users className="mr-2 h-4 w-4" />
+                        Personnel
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuItem disabled={pending} onSelect={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   {pending ? "Signing out..." : "Sign out"}
@@ -234,7 +250,7 @@ export function MainNav({
                     </span>
                   </Link>
                 ))}
-                {profile ? (
+                {profile && !mustChangePassword ? (
                   <>
                     <Link
                       href="/account"

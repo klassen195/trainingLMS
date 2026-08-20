@@ -27,6 +27,7 @@ import {
   familyDateEventLabel,
   familyDateTitle,
   listFamilyDates,
+  rankHasTitle,
 } from "@/lib/personnel-types";
 import { permissionLevelName } from "@/lib/permission-levels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -48,7 +49,7 @@ import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPa
 import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
 import { PersonnelDirectoryButton, PersonnelEditButton } from "@/components/PersonnelSectionNavButtons";
-import { SendPersonnelInviteButton } from "@/components/SendPersonnelInviteButton";
+import { IssueTemporaryPasswordButton } from "@/components/IssueTemporaryPasswordButton";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent } from "@/components/ui/Card";
 import { formatDate } from "@/lib/dates";
@@ -176,7 +177,7 @@ export default async function PersonnelDetailPage({
 
   const familyDates = listFamilyDates(profile);
 
-  const onProbation = isRankOnProbation(profile.rank_promoted_on);
+  const onProbation = isRankOnProbation(profile.rank, profile.rank_promoted_on);
 
   const workRows = [
     {
@@ -192,6 +193,9 @@ export default async function PersonnelDetailPage({
         </span>
       ),
     },
+    ...(rankHasTitle(profile.rank)
+      ? [{ label: "Title", value: profile.job_title || "—" }]
+      : []),
     { label: "Swing up", value: formatSwingUpRanks(profile.swing_up) },
     {
       label: "Promoted to this rank",
@@ -202,7 +206,7 @@ export default async function PersonnelDetailPage({
     { label: "Hire date", value: formatDate(profile.hire_date) },
     { label: "Station", value: profile.primary_location?.name || "—" },
     {
-      label: "Supervisor (Captain)",
+      label: "Supervisor",
       value: profile.supervisor ? personnelDisplayName(profile.supervisor) : "—",
     },
   ];
@@ -415,9 +419,12 @@ export default async function PersonnelDetailPage({
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             {profile.is_active === false ? <Badge variant="outline">Inactive</Badge> : null}
-            {!profile.invited_at ? <Badge variant="outline">Not invited</Badge> : null}
+            {!profile.invited_at ? <Badge variant="outline">No password issued</Badge> : null}
             {profile.is_admin ? <Badge variant="outline">System admin</Badge> : null}
             {profile.rank ? <Badge variant="outline">{profile.rank}</Badge> : null}
+            {rankHasTitle(profile.rank) && profile.job_title ? (
+              <Badge variant="outline">{profile.job_title}</Badge>
+            ) : null}
             {profile.rank && onProbation ? (
               <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
                 Probation
@@ -435,9 +442,9 @@ export default async function PersonnelDetailPage({
           {canManage ? (
             <>
               {profile.is_active !== false && profile.email ? (
-                <SendPersonnelInviteButton
+                <IssueTemporaryPasswordButton
                   userId={profile.id}
-                  hasBeenInvited={Boolean(profile.invited_at)}
+                  hasPasswordIssued={Boolean(profile.invited_at)}
                 />
               ) : null}
               <PersonnelEditButton personId={id} />

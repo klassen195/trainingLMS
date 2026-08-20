@@ -24,7 +24,7 @@ export async function requireCapability(capability: AppCapability): Promise<Prof
   const profile = await requireUserProfile();
   if (isAdmin(profile)) return profile;
   const { matrix } = await loadCapabilityMatrix();
-  if (!profileHasCapability(profile, capability, matrix)) redirect("/dashboard");
+  if (!profileHasCapability(profile, capability, matrix)) redirect("/");
   return profile;
 }
 

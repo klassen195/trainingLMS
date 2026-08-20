@@ -19,12 +19,17 @@ import {
   addYearsToDate,
   normalizeSwingUpRanks,
   isPersonnelSupervisorOf,
+  rankHasTitle,
   type PersonnelShift,
 } from "@/lib/personnel-types";
 import { listShiftBattalionChiefIds, personHasSupervisorCoverage } from "@/lib/personnel";
 import { autoIssuedTaskbooks, swingUpRanks, taskbookRanks, getTaskbookPrerequisites } from "@/lib/labels";
 import { isRecognitionAwardId } from "@/lib/recognition-awards";
 import { normalizeAuthEmail } from "@/lib/auth-messages";
+import {
+  generateTemporaryPassword,
+  withMustChangePassword,
+} from "@/lib/auth-password";
 import { isAdmin } from "@/lib/permissions";
 import { replaceProfilePermissionLevels } from "@/lib/permission-levels";
 
@@ -67,6 +72,7 @@ export async function createPersonnelMember(input: {
   const lastName = input.lastName?.trim() || null;
   const displayName = composePersonnelDisplayName(firstName, lastName);
   const clientId = adminProfile.client_id;
+  if (!clientId) throw new Error("Your account is missing an organization. Sign out and sign back in.");
   const supabase = await createSupabaseServerClient();
   let permissionLevelIds = [...new Set((input.permissionLevelIds ?? []).map((id) => id.trim()).filter(Boolean))];
   if (permissionLevelIds.length === 0) {
@@ -91,26 +97,31 @@ export async function createPersonnelMember(input: {
 
   const admin = createSupabaseServiceClient();
 
-  // Create Auth user without sending email; invite is sent separately.
+  // Create Auth user without sending email; a temporary password is issued from their file.
+  // client_id must also go in user_metadata: GoTrue applies custom app_metadata
+  // in a follow-up UPDATE, so the handle_new_user INSERT trigger never sees it.
+  const userMetadata = {
+    client_id: clientId,
+    ...(firstName || lastName || displayName
+      ? {
+          first_name: firstName,
+          last_name: lastName,
+          display_name: displayName,
+        }
+      : {}),
+  };
   const { data, error } = await admin.auth.admin.createUser({
     email,
     email_confirm: false,
     app_metadata: { client_id: clientId },
-    user_metadata:
-      firstName || lastName || displayName
-        ? {
-            first_name: firstName,
-            last_name: lastName,
-            display_name: displayName,
-          }
-        : undefined,
+    user_metadata: userMetadata,
   });
 
   if (error) {
     if (/already|registered|exists/i.test(error.message)) {
       throw new Error("A user with that email already exists.");
     }
-    throw new Error(error.message);
+    throw new Error(error.message?.trim() || "Could not create the sign-in account for this member.");
   }
   if (!data.user) throw new Error("Could not create user.");
 
@@ -166,49 +177,42 @@ export async function createPersonnelMember(input: {
   redirect(`/personnel/${userId}`);
 }
 
-export async function sendPersonnelInvite(input: { userId: string }) {
+export async function issueTemporaryPassword(input: { userId: string }) {
   await requireAdmin();
 
   const admin = createSupabaseServiceClient();
   const { data: profile, error: profileError } = await admin
     .from("profiles")
-    .select("id, email, first_name, last_name, display_name, is_active")
+    .select("id, email, client_id, is_active")
     .eq("id", input.userId)
     .maybeSingle();
 
   if (profileError) throw new Error(profileError.message);
   if (!profile) throw new Error("User not found.");
   if (profile.is_active === false) {
-    throw new Error("Reactivate this account before sending an invite.");
+    throw new Error("Reactivate this account before issuing a password.");
   }
 
   const email = normalizeAuthEmail(profile.email ?? "");
-  if (!email) throw new Error("This person needs an email address before you can send an invite.");
+  if (!email) throw new Error("This person needs an email address before you can issue a password.");
 
-  const displayName =
-    composePersonnelDisplayName(profile.first_name, profile.last_name) || profile.display_name;
-  const meta = {
-    first_name: profile.first_name,
-    last_name: profile.last_name,
-    display_name: displayName,
-  };
+  const { data: authData, error: authLookupError } = await admin.auth.admin.getUserById(input.userId);
+  if (authLookupError) throw new Error(authLookupError.message);
+  if (!authData.user) throw new Error("Sign-in account not found.");
 
-  // Native invite sends the Invite template. Works for brand-new emails; for accounts
-  // created via createUser it often errors with "already registered", so fall back to
-  // a magic-link email that still lets them sign in.
-  const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, { data: meta });
-
-  if (inviteError) {
-    if (!/already|registered|exists/i.test(inviteError.message)) {
-      throw new Error(inviteError.message);
-    }
-
-    const { error: otpError } = await admin.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
-    if (otpError) throw new Error(otpError.message);
-  }
+  const temporaryPassword = generateTemporaryPassword();
+  const { error: updateAuthError } = await admin.auth.admin.updateUserById(input.userId, {
+    password: temporaryPassword,
+    email_confirm: true,
+    app_metadata: withMustChangePassword(
+      {
+        ...authData.user.app_metadata,
+        client_id: authData.user.app_metadata?.client_id ?? profile.client_id,
+      },
+      true
+    ),
+  });
+  if (updateAuthError) throw new Error(updateAuthError.message);
 
   const { error: updateError } = await admin
     .from("profiles")
@@ -217,6 +221,7 @@ export async function sendPersonnelInvite(input: { userId: string }) {
   if (updateError) throw new Error(updateError.message);
 
   revalidatePersonnel(input.userId);
+  return { password: temporaryPassword };
 }
 
 export async function updatePersonnelProfile(input: {
@@ -224,6 +229,7 @@ export async function updatePersonnelProfile(input: {
   firstName: string;
   lastName: string;
   rank: string | null;
+  jobTitle: string | null;
   swingUp: string[];
   rankPromotedOn: string | null;
   employeeNumber: string | null;
@@ -254,6 +260,8 @@ export async function updatePersonnelProfile(input: {
   const firstName = input.firstName.trim() || null;
   const lastName = input.lastName.trim() || null;
   const displayName = composePersonnelDisplayName(firstName, lastName);
+  const rank = input.rank?.trim() || null;
+  const jobTitle = rankHasTitle(rank) ? input.jobTitle?.trim() || null : null;
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
@@ -262,7 +270,8 @@ export async function updatePersonnelProfile(input: {
       display_name: displayName,
       first_name: firstName,
       last_name: lastName,
-      rank: input.rank?.trim() || null,
+      rank,
+      job_title: jobTitle,
       swing_up: (() => {
         const allowed = new Set<string>(swingUpRanks);
         const selected = input.swingUp
@@ -852,7 +861,7 @@ export async function assignProgramToUser(input: { userId: string; programId: st
   throwIfDbError(error);
 
   revalidatePersonnel(input.userId);
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
 }
@@ -878,7 +887,7 @@ export async function unassignProgramFromUser(input: { userId: string; programId
   throwIfDbError(error);
 
   revalidatePersonnel(input.userId);
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   revalidatePath(`/programs/${input.programId}`);
 }
@@ -898,7 +907,7 @@ export async function assignModuleToUser(input: { userId: string; moduleId: stri
   throwIfDbError(error);
 
   revalidatePersonnel(input.userId);
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   if (input.programId) revalidatePath(`/programs/${input.programId}`);
 }
@@ -919,7 +928,7 @@ export async function unassignModuleFromUser(input: {
   throwIfDbError(error);
 
   revalidatePersonnel(input.userId);
-  revalidatePath("/dashboard");
+  revalidatePath("/programs");
   revalidatePath("/programs");
   if (input.programId) revalidatePath(`/programs/${input.programId}`);
 }

@@ -13,6 +13,7 @@ import {
   Wrench,
   Layers,
   ListTree,
+  ListChecks,
 } from "lucide-react";
 import Link from "next/link";
 import { getAuthContext, requireAdmin } from "@/lib/auth";
@@ -75,6 +76,12 @@ const ADMIN_GROUPS: AdminGroup[] = [
         label: "Qualifications",
         description: "Qualifications granted by training",
         icon: BadgeCheck,
+      },
+      {
+        href: "/admin/approval-tracker",
+        label: "Policy Tracker",
+        description: "Stage owners for policies, best practices, and training aids",
+        icon: ListChecks,
       },
     ],
   },

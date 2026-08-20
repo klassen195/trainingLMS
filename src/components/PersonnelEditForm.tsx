@@ -23,6 +23,7 @@ import {
   personnelDisplayName,
   personnelShiftLabel,
   personnelShifts,
+  rankHasTitle,
   serializeFamilyKids,
   type FamilyKidInput,
 } from "@/lib/personnel-types";
@@ -97,6 +98,7 @@ export function PersonnelEditForm({
   const [firstName, setFirstName] = useState(person.first_name ?? "");
   const [lastName, setLastName] = useState(person.last_name ?? "");
   const [rank, setRank] = useState(person.rank ?? "");
+  const [jobTitle, setJobTitle] = useState(person.job_title ?? "");
   const [swingUp, setSwingUp] = useState<string[]>(() => normalizeSwingUpRanks(person.swing_up));
   const [rankPromotedOn, setRankPromotedOn] = useState(person.rank_promoted_on ?? "");
   const [employeeNumber, setEmployeeNumber] = useState(person.employee_number ?? "");
@@ -146,6 +148,7 @@ export function PersonnelEditForm({
           firstName,
           lastName,
           rank: rank || null,
+          jobTitle: jobTitle || null,
           swingUp,
           rankPromotedOn: rankPromotedOn || null,
           employeeNumber: employeeNumber || null,
@@ -400,6 +403,7 @@ export function PersonnelEditForm({
                       setRankPromotedOn(today);
                     }
                     if (!next) setRankPromotedOn("");
+                    if (!rankHasTitle(next)) setJobTitle("");
                   }}
                 >
                   <option value="">Not set</option>
@@ -409,10 +413,21 @@ export function PersonnelEditForm({
                     </option>
                   ))}
                 </Select>
-                {rank && isRankOnProbation(rankPromotedOn || null) ? (
+                {isRankOnProbation(rank, rankPromotedOn || null) ? (
                   <p className="text-xs text-amber-800">On probation (first year in rank)</p>
                 ) : null}
               </div>
+              {rankHasTitle(rank) ? (
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="jobTitle">Title</FieldLabel>
+                  <Input
+                    id="jobTitle"
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                    placeholder="e.g. Training, Operations"
+                  />
+                </div>
+              ) : null}
               <div className="space-y-2 sm:col-span-2">
                 <FieldLabel>Swing up</FieldLabel>
                 <p className="text-xs text-muted-foreground">
@@ -502,7 +517,7 @@ export function PersonnelEditForm({
                 </Select>
               </div>
               <div className="space-y-2">
-                <FieldLabel htmlFor="supervisor">Supervisor (Captain)</FieldLabel>
+                <FieldLabel htmlFor="supervisor">Supervisor</FieldLabel>
                 <Select
                   id="supervisor"
                   value={supervisorId}

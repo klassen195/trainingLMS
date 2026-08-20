@@ -7,6 +7,7 @@ export const APP_CAPABILITIES = [
   "author_training",
   "ems_qi",
   "document_training",
+  "approval_tracker",
   "view_apparatus",
   "view_fleet",
   "view_all_ppe",
@@ -53,6 +54,11 @@ export const capabilityMeta: Record<
     group: "Training",
     label: "Document training",
     description: "Log in-house training sessions and certification courses.",
+  },
+  approval_tracker: {
+    group: "Training",
+    label: "Policy Tracker",
+    description: "Track policies, best practices, and training aids on the path to approval.",
   },
   view_apparatus: {
     group: "Assets & operations",

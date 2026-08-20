@@ -140,10 +140,28 @@ export const fireRanks = [
   "Captain",
   "Battalion Chief",
   "Assistant Chief",
+  "Division Chief",
   "Fire Chief",
 ] as const;
 
 export type FireRank = (typeof fireRanks)[number];
+
+/** Ranks that do not serve a first-year probation after promotion. */
+export const ranksWithoutProbation = [
+  "Assistant Chief",
+  "Division Chief",
+  "Fire Chief",
+] as const satisfies readonly FireRank[];
+
+/** Ranks that carry an associated title (e.g. division or functional assignment). */
+export const ranksWithTitle = [
+  "Assistant Chief",
+  "Division Chief",
+] as const satisfies readonly FireRank[];
+
+export function rankHasTitle(rank: string | null | undefined) {
+  return Boolean(rank && (ranksWithTitle as readonly string[]).includes(rank));
+}
 
 /** Ranks available for swing-up qualification (excludes entry and chief ranks). */
 export const swingUpRanks = [
