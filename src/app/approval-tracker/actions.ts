@@ -6,17 +6,26 @@ import { requireAdmin } from "@/lib/auth";
 import { assertCapability, requireCapability } from "@/lib/capability-access";
 import {
   APPROVAL_ASSIGNABLE_STAGES,
+  APPROVAL_COMMITTEE_MEMBER_SELECT,
+  APPROVAL_COMMITTEES,
   APPROVAL_DOC_TYPES,
   APPROVAL_DOCUMENT_LIST_SELECT,
   APPROVAL_EVENT_SELECT,
+  APPROVAL_FILES_BUCKET,
   APPROVAL_PROFILE_OPTION_SELECT,
   APPROVAL_STAGE_MEMBER_SELECT,
   APPROVAL_STAGES,
-  APPROVAL_TRACKS,
+  APPROVAL_SUBCOMMITTEES,
+  APPROVAL_SUBMISSION_KINDS,
+  buildApprovalFileStoragePath,
   earlierApprovalStages,
   groupStageMemberIds,
   nextApprovalStage,
+  sanitizeApprovalFileName,
   type ApprovalAssignableStage,
+  type ApprovalCommittee,
+  type ApprovalCommitteeMember,
+  type ApprovalCommitteeVote,
   type ApprovalDocType,
   type ApprovalDocument,
   type ApprovalDocumentDetail,
@@ -26,7 +35,8 @@ import {
   type ApprovalProfileSummary,
   type ApprovalStage,
   type ApprovalStageMember,
-  type ApprovalTrack,
+  type ApprovalSubcommittee,
+  type ApprovalSubmissionKind,
 } from "@/lib/approval-tracker-types";
 import { personnelDisplayName } from "@/lib/personnel-types";
 import {
@@ -87,22 +97,32 @@ function parseAssignableStage(raw: string | null | undefined): ApprovalAssignabl
   throw new Error("Invalid stage.");
 }
 
-function parseTrack(raw: string | null | undefined): ApprovalTrack {
-  if (raw && (APPROVAL_TRACKS as readonly string[]).includes(raw)) {
-    return raw as ApprovalTrack;
+function parseCommittee(raw: string | null | undefined): ApprovalCommittee {
+  if (raw && (APPROVAL_COMMITTEES as readonly string[]).includes(raw)) {
+    return raw as ApprovalCommittee;
   }
-  throw new Error("Choose Training or EMS.");
+  throw new Error("Choose a committee.");
 }
 
-function parseOptionalTrack(
-  stage: ApprovalAssignableStage,
+function parseSubcommittee(
+  committee: ApprovalCommittee,
   raw: string | null | undefined
-): ApprovalTrack | null {
-  if (stage === "fire_chief" || stage === "policy_holder") {
-    if (raw) throw new Error("This stage is shared by both tracks.");
+): ApprovalSubcommittee | null {
+  if (committee !== "operations") {
+    if (raw) throw new Error("Only Operations has subcommittees.");
     return null;
   }
-  return parseTrack(raw);
+  if (raw && (APPROVAL_SUBCOMMITTEES as readonly string[]).includes(raw)) {
+    return raw as ApprovalSubcommittee;
+  }
+  throw new Error("Choose an Operations subcommittee.");
+}
+
+function parseSubmissionKind(raw: string | null | undefined): ApprovalSubmissionKind {
+  if (raw && (APPROVAL_SUBMISSION_KINDS as readonly string[]).includes(raw)) {
+    return raw as ApprovalSubmissionKind;
+  }
+  throw new Error("Choose whether this is a new document or a replacement.");
 }
 
 function asProfile(value: unknown): ApprovalProfileSummary | null {
@@ -155,6 +175,34 @@ export async function listApprovalStageMembers(): Promise<ApprovalStageMember[]>
     .order("created_at", { ascending: true });
   throwIfDbError(error);
   return (data ?? []) as unknown as ApprovalStageMember[];
+}
+
+export async function listApprovalCommitteeMembers(): Promise<ApprovalCommitteeMember[]> {
+  await requireCapability("approval_tracker");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("approval_committee_members")
+    .select(APPROVAL_COMMITTEE_MEMBER_SELECT)
+    .order("created_at", { ascending: true });
+  throwIfDbError(error);
+  return (data ?? []) as unknown as ApprovalCommitteeMember[];
+}
+
+export async function listApprovalCommitteeVotes(
+  documentIds?: string[]
+): Promise<ApprovalCommitteeVote[]> {
+  await requireCapability("approval_tracker");
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from("approval_document_committee_votes")
+    .select("document_id, profile_id, created_at");
+  if (documentIds) {
+    if (documentIds.length === 0) return [];
+    query = query.in("document_id", documentIds);
+  }
+  const { data, error } = await query;
+  throwIfDbError(error);
+  return (data ?? []) as ApprovalCommitteeVote[];
 }
 
 export async function listApprovalDocuments(options?: {
@@ -223,13 +271,13 @@ export async function getApprovalDocument(
 export async function createApprovalDocument(input: {
   title: string;
   docType: string;
-  track: string;
+  submissionKind: string;
   notes?: string | null;
 }): Promise<{ id: string }> {
   const profile = await assertCapability("approval_tracker");
   const title = parseTitle(input.title);
   const docType = parseDocType(input.docType);
-  const track = parseTrack(input.track);
+  const submissionKind = parseSubmissionKind(input.submissionKind);
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -237,7 +285,7 @@ export async function createApprovalDocument(input: {
     .insert({
       title,
       doc_type: docType,
-      track,
+      submission_kind: submissionKind,
       notes: input.notes?.trim() || null,
       created_by: profile.id,
       current_stage: "creator",
@@ -255,13 +303,13 @@ export async function updateApprovalDocument(input: {
   id: string;
   title: string;
   docType: string;
-  track: string;
+  submissionKind: string;
   notes?: string | null;
 }) {
   await assertCapability("approval_tracker");
   const title = parseTitle(input.title);
   const docType = parseDocType(input.docType);
-  const track = parseTrack(input.track);
+  const submissionKind = parseSubmissionKind(input.submissionKind);
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
@@ -269,7 +317,7 @@ export async function updateApprovalDocument(input: {
     .update({
       title,
       doc_type: docType,
-      track,
+      submission_kind: submissionKind,
       notes: input.notes?.trim() || null,
     })
     .eq("id", input.id);
@@ -278,7 +326,93 @@ export async function updateApprovalDocument(input: {
   revalidateApprovals(input.id);
 }
 
-export async function advanceApprovalDocument(input: { id: string; comment?: string | null }) {
+export async function prepareApprovalDocumentFileUpload(input: {
+  documentId: string;
+  fileName: string;
+  mimeType?: string | null;
+}) {
+  await assertCapability("approval_tracker");
+  const fileName = sanitizeApprovalFileName(input.fileName);
+  if (!fileName) throw new Error("File name is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("approval_documents")
+    .select("id")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data) throw new Error("Document not found.");
+
+  const fileId = crypto.randomUUID();
+  return {
+    storagePath: buildApprovalFileStoragePath(input.documentId, fileId, fileName),
+  };
+}
+
+export async function attachApprovalDocumentFile(input: {
+  documentId: string;
+  storagePath: string;
+  fileName: string;
+  mimeType?: string | null;
+}) {
+  await assertCapability("approval_tracker");
+  const fileName = sanitizeApprovalFileName(input.fileName);
+  const storagePath = input.storagePath.trim();
+  if (!fileName || !storagePath) throw new Error("File is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("approval_documents")
+    .select("id, storage_path")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data) throw new Error("Document not found.");
+
+  const previousPath = data.storage_path;
+  const { error: updateError } = await supabase
+    .from("approval_documents")
+    .update({
+      file_name: fileName,
+      storage_path: storagePath,
+      mime_type: input.mimeType?.trim() || null,
+    })
+    .eq("id", input.documentId);
+  throwIfDbError(updateError);
+
+  if (previousPath && previousPath !== storagePath) {
+    await supabase.storage.from(APPROVAL_FILES_BUCKET).remove([previousPath]);
+  }
+
+  revalidateApprovals(input.documentId);
+}
+
+export async function getApprovalDocumentDownloadUrl(input: { documentId: string }) {
+  await requireCapability("approval_tracker");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("approval_documents")
+    .select("storage_path")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data?.storage_path) throw new Error("No file is attached to this document.");
+
+  const { data: signed, error: signedError } = await supabase.storage
+    .from(APPROVAL_FILES_BUCKET)
+    .createSignedUrl(data.storage_path, 60);
+  if (signedError) throw new Error(signedError.message);
+  if (!signed?.signedUrl) throw new Error("Could not create download link.");
+  return { url: signed.signedUrl };
+}
+
+export async function advanceApprovalDocument(input: {
+  id: string;
+  comment?: string | null;
+  committee?: string | null;
+  subcommittee?: string | null;
+}) {
   await assertCapability("approval_tracker");
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -292,12 +426,32 @@ export async function advanceApprovalDocument(input: { id: string; comment?: str
   const next = nextApprovalStage(data.current_stage as ApprovalStage);
   if (!next) throw new Error("This document cannot advance further.");
 
+  let committee: string | null = null;
+  let subcommittee: string | null = null;
+  if (data.current_stage === "special_projects_intake") {
+    const parsed = parseCommittee(input.committee);
+    committee = parsed;
+    subcommittee = parseSubcommittee(parsed, input.subcommittee);
+  }
+
   const { error: rpcError } = await supabase.rpc("transition_approval_document", {
     p_document_id: input.id,
     p_to_stage: next,
     p_comment: input.comment?.trim() || null,
+    p_committee: committee,
+    p_subcommittee: subcommittee,
   });
   throwIfDbError(rpcError);
+  revalidateApprovals(input.id);
+}
+
+export async function recordApprovalCommitteeVote(input: { id: string }) {
+  await assertCapability("approval_tracker");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("record_approval_committee_vote", {
+    p_document_id: input.id,
+  });
+  throwIfDbError(error);
   revalidateApprovals(input.id);
 }
 
@@ -358,26 +512,66 @@ export async function setApprovalDocumentArchived(input: { id: string; archived:
 
 export async function replaceApprovalStageMembers(input: {
   stage: string;
-  track?: string | null;
   profileIds: string[];
 }) {
   await requireAdmin();
   const stage = parseAssignableStage(input.stage);
-  const track = parseOptionalTrack(stage, input.track);
   const profileIds = uniqueIds(input.profileIds);
   const supabase = await createSupabaseServerClient();
 
-  let deleteQuery = supabase.from("approval_stage_members").delete().eq("stage", stage);
-  deleteQuery = track ? deleteQuery.eq("track", track) : deleteQuery.is("track", null);
-  const { error: deleteError } = await deleteQuery;
+  const { error: deleteError } = await supabase
+    .from("approval_stage_members")
+    .delete()
+    .eq("stage", stage);
   throwIfDbError(deleteError);
 
   if (profileIds.length > 0) {
     const { error: insertError } = await supabase.from("approval_stage_members").insert(
       profileIds.map((profile_id) => ({
         stage,
-        track,
+        track: null,
         profile_id,
+      }))
+    );
+    throwIfDbError(insertError);
+  }
+
+  revalidateApprovals();
+}
+
+export async function replaceApprovalCommitteeMembers(input: {
+  committee: string;
+  subcommittee?: string | null;
+  profileIds: string[];
+  chairId?: string | null;
+}) {
+  await requireAdmin();
+  const committee = parseCommittee(input.committee);
+  const subcommittee = parseSubcommittee(committee, input.subcommittee);
+  const chairId = input.chairId?.trim() || null;
+  const profileIds = uniqueIds([
+    ...input.profileIds,
+    ...(chairId ? [chairId] : []),
+  ]);
+  if (chairId && !profileIds.includes(chairId)) {
+    throw new Error("Chair must be a committee member.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  let deleteQuery = supabase.from("approval_committee_members").delete().eq("committee", committee);
+  deleteQuery = subcommittee
+    ? deleteQuery.eq("subcommittee", subcommittee)
+    : deleteQuery.is("subcommittee", null);
+  const { error: deleteError } = await deleteQuery;
+  throwIfDbError(deleteError);
+
+  if (profileIds.length > 0) {
+    const { error: insertError } = await supabase.from("approval_committee_members").insert(
+      profileIds.map((profile_id) => ({
+        committee,
+        subcommittee,
+        profile_id,
+        is_chair: profile_id === chairId,
       }))
     );
     throwIfDbError(insertError);
@@ -388,14 +582,20 @@ export async function replaceApprovalStageMembers(input: {
 
 export async function loadApprovalBoardContext() {
   const profile = await requireCapability("approval_tracker");
-  const [documents, members] = await Promise.all([
+  const [documents, members, committeeMembers] = await Promise.all([
     listApprovalDocuments({ includeArchived: true }),
     listApprovalStageMembers(),
+    listApprovalCommitteeMembers(),
   ]);
+  const votes = await listApprovalCommitteeVotes(
+    documents.filter((doc) => doc.current_stage === "committee").map((doc) => doc.id)
+  );
   return {
     profile,
     isAdminUser: isAdmin(profile),
     documents,
     stageMemberIds: groupStageMemberIds(members),
+    committeeMembers,
+    votes,
   };
 }

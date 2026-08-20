@@ -58,7 +58,7 @@ export function ApprovalPathStepper({
   currentStage: ApprovalStage;
 }) {
   return (
-    <ol className="grid gap-2 sm:grid-cols-6">
+    <ol className="grid gap-2 sm:grid-cols-7">
       {APPROVAL_STAGES.map((stage, index) => {
         const tone = stageTone(stage, currentStage);
         return (

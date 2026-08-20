@@ -31,9 +31,9 @@ export default async function AdminApprovalTrackerPage() {
             <h1 className="text-4xl font-bold">Policy Tracker</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Assign who acts on the Training and EMS working committees, each assistant chief, the
-            policy holder group, and Fire Chief. People still need the Policy Tracker capability
-            under Permissions to open the board.
+            Assign the Assistant Chief of Special Projects, each committee and chair, the policy
+            holder group, and Fire Chief. People still need the Policy Tracker capability under
+            Permissions to open the board.
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -46,7 +46,11 @@ export default async function AdminApprovalTrackerPage() {
           <p className="text-sm text-muted-foreground">{loadError ?? "Failed to load."}</p>
         </div>
       ) : (
-        <ApprovalStageMembersAdmin profiles={data.profiles} members={data.members} />
+        <ApprovalStageMembersAdmin
+          profiles={data.profiles}
+          members={data.members}
+          committeeMembers={data.committeeMembers}
+        />
       )}
     </div>
   );

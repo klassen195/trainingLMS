@@ -1,13 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  approvalCommitteeBodyLabel,
   approvalDocTypeLabel,
   approvalStageLabel,
-  approvalTrackLabel,
   daysInApprovalStageLabel,
   groupStageMemberIds,
   isWaitingOnApprovalUser,
+  APPROVAL_COMMITTEE_MEMBER_SELECT,
   APPROVAL_DOCUMENT_LIST_SELECT,
   APPROVAL_STAGE_MEMBER_SELECT,
+  type ApprovalCommitteeMember,
   type ApprovalDocument,
   type ApprovalProfileSummary,
   type ApprovalStageMember,
@@ -192,7 +194,7 @@ async function loadApprovalsQueue(
   supabase: SupabaseClient,
   profileId: string
 ): Promise<ApprovalQueueItem[] | { error: string }> {
-  const [{ data: documents, error: documentsError }, { data: members, error: membersError }] =
+  const [{ data: documents, error: documentsError }, { data: members, error: membersError }, { data: committeeRows, error: committeeError }] =
     await Promise.all([
       supabase
         .from("approval_documents")
@@ -200,6 +202,7 @@ async function loadApprovalsQueue(
         .is("archived_at", null)
         .order("stage_entered_at", { ascending: true }),
       supabase.from("approval_stage_members").select(APPROVAL_STAGE_MEMBER_SELECT),
+      supabase.from("approval_committee_members").select(APPROVAL_COMMITTEE_MEMBER_SELECT),
     ]);
 
   if (documentsError) {
@@ -214,29 +217,61 @@ async function loadApprovalsQueue(
     }
     return { error: membersError.message };
   }
+  if (committeeError) {
+    if (isMissingApprovalTrackerTables(committeeError)) {
+      return { error: "Approval tracker is not set up yet." };
+    }
+    return { error: committeeError.message };
+  }
 
   const docs = (documents ?? []) as unknown as (ApprovalDocument & {
     creator?: ApprovalProfileSummary | null;
   })[];
   if (docs.length === 0) return [];
 
+  const committeeDocIds = docs.filter((doc) => doc.current_stage === "committee").map((doc) => doc.id);
+  const { data: voteRows, error: voteError } =
+    committeeDocIds.length === 0
+      ? { data: [], error: null }
+      : await supabase
+          .from("approval_document_committee_votes")
+          .select("document_id, profile_id")
+          .in("document_id", committeeDocIds);
+  if (voteError) {
+    if (isMissingApprovalTrackerTables(voteError)) {
+      return { error: "Approval tracker is not set up yet." };
+    }
+    return { error: voteError.message };
+  }
+
+  const votesByDoc = new Map<string, string[]>();
+  for (const row of voteRows ?? []) {
+    const list = votesByDoc.get(row.document_id) ?? [];
+    list.push(row.profile_id);
+    votesByDoc.set(row.document_id, list);
+  }
+
   const stageMemberIds = groupStageMemberIds((members ?? []) as unknown as ApprovalStageMember[]);
+  const committeeMembers = (committeeRows ?? []) as unknown as ApprovalCommitteeMember[];
 
   return docs
     .filter((doc) =>
       isWaitingOnApprovalUser({
         userId: profileId,
         stage: doc.current_stage,
-        track: doc.track,
         createdBy: doc.created_by,
         stageMemberIds,
+        committee: doc.committee,
+        subcommittee: doc.subcommittee,
+        committeeMembers,
+        votedProfileIds: votesByDoc.get(doc.id) ?? [],
       })
     )
     .map((doc) => ({
       id: doc.id,
       title: doc.title,
       docTypeLabel: approvalDocTypeLabel(doc.doc_type),
-      stageLabel: `${approvalTrackLabel(doc.track)} · ${approvalStageLabel(doc.current_stage)}`,
+      stageLabel: `${approvalCommitteeBodyLabel(doc.committee, doc.subcommittee)} · ${approvalStageLabel(doc.current_stage)}`,
       daysInStage: daysInApprovalStageLabel(doc.stage_entered_at),
     }));
 }

@@ -202,6 +202,8 @@ export function isMissingApprovalTrackerTables(error: PostgrestError | null) {
     error.message.includes("approval_stage_members") ||
     error.message.includes("approval_document_holders") ||
     error.message.includes("approval_document_events") ||
+    error.message.includes("approval_committee_members") ||
+    error.message.includes("approval_document_committee_votes") ||
     error.message.includes("Could not find the table")
   );
 }

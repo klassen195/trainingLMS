@@ -80,7 +80,7 @@ const ADMIN_GROUPS: AdminGroup[] = [
       {
         href: "/admin/approval-tracker",
         label: "Policy Tracker",
-        description: "Stage owners for policies, best practices, and training aids",
+        description: "Special Projects, committees, and later-stage owners",
         icon: ListChecks,
       },
     ],

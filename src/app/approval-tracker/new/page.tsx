@@ -15,7 +15,7 @@ export default async function NewApprovalDocumentPage() {
           <h1 className="text-3xl font-bold">New document</h1>
         </div>
         <p className="text-muted-foreground">
-          Start a policy, best practice, or training aid on the approval path.
+          Mark it as new or a replacement, upload the file, and send it down the approval path.
         </p>
         <div className="mt-4">
           <Button asChild variant="outline" size="sm">

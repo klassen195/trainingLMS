@@ -9,12 +9,18 @@ import { isMissingApprovalTrackerTables } from "@/lib/supabase/errors";
 export default async function ApprovalTrackerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ archived?: string; track?: string }>;
+  searchParams: Promise<{ archived?: string; committee?: string }>;
 }) {
   await requireCapability("approval_tracker");
-  const { archived, track: trackParam } = await searchParams;
+  const { archived, committee: committeeParam } = await searchParams;
   const showArchived = archived === "1";
-  const trackFilter = trackParam === "training" || trackParam === "ems" ? trackParam : "all";
+  const committeeFilter =
+    committeeParam === "admin" ||
+    committeeParam === "operations" ||
+    committeeParam === "logistics" ||
+    committeeParam === "prevention"
+      ? committeeParam
+      : "all";
 
   let board: Awaited<ReturnType<typeof loadApprovalBoardContext>> | null = null;
   let loadError: string | null = null;
@@ -60,10 +66,11 @@ export default async function ApprovalTrackerPage({
         <ApprovalTrackerBoard
           documents={board.documents}
           currentUserId={board.profile.id}
-          isAdminUser={board.isAdminUser}
           stageMemberIds={board.stageMemberIds}
+          committeeMembers={board.committeeMembers}
+          votes={board.votes}
           showArchived={showArchived}
-          trackFilter={trackFilter}
+          committeeFilter={committeeFilter}
         />
       )}
     </div>

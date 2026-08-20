@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   advanceApprovalDocument,
   kickBackApprovalDocument,
+  recordApprovalCommitteeVote,
   setApprovalDocumentArchived,
 } from "@/app/approval-tracker/actions";
 import { Button } from "@/components/ui/Button";
@@ -12,10 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Select, Textarea } from "@/components/ui/Input";
 import {
+  APPROVAL_COMMITTEES,
+  APPROVAL_SUBCOMMITTEES,
+  approvalCommitteeLabel,
   approvalStageLabel,
+  approvalSubcommitteeLabel,
   earlierApprovalStages,
   nextApprovalStage,
+  type ApprovalCommittee,
   type ApprovalStage,
+  type ApprovalSubcommittee,
 } from "@/lib/approval-tracker-types";
 
 export function ApprovalDocumentActions({
@@ -23,17 +30,33 @@ export function ApprovalDocumentActions({
   currentStage,
   archived,
   canAct,
+  committee,
+  subcommittee,
+  canVote,
+  hasVoted,
+  canSendAsChair,
 }: {
   documentId: string;
   currentStage: ApprovalStage;
   archived: boolean;
   canAct: boolean;
+  committee: ApprovalCommittee | null;
+  subcommittee: ApprovalSubcommittee | null;
+  canVote: boolean;
+  hasVoted: boolean;
+  canSendAsChair: boolean;
 }) {
   const router = useRouter();
   const next = nextApprovalStage(currentStage);
   const earlier = earlierApprovalStages(currentStage);
   const [kickStage, setKickStage] = useState<ApprovalStage | "">(earlier[0] ?? "");
   const [comment, setComment] = useState("");
+  const [selectedCommittee, setSelectedCommittee] = useState<ApprovalCommittee | "">(
+    committee ?? ""
+  );
+  const [selectedSubcommittee, setSelectedSubcommittee] = useState<ApprovalSubcommittee | "">(
+    subcommittee ?? ""
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -115,13 +138,111 @@ export function ApprovalDocumentActions({
     );
   }
 
+  const intakeReady =
+    selectedCommittee !== "" &&
+    (selectedCommittee !== "operations" || selectedSubcommittee !== "");
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg">Move document</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
-        {next ? (
+        {currentStage === "special_projects_intake" ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Choose the committee that will review this document.
+            </p>
+            <div className="space-y-1.5">
+              <FieldLabel htmlFor="assign-committee">Committee</FieldLabel>
+              <Select
+                id="assign-committee"
+                value={selectedCommittee}
+                disabled={pending}
+                onChange={(e) => {
+                  const value = e.target.value as ApprovalCommittee | "";
+                  setSelectedCommittee(value);
+                  if (value !== "operations") setSelectedSubcommittee("");
+                }}
+              >
+                <option value="">Select committee</option>
+                {APPROVAL_COMMITTEES.map((value) => (
+                  <option key={value} value={value}>
+                    {approvalCommitteeLabel(value)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {selectedCommittee === "operations" ? (
+              <div className="space-y-1.5">
+                <FieldLabel htmlFor="assign-subcommittee">Subcommittee</FieldLabel>
+                <Select
+                  id="assign-subcommittee"
+                  value={selectedSubcommittee}
+                  disabled={pending}
+                  onChange={(e) =>
+                    setSelectedSubcommittee(e.target.value as ApprovalSubcommittee | "")
+                  }
+                >
+                  <option value="">Select subcommittee</option>
+                  {APPROVAL_SUBCOMMITTEES.map((value) => (
+                    <option key={value} value={value}>
+                      {approvalSubcommitteeLabel(value)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              disabled={pending || !intakeReady}
+              onClick={() =>
+                run(() =>
+                  advanceApprovalDocument({
+                    id: documentId,
+                    committee: selectedCommittee,
+                    subcommittee:
+                      selectedCommittee === "operations" ? selectedSubcommittee : null,
+                  })
+                )
+              }
+            >
+              {pending ? "Updating…" : "Send to committee"}
+            </Button>
+          </div>
+        ) : null}
+
+        {currentStage === "committee" ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Every committee member must approve. The chair can send it forward without waiting.
+            </p>
+            {canVote && !hasVoted ? (
+              <Button
+                type="button"
+                disabled={pending}
+                onClick={() => run(() => recordApprovalCommitteeVote({ id: documentId }))}
+              >
+                {pending ? "Updating…" : "Approve"}
+              </Button>
+            ) : null}
+            {hasVoted ? (
+              <p className="text-sm text-muted-foreground">You have already approved.</p>
+            ) : null}
+            {canSendAsChair ? (
+              <Button
+                type="button"
+                variant={canVote && !hasVoted ? "outline" : "default"}
+                disabled={pending}
+                onClick={() => run(() => advanceApprovalDocument({ id: documentId }))}
+              >
+                {pending ? "Updating…" : "Send forward as chair"}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {next && currentStage !== "special_projects_intake" && currentStage !== "committee" ? (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
               {next === "approved"

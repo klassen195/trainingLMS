@@ -3,13 +3,17 @@ import type { PersonnelShift } from "@/lib/personnel-types";
 export const APPROVAL_DOC_TYPES = ["policy", "best_practice", "training_aid"] as const;
 export type ApprovalDocType = (typeof APPROVAL_DOC_TYPES)[number];
 
-export const APPROVAL_TRACKS = ["training", "ems"] as const;
-export type ApprovalTrack = (typeof APPROVAL_TRACKS)[number];
+export const APPROVAL_COMMITTEES = ["admin", "operations", "logistics", "prevention"] as const;
+export type ApprovalCommittee = (typeof APPROVAL_COMMITTEES)[number];
+
+export const APPROVAL_SUBCOMMITTEES = ["training", "ems", "general_operations"] as const;
+export type ApprovalSubcommittee = (typeof APPROVAL_SUBCOMMITTEES)[number];
 
 export const APPROVAL_STAGES = [
   "creator",
-  "working_committee",
-  "assistant_chief",
+  "special_projects_intake",
+  "committee",
+  "special_projects_review",
   "policy_holder",
   "fire_chief",
   "approved",
@@ -17,7 +21,6 @@ export const APPROVAL_STAGES = [
 export type ApprovalStage = (typeof APPROVAL_STAGES)[number];
 
 export const APPROVAL_ASSIGNABLE_STAGES = [
-  "working_committee",
   "assistant_chief",
   "policy_holder",
   "fire_chief",
@@ -31,53 +34,63 @@ export const APPROVAL_EVENT_ACTIONS = [
   "approved",
   "archived",
   "unarchived",
+  "committee_approved",
 ] as const;
 export type ApprovalEventAction = (typeof APPROVAL_EVENT_ACTIONS)[number];
 
 export type ApprovalAssignmentSlot = {
   key: string;
   stage: ApprovalAssignableStage;
-  track: ApprovalTrack | null;
   label: string;
 };
 
 export const APPROVAL_ASSIGNMENT_SLOTS: ApprovalAssignmentSlot[] = [
   {
-    key: "working_committee:training",
-    stage: "working_committee",
-    track: "training",
-    label: "Working committee — Training",
-  },
-  {
-    key: "working_committee:ems",
-    stage: "working_committee",
-    track: "ems",
-    label: "Working committee — EMS",
-  },
-  {
-    key: "assistant_chief:training",
+    key: "assistant_chief",
     stage: "assistant_chief",
-    track: "training",
-    label: "Assistant chief — Training",
-  },
-  {
-    key: "assistant_chief:ems",
-    stage: "assistant_chief",
-    track: "ems",
-    label: "Assistant chief — EMS",
+    label: "Assistant Chief of Special Projects",
   },
   {
     key: "policy_holder",
     stage: "policy_holder",
-    track: null,
     label: "Policy holder group",
   },
   {
     key: "fire_chief",
     stage: "fire_chief",
-    track: null,
     label: "Fire Chief",
   },
+];
+
+export type ApprovalCommitteeSlot = {
+  key: string;
+  committee: ApprovalCommittee;
+  subcommittee: ApprovalSubcommittee | null;
+  label: string;
+};
+
+export const APPROVAL_COMMITTEE_SLOTS: ApprovalCommitteeSlot[] = [
+  { key: "admin", committee: "admin", subcommittee: null, label: "Admin committee" },
+  {
+    key: "operations:training",
+    committee: "operations",
+    subcommittee: "training",
+    label: "Operations — Training",
+  },
+  {
+    key: "operations:ems",
+    committee: "operations",
+    subcommittee: "ems",
+    label: "Operations — EMS",
+  },
+  {
+    key: "operations:general_operations",
+    committee: "operations",
+    subcommittee: "general_operations",
+    label: "Operations — General Operations",
+  },
+  { key: "logistics", committee: "logistics", subcommittee: null, label: "Logistics committee" },
+  { key: "prevention", committee: "prevention", subcommittee: null, label: "Prevention committee" },
 ];
 
 export type ApprovalProfileSummary = {
@@ -94,13 +107,23 @@ export type ApprovalProfileOption = ApprovalProfileSummary & {
   primary_location?: { id: string; name: string } | null;
 };
 
+export const APPROVAL_SUBMISSION_KINDS = ["new", "replacement"] as const;
+export type ApprovalSubmissionKind = (typeof APPROVAL_SUBMISSION_KINDS)[number];
+
+export const APPROVAL_FILES_BUCKET = "approval-tracker-files";
+
 export type ApprovalDocument = {
   id: string;
   title: string;
   doc_type: ApprovalDocType;
-  track: ApprovalTrack;
+  submission_kind: ApprovalSubmissionKind;
+  committee: ApprovalCommittee | null;
+  subcommittee: ApprovalSubcommittee | null;
   current_stage: ApprovalStage;
   notes: string | null;
+  file_name: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
   created_by: string;
   stage_entered_at: string;
   archived_at: string | null;
@@ -132,20 +155,34 @@ export type ApprovalDocumentDetail = ApprovalDocument & {
 export type ApprovalStageMember = {
   id: string;
   stage: ApprovalAssignableStage;
-  track: ApprovalTrack | null;
+  track: null;
   profile_id: string;
   profile?: ApprovalProfileSummary | null;
 };
 
+export type ApprovalCommitteeMember = {
+  id: string;
+  committee: ApprovalCommittee;
+  subcommittee: ApprovalSubcommittee | null;
+  profile_id: string;
+  is_chair: boolean;
+  profile?: ApprovalProfileSummary | null;
+};
+
+export type ApprovalCommitteeVote = {
+  document_id: string;
+  profile_id: string;
+  created_at: string;
+};
+
 export type ApprovalStageMemberIndex = {
-  working_committee: Record<ApprovalTrack, string[]>;
-  assistant_chief: Record<ApprovalTrack, string[]>;
+  assistant_chief: string[];
   policy_holder: string[];
   fire_chief: string[];
 };
 
 export const APPROVAL_DOCUMENT_SELECT =
-  "id, title, doc_type, track, current_stage, notes, created_by, stage_entered_at, archived_at, created_at, updated_at";
+  "id, title, doc_type, submission_kind, committee, subcommittee, current_stage, notes, file_name, storage_path, mime_type, created_by, stage_entered_at, archived_at, created_at, updated_at";
 
 export const APPROVAL_DOCUMENT_LIST_SELECT = `${APPROVAL_DOCUMENT_SELECT}, creator:profiles!created_by(id, display_name, first_name, last_name, email)`;
 
@@ -154,6 +191,9 @@ export const APPROVAL_EVENT_SELECT =
 
 export const APPROVAL_STAGE_MEMBER_SELECT =
   "id, stage, track, profile_id, profile:profiles!profile_id(id, display_name, first_name, last_name, email)";
+
+export const APPROVAL_COMMITTEE_MEMBER_SELECT =
+  "id, committee, subcommittee, profile_id, is_chair, profile:profiles!profile_id(id, display_name, first_name, last_name, email)";
 
 export const APPROVAL_PROFILE_OPTION_SELECT =
   "id, display_name, first_name, last_name, email, shift, primary_location_id, primary_location:locations!primary_location_id(id, name)";
@@ -169,18 +209,98 @@ export function approvalDocTypeLabel(type: ApprovalDocType) {
   }
 }
 
-export function approvalTrackLabel(track: ApprovalTrack) {
-  return track === "ems" ? "EMS" : "Training";
+export function approvalSubmissionKindLabel(kind: ApprovalSubmissionKind) {
+  return kind === "replacement" ? "Replacement" : "New";
+}
+
+const APPROVAL_FILE_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+const APPROVAL_FILE_EXTENSIONS = new Set([
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".heic",
+  ".heif",
+]);
+
+export function isApprovalDocumentFile(file: File) {
+  const name = file.name.toLowerCase();
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  return APPROVAL_FILE_MIME_TYPES.has(file.type) || APPROVAL_FILE_EXTENSIONS.has(ext);
+}
+
+export function sanitizeApprovalFileName(fileName: string) {
+  const base = fileName.split(/[/\\]/).pop() ?? "document";
+  const cleaned = base.replace(/[^\w.\-() ]+/g, "_").trim();
+  return cleaned || "document";
+}
+
+export function buildApprovalFileStoragePath(
+  documentId: string,
+  fileId: string,
+  fileName: string
+) {
+  return `${documentId}/${fileId}/${sanitizeApprovalFileName(fileName)}`;
+}
+
+export function approvalCommitteeLabel(committee: ApprovalCommittee) {
+  switch (committee) {
+    case "admin":
+      return "Admin";
+    case "operations":
+      return "Operations";
+    case "logistics":
+      return "Logistics";
+    case "prevention":
+      return "Prevention";
+  }
+}
+
+export function approvalSubcommitteeLabel(subcommittee: ApprovalSubcommittee) {
+  switch (subcommittee) {
+    case "training":
+      return "Training";
+    case "ems":
+      return "EMS";
+    case "general_operations":
+      return "General Operations";
+  }
+}
+
+export function approvalCommitteeBodyLabel(
+  committee: ApprovalCommittee | null,
+  subcommittee?: ApprovalSubcommittee | null
+) {
+  if (!committee) return "Unassigned";
+  if (committee === "operations" && subcommittee) {
+    return `Operations — ${approvalSubcommitteeLabel(subcommittee)}`;
+  }
+  return `${approvalCommitteeLabel(committee)} committee`;
 }
 
 export function approvalStageLabel(stage: ApprovalStage) {
   switch (stage) {
     case "creator":
       return "Document creator";
-    case "working_committee":
-      return "Working committee";
-    case "assistant_chief":
-      return "Assistant chief";
+    case "special_projects_intake":
+      return "Assign committee";
+    case "committee":
+      return "Committee";
+    case "special_projects_review":
+      return "Special Projects review";
     case "policy_holder":
       return "Policy holder group";
     case "fire_chief":
@@ -194,10 +314,12 @@ export function approvalStageShortLabel(stage: ApprovalStage) {
   switch (stage) {
     case "creator":
       return "Creator";
-    case "working_committee":
-      return "Working";
-    case "assistant_chief":
-      return "Asst. chief";
+    case "special_projects_intake":
+      return "Assign";
+    case "committee":
+      return "Committee";
+    case "special_projects_review":
+      return "Review";
     case "policy_holder":
       return "Holders";
     case "fire_chief":
@@ -221,6 +343,8 @@ export function approvalEventActionLabel(action: ApprovalEventAction) {
       return "Archived";
     case "unarchived":
       return "Restored";
+    case "committee_approved":
+      return "Committee member approved";
   }
 }
 
@@ -240,38 +364,50 @@ export function earlierApprovalStages(stage: ApprovalStage): ApprovalStage[] {
   return APPROVAL_STAGES.slice(0, index);
 }
 
+export function committeeSlotKey(
+  committee: ApprovalCommittee,
+  subcommittee?: ApprovalSubcommittee | null
+) {
+  return subcommittee ? `${committee}:${subcommittee}` : committee;
+}
+
+export function membersForCommitteeBody(
+  members: ApprovalCommitteeMember[],
+  committee: ApprovalCommittee | null,
+  subcommittee?: ApprovalSubcommittee | null
+) {
+  if (!committee) return [];
+  return members.filter((member) => {
+    if (member.committee !== committee) return false;
+    if (committee === "operations") return member.subcommittee === subcommittee;
+    return member.subcommittee == null;
+  });
+}
+
 export function emptyStageMemberIndex(): ApprovalStageMemberIndex {
   return {
-    working_committee: { training: [], ems: [] },
-    assistant_chief: { training: [], ems: [] },
+    assistant_chief: [],
     policy_holder: [],
     fire_chief: [],
   };
 }
 
 export function groupStageMemberIds(
-  members: { stage: ApprovalAssignableStage; track?: ApprovalTrack | null; profile_id: string }[]
+  members: { stage: ApprovalAssignableStage; profile_id: string }[]
 ): ApprovalStageMemberIndex {
   const grouped = emptyStageMemberIndex();
   for (const member of members) {
-    if (member.stage === "fire_chief" || member.stage === "policy_holder") {
-      grouped[member.stage].push(member.profile_id);
-      continue;
-    }
-    if (member.track === "training" || member.track === "ems") {
-      grouped[member.stage][member.track].push(member.profile_id);
-    }
+    grouped[member.stage].push(member.profile_id);
   }
   return grouped;
 }
 
 export function memberIdsForStage(
   index: ApprovalStageMemberIndex,
-  stage: ApprovalStage,
-  track: ApprovalTrack
+  stage: ApprovalStage
 ): string[] {
-  if (stage === "working_committee" || stage === "assistant_chief") {
-    return index[stage][track];
+  if (stage === "special_projects_intake" || stage === "special_projects_review") {
+    return index.assistant_chief;
   }
   if (stage === "policy_holder") return index.policy_holder;
   if (stage === "fire_chief") return index.fire_chief;
@@ -280,26 +416,52 @@ export function memberIdsForStage(
 
 export function isWaitingOnApprovalUser(input: {
   userId: string;
+  isAdmin?: boolean;
   stage: ApprovalStage;
-  track: ApprovalTrack;
   createdBy: string;
   stageMemberIds: ApprovalStageMemberIndex;
+  committee: ApprovalCommittee | null;
+  subcommittee?: ApprovalSubcommittee | null;
+  committeeMembers: ApprovalCommitteeMember[];
+  votedProfileIds?: string[];
 }) {
   if (input.stage === "approved") return false;
   if (input.stage === "creator") return input.createdBy === input.userId;
-  return memberIdsForStage(input.stageMemberIds, input.stage, input.track).includes(input.userId);
+  if (input.stage === "committee") {
+    const body = membersForCommitteeBody(
+      input.committeeMembers,
+      input.committee,
+      input.subcommittee
+    );
+    const member = body.find((row) => row.profile_id === input.userId);
+    if (!member) return false;
+    if (member.is_chair) return true;
+    return !(input.votedProfileIds ?? []).includes(input.userId);
+  }
+  return memberIdsForStage(input.stageMemberIds, input.stage).includes(input.userId);
 }
 
 export function isApprovalStageActor(input: {
   userId: string;
   isAdmin: boolean;
   stage: ApprovalStage;
-  track: ApprovalTrack;
   createdBy: string;
   stageMemberIds: ApprovalStageMemberIndex;
+  committee: ApprovalCommittee | null;
+  subcommittee?: ApprovalSubcommittee | null;
+  committeeMembers: ApprovalCommitteeMember[];
 }) {
   if (input.isAdmin) return true;
-  return isWaitingOnApprovalUser(input);
+  if (input.stage === "approved") return false;
+  if (input.stage === "creator") return input.createdBy === input.userId;
+  if (input.stage === "committee") {
+    return membersForCommitteeBody(
+      input.committeeMembers,
+      input.committee,
+      input.subcommittee
+    ).some((member) => member.profile_id === input.userId);
+  }
+  return memberIdsForStage(input.stageMemberIds, input.stage).includes(input.userId);
 }
 
 export function daysInApprovalStageLabel(stageEnteredAt: string) {
@@ -311,9 +473,12 @@ export function daysInApprovalStageLabel(stageEnteredAt: string) {
   return `${days} days`;
 }
 
-export function approvalBoardHref(input?: { track?: ApprovalTrack | "all"; archived?: boolean }) {
+export function approvalBoardHref(input?: {
+  committee?: ApprovalCommittee | "all";
+  archived?: boolean;
+}) {
   const params = new URLSearchParams();
-  if (input?.track && input.track !== "all") params.set("track", input.track);
+  if (input?.committee && input.committee !== "all") params.set("committee", input.committee);
   if (input?.archived) params.set("archived", "1");
   const query = params.toString();
   return query ? `/approval-tracker?${query}` : "/approval-tracker";

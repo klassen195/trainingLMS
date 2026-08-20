@@ -3,17 +3,21 @@ import { ApprovalPathDots } from "@/components/ApprovalPathStepper";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
+  APPROVAL_COMMITTEES,
   APPROVAL_STAGES,
-  APPROVAL_TRACKS,
   approvalBoardHref,
+  approvalCommitteeBodyLabel,
+  approvalCommitteeLabel,
   approvalDocTypeLabel,
   approvalStageLabel,
-  approvalTrackLabel,
+  approvalSubmissionKindLabel,
   daysInApprovalStageLabel,
-  isApprovalStageActor,
+  isWaitingOnApprovalUser,
+  type ApprovalCommittee,
+  type ApprovalCommitteeMember,
+  type ApprovalCommitteeVote,
   type ApprovalDocumentListItem,
   type ApprovalStageMemberIndex,
-  type ApprovalTrack,
 } from "@/lib/approval-tracker-types";
 import { personnelDisplayName } from "@/lib/personnel-types";
 import { cn } from "@/lib/cn";
@@ -21,21 +25,30 @@ import { cn } from "@/lib/cn";
 export function ApprovalTrackerBoard({
   documents,
   currentUserId,
-  isAdminUser,
   stageMemberIds,
+  committeeMembers,
+  votes,
   showArchived,
-  trackFilter,
+  committeeFilter,
 }: {
   documents: ApprovalDocumentListItem[];
   currentUserId: string;
-  isAdminUser: boolean;
   stageMemberIds: ApprovalStageMemberIndex;
+  committeeMembers: ApprovalCommitteeMember[];
+  votes: ApprovalCommitteeVote[];
   showArchived: boolean;
-  trackFilter: ApprovalTrack | "all";
+  committeeFilter: ApprovalCommittee | "all";
 }) {
+  const votesByDoc = new Map<string, string[]>();
+  for (const vote of votes) {
+    const list = votesByDoc.get(vote.document_id) ?? [];
+    list.push(vote.profile_id);
+    votesByDoc.set(vote.document_id, list);
+  }
+
   const visible = documents.filter((doc) => {
     if (showArchived ? !doc.archived_at : doc.archived_at) return false;
-    if (trackFilter !== "all" && doc.track !== trackFilter) return false;
+    if (committeeFilter !== "all" && doc.committee !== committeeFilter) return false;
     return true;
   });
 
@@ -43,15 +56,15 @@ export function ApprovalTrackerBoard({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1 rounded-md border p-1">
-          {(["all", ...APPROVAL_TRACKS] as const).map((value) => {
+          {(["all", ...APPROVAL_COMMITTEES] as const).map((value) => {
             const href = approvalBoardHref({
-              track: value,
+              committee: value,
               archived: showArchived,
             });
-            const active = trackFilter === value;
+            const active = committeeFilter === value;
             return (
               <Button key={value} asChild size="sm" variant={active ? "default" : "ghost"}>
-                <Link href={href}>{value === "all" ? "All" : approvalTrackLabel(value)}</Link>
+                <Link href={href}>{value === "all" ? "All" : approvalCommitteeLabel(value)}</Link>
               </Button>
             );
           })}
@@ -59,7 +72,7 @@ export function ApprovalTrackerBoard({
         <Button asChild variant="outline" size="sm">
           <Link
             href={approvalBoardHref({
-              track: trackFilter,
+              committee: committeeFilter,
               archived: !showArchived,
             })}
           >
@@ -77,7 +90,7 @@ export function ApprovalTrackerBoard({
       </p>
 
       <div className="-mx-4 overflow-x-auto px-4 pb-2">
-        <div className="flex min-w-[72rem] gap-3">
+        <div className="flex min-w-[132rem] gap-3">
           {APPROVAL_STAGES.map((stage) => {
             const columnDocs = visible.filter((doc) => doc.current_stage === stage);
             return (
@@ -96,13 +109,15 @@ export function ApprovalTrackerBoard({
                     <p className="px-1 py-6 text-center text-xs text-muted-foreground">None</p>
                   ) : (
                     columnDocs.map((doc) => {
-                      const waitingOnYou = isApprovalStageActor({
+                      const waitingOnYou = isWaitingOnApprovalUser({
                         userId: currentUserId,
-                        isAdmin: isAdminUser,
                         stage: doc.current_stage,
-                        track: doc.track,
                         createdBy: doc.created_by,
                         stageMemberIds,
+                        committee: doc.committee,
+                        subcommittee: doc.subcommittee,
+                        committeeMembers,
+                        votedProfileIds: votesByDoc.get(doc.id) ?? [],
                       });
                       return (
                         <Link
@@ -114,7 +129,14 @@ export function ApprovalTrackerBoard({
                           )}
                         >
                           <div className="mb-2 flex flex-wrap items-start gap-1.5">
-                            <Badge variant="outline">{approvalTrackLabel(doc.track)}</Badge>
+                            {doc.committee ? (
+                              <Badge variant="outline">
+                                {approvalCommitteeBodyLabel(doc.committee, doc.subcommittee)}
+                              </Badge>
+                            ) : null}
+                            <Badge variant="outline">
+                              {approvalSubmissionKindLabel(doc.submission_kind)}
+                            </Badge>
                             <Badge variant="secondary">{approvalDocTypeLabel(doc.doc_type)}</Badge>
                             {waitingOnYou ? (
                               <span className="ml-auto text-[11px] font-medium text-primary">

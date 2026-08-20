@@ -57,10 +57,29 @@ async function fetchAssignedReports(supabase: SupabaseClient, supervisorId: stri
     .order("display_name", { ascending: true, nullsFirst: false });
 
   if (error) {
-    return { rows: [] as PersonnelProfile[], error: error as PostgrestError };
+    const fallback = await supabase
+      .from("profiles")
+      .select(PROFILE_ORG_COLUMNS)
+      .eq("supervisor_id", supervisorId)
+      .eq("is_active", true)
+      .order("display_name", { ascending: true, nullsFirst: false });
+    if (fallback.error) {
+      return { rows: [] as PersonnelProfile[], error: error as PostgrestError };
+    }
+    return {
+      rows: await finalizePersonnelProfiles(
+        supabase,
+        (fallback.data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+      ),
+      error: null as PostgrestError | null,
+    };
   }
+
   return {
-    rows: (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>)),
+    rows: await finalizePersonnelProfiles(
+      supabase,
+      (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+    ),
     error: null as PostgrestError | null,
   };
 }
@@ -82,10 +101,30 @@ async function fetchShiftReports(
     .order("display_name", { ascending: true, nullsFirst: false });
 
   if (error) {
-    return { rows: [] as PersonnelProfile[], error: error as PostgrestError };
+    const fallback = await supabase
+      .from("profiles")
+      .select(PROFILE_ORG_COLUMNS)
+      .eq("shift", viewer.shift)
+      .eq("is_active", true)
+      .neq("id", viewer.id)
+      .order("display_name", { ascending: true, nullsFirst: false });
+    if (fallback.error) {
+      return { rows: [] as PersonnelProfile[], error: error as PostgrestError };
+    }
+    return {
+      rows: await finalizePersonnelProfiles(
+        supabase,
+        (fallback.data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+      ),
+      error: null as PostgrestError | null,
+    };
   }
+
   return {
-    rows: (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>)),
+    rows: await finalizePersonnelProfiles(
+      supabase,
+      (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+    ),
     error: null as PostgrestError | null,
   };
 }
