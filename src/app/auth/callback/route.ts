@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { CHANGE_PASSWORD_PATH, userMustChangePassword } from "@/lib/auth-password";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import { normalizeClientCode } from "@/lib/clients";
+import { isPlatformAdminFromUser } from "@/lib/platform-admin";
 import { safeAppPath } from "@/lib/auth-redirect";
 
 function loginRedirect(origin: string, error: string) {
@@ -73,7 +74,15 @@ export async function GET(request: NextRequest) {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile?.client_id || profile.client_id !== clientId) {
+  if (isPlatformAdminFromUser(user)) {
+    const { error: switchError } = await supabase.rpc("switch_platform_acting_client", {
+      p_client_id: clientId,
+    });
+    if (switchError) {
+      await supabase.auth.signOut();
+      return loginRedirect(origin, "invalid_client");
+    }
+  } else if (!profile?.client_id || profile.client_id !== clientId) {
     await supabase.auth.signOut();
     return loginRedirect(origin, "client_mismatch");
   }

@@ -371,12 +371,14 @@ function SortableWidgetCard({
     <div ref={setNodeRef} style={style} className={cn(isDragging && "z-10 opacity-80")}>
       <Card className="h-full">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-          <CardTitle className="text-base font-semibold">{HOME_WIDGET_CATALOG[type].title}</CardTitle>
+          <CardTitle className="text-base font-semibold">
+            {HOME_WIDGET_CATALOG[type]?.title ?? type}
+          </CardTitle>
           <div className="flex items-center gap-1">
             <button
               type="button"
               className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-40"
-              aria-label={`Reorder ${HOME_WIDGET_CATALOG[type].title}`}
+              aria-label={`Reorder ${HOME_WIDGET_CATALOG[type]?.title ?? type}`}
               disabled={disabled}
               {...attributes}
               {...listeners}
@@ -386,7 +388,7 @@ function SortableWidgetCard({
             <button
               type="button"
               className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              aria-label={`Remove ${HOME_WIDGET_CATALOG[type].title}`}
+              aria-label={`Remove ${HOME_WIDGET_CATALOG[type]?.title ?? type}`}
               onClick={onRemove}
             >
               <X className="h-4 w-4" />
@@ -522,7 +524,7 @@ export function HomeDashboard({ payload }: { payload: HomeDashboardPayload }) {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={widgets} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {widgets.map((type) => (
+              {widgets.filter((type) => HOME_WIDGET_CATALOG[type]).map((type) => (
                 <SortableWidgetCard key={type} type={type} disabled={pending} onRemove={() => removeWidget(type)}>
                   <WidgetBody type={type} payload={payload} pending={pending} onSetFlag={handleSetFlag} />
                 </SortableWidgetCard>

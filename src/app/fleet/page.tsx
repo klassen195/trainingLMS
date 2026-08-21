@@ -49,6 +49,7 @@ export default async function FleetPage({
     .from("profiles")
     .select("id, display_name, email")
     .eq("is_active", true)
+    .eq("is_platform_operator", false)
     .order("display_name", { ascending: true });
   if (mechanicsError) throw mechanicsError;
 

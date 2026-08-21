@@ -10,6 +10,8 @@ import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { hasRole, isAdmin } from "@/lib/permissions";
 import { loadCapabilityMatrix } from "@/lib/capability-matrix";
 import { profileHasCapability } from "@/lib/capabilities";
+import { isPlatformAdminFromUser } from "@/lib/platform-admin";
+import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import type { Profile } from "@/lib/training-lms-types";
 
 export type AuthContext =
@@ -25,10 +27,6 @@ export type AuthContext =
     };
 
 export { canAuthorTraining, hasRole, isAdmin, isRecruit } from "@/lib/permissions";
-
-function isPlatformAdminFromUser(user: { app_metadata?: Record<string, unknown> } | null): boolean {
-  return Boolean(user?.app_metadata?.is_platform_admin);
-}
 
 export const getAuthContext = cache(async (): Promise<AuthContext> => {
   const cookieStore = await cookies();
@@ -55,11 +53,41 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
     const fallback = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
     if (fallback.error && isMissingTrainingLmsTables(fallback.error)) return { kind: "missing_tables" };
     if (fallback.error) throw fallback.error;
-    if (!fallback.data) return { kind: "missing_profile", userId: user.id };
-    profile = fallback.data as Profile;
+    if (!fallback.data) {
+      const admin = createSupabaseServiceClient();
+      const privileged = await admin.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      if (privileged.error) throw privileged.error;
+      if (!privileged.data) return { kind: "missing_profile", userId: user.id };
+      profile = privileged.data as Profile;
+    } else {
+      profile = fallback.data as Profile;
+    }
     Object.assign(profile, await loadProfilePermissionLevels(supabase, user.id));
+  } else if (!data) {
+    const admin = createSupabaseServiceClient();
+    const privileged = await admin
+      .from("profiles")
+      .select(`*, ${PROFILE_PERMISSION_LEVELS_EMBED}`)
+      .eq("id", user.id)
+      .maybeSingle();
+    if (privileged.error && isMissingTrainingLmsTables(privileged.error)) return { kind: "missing_tables" };
+    if (privileged.error) {
+      const fallback = await admin.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      if (fallback.error) throw fallback.error;
+      if (!fallback.data) return { kind: "missing_profile", userId: user.id };
+      profile = fallback.data as Profile;
+      Object.assign(profile, await loadProfilePermissionLevels(admin, user.id));
+    } else if (!privileged.data) {
+      return { kind: "missing_profile", userId: user.id };
+    } else {
+      profile = {
+        ...(privileged.data as Profile),
+        ...parseProfilePermissionLevels(
+          privileged.data as Parameters<typeof parseProfilePermissionLevels>[0]
+        ),
+      };
+    }
   } else {
-    if (!data) return { kind: "missing_profile", userId: user.id };
     profile = {
       ...(data as Profile),
       ...parseProfilePermissionLevels(data as Parameters<typeof parseProfilePermissionLevels>[0]),
@@ -73,9 +101,21 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
     redirect("/login?error=account_deactivated");
   }
 
-  const clientId =
+  const isPlatformAdmin = isPlatformAdminFromUser(user);
+  let clientId =
     profile.client_id ||
     (typeof user.app_metadata?.client_id === "string" ? user.app_metadata.client_id : "");
+
+  if (isPlatformAdmin) {
+    const { data: acting } = await supabase
+      .from("platform_operator_context")
+      .select("acting_client_id")
+      .eq("profile_id", user.id)
+      .maybeSingle();
+    if (acting?.acting_client_id) {
+      clientId = acting.acting_client_id as string;
+    }
+  }
 
   if (!clientId) {
     await supabase.auth.signOut();
@@ -87,11 +127,12 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
     profile: {
       ...profile,
       client_id: clientId,
-      is_admin: Boolean(profile.is_admin),
+      is_admin: Boolean(profile.is_admin) || isPlatformAdmin,
+      is_platform_operator: Boolean(profile.is_platform_operator) || isPlatformAdmin,
       is_active: true,
     },
     clientId,
-    isPlatformAdmin: isPlatformAdminFromUser(user),
+    isPlatformAdmin,
     mustChangePassword: userMustChangePassword(user),
   };
 });
@@ -128,9 +169,12 @@ export async function requireRole(permissionLevelIds: string[]): Promise<Profile
 }
 
 export async function requireAdmin(): Promise<Profile> {
-  const profile = await requireUserProfile();
-  if (!isAdmin(profile)) redirect("/");
-  return profile;
+  const ctx = await getAuthContext();
+  if (ctx.kind === "unauthenticated") redirect("/login");
+  if (ctx.kind !== "authenticated") redirect("/");
+  if (ctx.mustChangePassword) redirect(CHANGE_PASSWORD_PATH);
+  if (!ctx.isPlatformAdmin && !isAdmin(ctx.profile)) redirect("/");
+  return ctx.profile;
 }
 
 export async function requireCaptainOrAdmin(): Promise<Profile> {

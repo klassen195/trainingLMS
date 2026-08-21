@@ -7,7 +7,7 @@ export function hasRole(profile: Profile, permissionLevelIds: string[]) {
 }
 
 export function isAdmin(profile: Profile) {
-  return profile.is_admin;
+  return profile.is_admin || Boolean(profile.is_platform_operator);
 }
 
 export function canAuthorTraining(profile: Profile) {

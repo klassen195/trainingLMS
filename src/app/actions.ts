@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth-password";
 import { normalizeClientCode } from "@/lib/clients";
 import { assertClientMembership, resolveClientIdByCode } from "@/lib/clients-server";
+import { isPlatformAdminFromUser } from "@/lib/platform-admin";
 import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables, supabaseErrorMessage } from "@/lib/supabase/errors";
@@ -127,14 +128,36 @@ async function ensureSessionMatchesClient(clientCode: string) {
     .eq("id", user.id)
     .maybeSingle();
 
+  const profileClientId =
+    profile?.client_id ??
+    (
+      await createSupabaseServiceClient()
+        .from("profiles")
+        .select("client_id")
+        .eq("id", user.id)
+        .maybeSingle()
+    ).data?.client_id;
+
   const membership = await assertClientMembership({
-    profileClientId: profile?.client_id,
+    profileClientId,
     clientCode,
+    isPlatformAdmin: isPlatformAdminFromUser(user),
   });
   if ("error" in membership) {
     await supabase.auth.signOut();
     return { error: membership.error };
   }
+
+  if (isPlatformAdminFromUser(user)) {
+    const { error } = await supabase.rpc("switch_platform_acting_client", {
+      p_client_id: membership.clientId,
+    });
+    if (error) {
+      await supabase.auth.signOut();
+      return { error: supabaseErrorMessage(error) };
+    }
+  }
+
   return {
     success: true as const,
     clientId: membership.clientId,

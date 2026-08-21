@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import { CHANGE_PASSWORD_PATH, userMustChangePassword } from "@/lib/auth-password";
 import { safeAppPath } from "@/lib/auth-redirect";
 import { LoginForm } from "./ui";
@@ -23,7 +24,16 @@ export default async function LoginPage({
       .select("is_active")
       .eq("id", user.id)
       .maybeSingle();
-    if (profile?.is_active === false) {
+    const isActive =
+      profile?.is_active ??
+      (
+        await createSupabaseServiceClient()
+          .from("profiles")
+          .select("is_active")
+          .eq("id", user.id)
+          .maybeSingle()
+      ).data?.is_active;
+    if (isActive === false) {
       await supabase.auth.signOut();
     } else if (userMustChangePassword(user)) {
       const changeUrl = new URL(CHANGE_PASSWORD_PATH, "http://local");

@@ -16,8 +16,8 @@ export default async function InvitePersonnelPage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Add member</h1>
         <p className="mt-2 text-muted-foreground">
-          Create a personnel record now. Issue a temporary password from their file when they
-          are ready to sign in.
+          Create a personnel record, then complete their file on the next screen. Issue a
+          temporary password from their file when they are ready to sign in.
         </p>
       </div>
       <InvitePersonnelForm permissionLevels={permissionLevels} />

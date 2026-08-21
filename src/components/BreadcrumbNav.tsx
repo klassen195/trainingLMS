@@ -150,6 +150,16 @@ export function BreadcrumbNav() {
           href: isLast ? undefined : "/admin",
           icon: <Shield className="h-4 w-4" />,
         });
+      } else if (path === "clients") {
+        breadcrumbs.push({
+          label: "Clients",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (path === "platform-operators") {
+        breadcrumbs.push({
+          label: "Platform operators",
+          href: isLast ? undefined : currentPath,
+        });
       } else if (path === "ems-qi") {
         breadcrumbs.push({
           label: "EMS QI",

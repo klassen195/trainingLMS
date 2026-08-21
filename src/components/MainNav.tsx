@@ -23,8 +23,9 @@ import {
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
 import type { Profile } from "@/lib/training-lms-types";
-import { permissionLevelName } from "@/lib/permission-levels";
+import type { Client } from "@/lib/clients";
 import { Button } from "@/components/ui/Button";
+import { DepartmentSwitcher } from "@/components/DepartmentSwitcher";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
 import {
   DropdownMenu,
@@ -69,6 +70,8 @@ export function MainNav({
   showIncidents = false,
   showFleet = false,
   showApprovals = false,
+  actingClientId = null,
+  actingClients = [],
 }: {
   profile: Profile | null;
   mustChangePassword?: boolean;
@@ -77,6 +80,8 @@ export function MainNav({
   showIncidents?: boolean;
   showFleet?: boolean;
   showApprovals?: boolean;
+  actingClientId?: string | null;
+  actingClients?: Pick<Client, "id" | "code" | "name" | "is_active">[];
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -85,11 +90,11 @@ export function MainNav({
 
   const displayName = profile?.display_name ?? profile?.email ?? "Member";
   const initials = displayName.charAt(0).toUpperCase();
-  const accessLabel = profile
-    ? [permissionLevelName(profile.permission_levels), profile.is_admin ? "Admin" : null]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
+  const accessLabel = profile?.is_platform_operator
+    ? "Platform"
+    : profile?.is_admin
+      ? "Admin"
+      : null;
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -110,6 +115,9 @@ export function MainNav({
       ];
 
   const allNavItems = profile ? loggedInNavItems : [];
+
+  const showDepartmentSwitcher =
+    Boolean(profile && !mustChangePassword && actingClientId && actingClients.length > 0);
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
@@ -152,6 +160,13 @@ export function MainNav({
         </div>
 
         <div className="relative z-10 ml-auto hidden items-center gap-2 md:flex">
+          {showDepartmentSwitcher && actingClientId ? (
+            <DepartmentSwitcher
+              clients={actingClients}
+              actingClientId={actingClientId}
+              className="h-10 w-[11.5rem] py-1 text-xs"
+            />
+          ) : null}
           {profile ? (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
@@ -168,7 +183,9 @@ export function MainNav({
                     {profile.email ? (
                       <p className="text-xs leading-none text-muted-foreground">{profile.email}</p>
                     ) : null}
-                    <p className="text-xs leading-none text-muted-foreground">{accessLabel}</p>
+                    {accessLabel ? (
+                      <p className="text-xs leading-none text-muted-foreground">{accessLabel}</p>
+                    ) : null}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -289,13 +306,25 @@ export function MainNav({
               </div>
               {profile ? (
                 <div className="mt-6 space-y-3 border-t pt-4">
+                  {showDepartmentSwitcher && actingClientId ? (
+                    <div className="px-1">
+                      <p className="mb-1 text-xs text-muted-foreground">Department</p>
+                      <DepartmentSwitcher
+                        clients={actingClients}
+                        actingClientId={actingClientId}
+                        className="h-10 text-xs"
+                      />
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-3 px-1">
                     <Avatar className="h-10 w-10 rounded-md">
                       <AvatarFallback className="rounded-md">{initials}</AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{displayName}</span>
-                      <span className="text-xs text-muted-foreground">{accessLabel}</span>
+                      {accessLabel ? (
+                        <span className="text-xs text-muted-foreground">{accessLabel}</span>
+                      ) : null}
                     </div>
                   </div>
                   <Button variant="outline" className="w-full" disabled={pending} onClick={handleSignOut}>

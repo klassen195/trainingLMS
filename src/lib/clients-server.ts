@@ -16,10 +16,14 @@ export async function resolveClientIdByCode(code: string): Promise<string | null
 export async function assertClientMembership(input: {
   profileClientId: string | null | undefined;
   clientCode: string;
+  isPlatformAdmin?: boolean;
 }): Promise<{ clientId: string } | { error: string }> {
   const clientId = await resolveClientIdByCode(input.clientCode);
   if (!clientId) {
     return { error: "Invalid Client ID. Check the code from your administrator." };
+  }
+  if (input.isPlatformAdmin) {
+    return { clientId };
   }
   if (!input.profileClientId || input.profileClientId !== clientId) {
     return { error: "This account does not belong to that Client ID." };

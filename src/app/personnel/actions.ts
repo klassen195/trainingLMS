@@ -174,7 +174,7 @@ export async function createPersonnelMember(input: {
   }
 
   revalidatePersonnel(userId);
-  redirect(`/personnel/${userId}`);
+  redirect(`/personnel/${userId}/edit`);
 }
 
 export async function issueTemporaryPassword(input: { userId: string }) {

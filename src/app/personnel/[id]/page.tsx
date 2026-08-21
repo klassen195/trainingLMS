@@ -78,6 +78,7 @@ export default async function PersonnelDetailPage({
   }
   if (error) throw error;
   if (!profile) notFound();
+  if (profile.is_platform_operator && !viewer.is_platform_operator) notFound();
 
   const isSupervisorOfPerson = isPersonnelSupervisorOf(viewer, profile);
   if (!canManage && !isSelf && !isSupervisorOfPerson) {

@@ -39,6 +39,7 @@ import {
   type ApprovalSubmissionKind,
 } from "@/lib/approval-tracker-types";
 import { personnelDisplayName } from "@/lib/personnel-types";
+import { excludePlatformOperatorsFromRoster } from "@/lib/department-roster";
 import {
   isMissingApprovalTrackerTables,
   supabaseErrorMessage,
@@ -139,6 +140,7 @@ export async function listApprovalProfiles(): Promise<ApprovalProfileOption[]> {
     .from("profiles")
     .select(APPROVAL_PROFILE_OPTION_SELECT)
     .eq("is_active", true)
+    .eq("is_platform_operator", false)
     .order("display_name", { ascending: true });
   throwIfDbError(error);
 
@@ -156,6 +158,7 @@ export async function listAdminApprovalProfiles(): Promise<ApprovalProfileOption
     .from("profiles")
     .select(APPROVAL_PROFILE_OPTION_SELECT)
     .eq("is_active", true)
+    .eq("is_platform_operator", false)
     .order("display_name", { ascending: true });
   throwIfDbError(error);
 

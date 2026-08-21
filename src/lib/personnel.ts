@@ -27,6 +27,7 @@ import {
 } from "@/lib/personnel-types";
 import { isMissingTrainingSessionsTable } from "@/lib/supabase/errors";
 import { attachProfilePermissionLevels, parseProfilePermissionLevels } from "@/lib/permission-levels";
+import { excludePlatformOperatorsFromRoster } from "@/lib/department-roster";
 
 type SupervisorViewer = {
   id: string;
@@ -49,17 +50,17 @@ function mergeProfilesById(lists: PersonnelProfile[][]) {
 }
 
 async function fetchAssignedReports(supabase: SupabaseClient, supervisorId: string) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PERSONNEL_PROFILE_SELECT)
+  const { data, error } = await excludePlatformOperatorsFromRoster(
+    supabase.from("profiles").select(PERSONNEL_PROFILE_SELECT)
+  )
     .eq("supervisor_id", supervisorId)
     .eq("is_active", true)
     .order("display_name", { ascending: true, nullsFirst: false });
 
   if (error) {
-    const fallback = await supabase
-      .from("profiles")
-      .select(PROFILE_ORG_COLUMNS)
+    const fallback = await excludePlatformOperatorsFromRoster(
+      supabase.from("profiles").select(PROFILE_ORG_COLUMNS)
+    )
       .eq("supervisor_id", supervisorId)
       .eq("is_active", true)
       .order("display_name", { ascending: true, nullsFirst: false });
@@ -92,18 +93,18 @@ async function fetchShiftReports(
     return { rows: [] as PersonnelProfile[], error: null as PostgrestError | null };
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PERSONNEL_PROFILE_SELECT)
+  const { data, error } = await excludePlatformOperatorsFromRoster(
+    supabase.from("profiles").select(PERSONNEL_PROFILE_SELECT)
+  )
     .eq("shift", viewer.shift)
     .eq("is_active", true)
     .neq("id", viewer.id)
     .order("display_name", { ascending: true, nullsFirst: false });
 
   if (error) {
-    const fallback = await supabase
-      .from("profiles")
-      .select(PROFILE_ORG_COLUMNS)
+    const fallback = await excludePlatformOperatorsFromRoster(
+      supabase.from("profiles").select(PROFILE_ORG_COLUMNS)
+    )
       .eq("shift", viewer.shift)
       .eq("is_active", true)
       .neq("id", viewer.id)
@@ -273,16 +274,14 @@ async function finalizePersonnelProfiles(supabase: SupabaseClient, rows: Personn
 }
 
 export async function fetchPersonnelDirectory(supabase: SupabaseClient) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PERSONNEL_PROFILE_SELECT)
-    .order("display_name", { ascending: true, nullsFirst: false });
+  const { data, error } = await excludePlatformOperatorsFromRoster(
+    supabase.from("profiles").select(PERSONNEL_PROFILE_SELECT)
+  ).order("display_name", { ascending: true, nullsFirst: false });
 
   if (error) {
-    const fallback = await supabase
-      .from("profiles")
-      .select(PROFILE_ORG_COLUMNS)
-      .order("display_name", { ascending: true, nullsFirst: false });
+    const fallback = await excludePlatformOperatorsFromRoster(
+      supabase.from("profiles").select(PROFILE_ORG_COLUMNS)
+    ).order("display_name", { ascending: true, nullsFirst: false });
     if (fallback.error) return { rows: [] as PersonnelProfile[], error };
     return {
       rows: await finalizePersonnelProfiles(
@@ -593,11 +592,11 @@ export async function fetchPendingTaskbookApprovals(
   viewer: SupervisorViewer
 ) {
   const [assigned, shift] = await Promise.all([
-    supabase.from("profiles").select("id").eq("supervisor_id", viewer.id),
+    excludePlatformOperatorsFromRoster(
+      supabase.from("profiles").select("id")
+    ).eq("supervisor_id", viewer.id),
     isBattalionChiefRank(viewer.rank) && viewer.shift
-      ? supabase
-          .from("profiles")
-          .select("id")
+      ? excludePlatformOperatorsFromRoster(supabase.from("profiles").select("id"))
           .eq("shift", viewer.shift)
           .eq("is_active", true)
           .neq("id", viewer.id)

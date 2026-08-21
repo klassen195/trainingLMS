@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import {
   APPROVAL_DOC_TYPES,
   APPROVAL_FILES_BUCKET,
+  APPROVAL_FILE_ACCEPT,
   approvalDocTypeLabel,
   approvalSubmissionKindLabel,
   isApprovalDocumentFile,
@@ -72,7 +73,9 @@ export function ApprovalDocumentForm({
               throw new Error("Upload the document so it can travel through the pipeline.");
             }
             if (file && !isApprovalDocumentFile(file)) {
-              throw new Error("Upload a PDF, Word document, or image (JPEG, PNG, WebP, or HEIC).");
+              throw new Error(
+                "Upload a PDF, Word document, PowerPoint, image, or video (MP4, MOV, WebM)."
+              );
             }
 
             let documentId = initial?.id;
@@ -204,13 +207,16 @@ export function ApprovalDocumentForm({
               type="file"
               required={!isEdit}
               disabled={pending}
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp"
+              accept={APPROVAL_FILE_ACCEPT}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
             {isEdit && initial?.fileName ? (
               <FieldHint>Current file: {initial.fileName}. Leave empty to keep it.</FieldHint>
             ) : (
-              <FieldHint>PDF, Word, or image. This file stays with the document through every stage.</FieldHint>
+              <FieldHint>
+                PDF, Word, PowerPoint, image, or video (up to 500 MB). This file stays with the
+                document through every stage.
+              </FieldHint>
             )}
           </div>
           <div className="space-y-1.5">

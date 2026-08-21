@@ -42,6 +42,7 @@ export default async function EditAssetPage({
         ? `is_active.eq.true,id.eq.${row.assigned_to}`
         : "is_active.eq.true"
     )
+    .eq("is_platform_operator", false)
     .order("display_name", { ascending: true });
 
   if (profilesError) throw profilesError;

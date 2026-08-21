@@ -138,6 +138,12 @@ export default async function AdminPage() {
               description: "Client ID codes and tenant silos",
               icon: Building2,
             },
+            {
+              href: "/admin/platform-operators",
+              label: "Platform operators",
+              description: "Grant a few people access to every department",
+              icon: Shield,
+            },
           ],
         },
         ...ADMIN_GROUPS,

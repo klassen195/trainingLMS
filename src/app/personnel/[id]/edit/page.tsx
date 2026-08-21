@@ -21,6 +21,7 @@ import { listEmsLevels } from "@/lib/ems-levels";
 import { listQualifications } from "@/lib/qualifications";
 import { listPermissionLevels } from "@/lib/permission-levels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { excludePlatformOperatorsFromRoster } from "@/lib/department-roster";
 import {
   isMissingEmsLevelsTable,
   isMissingPersonnelTables,
@@ -45,6 +46,7 @@ export default async function PersonnelEditPage({
   }
   if (error) throw error;
   if (!profile) notFound();
+  if (profile.is_platform_operator && !admin.is_platform_operator) notFound();
 
   const [
     { data: locations },
@@ -70,17 +72,19 @@ export default async function PersonnelEditPage({
       .eq("is_active", true)
       .order("sort_order")
       .order("name"),
-    supabase
-      .from("profiles")
-      .select(
-        "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, primary_location_id, supervisor_id"
-      )
-      .or(
-        profile.supervisor_id
-          ? `is_active.eq.true,id.eq.${profile.supervisor_id}`
-          : "is_active.eq.true"
-      )
-      .order("display_name", { ascending: true, nullsFirst: false }),
+    excludePlatformOperatorsFromRoster(
+      supabase
+        .from("profiles")
+        .select(
+          "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, primary_location_id, supervisor_id"
+        )
+        .or(
+          profile.supervisor_id
+            ? `is_active.eq.true,id.eq.${profile.supervisor_id}`
+            : "is_active.eq.true"
+        )
+        .order("display_name", { ascending: true, nullsFirst: false })
+    ),
     fetchPersonnelCertifications(supabase, id),
     fetchPersonnelEmsLicenses(supabase, id),
     fetchPersonnelQualifications(supabase, id),

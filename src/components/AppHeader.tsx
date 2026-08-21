@@ -1,5 +1,6 @@
 import { getAuthContext } from "@/lib/auth";
 import { getProfileCapabilities } from "@/lib/capability-access";
+import { listClients } from "@/app/admin/clients/actions";
 import { MainNav } from "@/components/MainNav";
 import { BreadcrumbNav } from "@/components/BreadcrumbNav";
 
@@ -21,14 +22,18 @@ export async function AppHeader() {
   const ctx = await getAuthContext();
   const profile = ctx.kind === "authenticated" ? ctx.profile : null;
   const mustChangePassword = ctx.kind === "authenticated" && ctx.mustChangePassword;
+  const isPlatformAdmin = ctx.kind === "authenticated" && ctx.isPlatformAdmin;
   const capabilities =
     profile && !mustChangePassword ? await getProfileCapabilities(profile) : null;
+  const actingClients = isPlatformAdmin && !mustChangePassword ? await listClients() : [];
 
   return (
     <header className="sticky top-0 z-[100] w-full overflow-visible bg-background shadow-sm">
       <MainNav
         profile={profile}
         mustChangePassword={mustChangePassword}
+        actingClientId={ctx.kind === "authenticated" ? ctx.clientId : null}
+        actingClients={actingClients}
         showInstructor={Boolean(capabilities?.author_training)}
         showIncidents={Boolean(capabilities?.manage_incidents)}
         showFleet={Boolean(capabilities?.view_fleet)}

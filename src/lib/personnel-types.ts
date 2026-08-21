@@ -207,7 +207,7 @@ export type PersonnelTrainingProgram = {
 };
 
 export const PROFILE_ORG_COLUMNS =
-  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays, primary_location_id, supervisor_id, ems_cleared_level_id";
+  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_platform_operator, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays, primary_location_id, supervisor_id, ems_cleared_level_id";
 
 export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_LEVELS_EMBED}`;
 

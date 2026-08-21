@@ -97,7 +97,7 @@ async function loadLookups(
   ] = await Promise.all([
     supabase.from("equipment_categories").select("id, name"),
     supabase.from("equipment_subcategories").select("id, name, equipment_category_id"),
-    supabase.from("profiles").select("id, display_name, email"),
+    supabase.from("profiles").select("id, display_name, email").eq("is_platform_operator", false),
     supabase.from("locations").select("id, name"),
     supabase
       .from("assets")
