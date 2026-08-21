@@ -13,7 +13,11 @@ export const createSupabaseServerClient = cache(async () => {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        } catch {
+          // Cookies cannot be set during Server Component render. Proxy refreshes the session.
+        }
       },
     },
   });

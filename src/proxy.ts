@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { CHANGE_PASSWORD_PATH, claimsMustChangePassword, userMustChangePassword } from "@/lib/auth-password";
+import { CHANGE_PASSWORD_PATH, userMustChangePassword } from "@/lib/auth-password";
 import { getSupabaseEnv } from "@/lib/supabase/env";
 import { hasSupabaseSessionCookie } from "@/lib/supabase/session-cookie";
 
@@ -19,11 +19,15 @@ function isPublicPath(pathname: string) {
   );
 }
 
-function redirectToLogin(request: NextRequest) {
+function redirectToLogin(request: NextRequest, cookieSource?: NextResponse) {
   const loginUrl = request.nextUrl.clone();
   loginUrl.pathname = "/login";
   loginUrl.searchParams.set("redirectedFrom", request.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
+  const redirect = NextResponse.redirect(loginUrl);
+  cookieSource?.cookies.getAll().forEach((cookie) => {
+    redirect.cookies.set(cookie);
+  });
+  return redirect;
 }
 
 export async function proxy(request: NextRequest) {
@@ -32,7 +36,7 @@ export async function proxy(request: NextRequest) {
   const hasSessionCookie = hasSupabaseSessionCookie(request.cookies.getAll());
 
   if (!hasSessionCookie) {
-    return isPublicPath(pathname) ? response : redirectToLogin(request);
+    return isPublicPath(pathname) ? response : redirectToLogin(request, response);
   }
 
   let url: string;
@@ -49,27 +53,23 @@ export async function proxy(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
       },
     },
   });
 
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const isAuthenticated = Boolean(claimsData?.claims?.sub);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthenticated = Boolean(user);
 
   if (!isAuthenticated && !isPublicPath(pathname)) {
-    return redirectToLogin(request);
+    return redirectToLogin(request, response);
   }
 
   if (isAuthenticated && pathname !== CHANGE_PASSWORD_PATH && !pathname.startsWith("/auth")) {
-    let mustChange = claimsMustChangePassword(claimsData?.claims as Record<string, unknown> | undefined);
-    if (mustChange) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      mustChange = userMustChangePassword(user);
-    }
-    if (mustChange) {
+    if (userMustChangePassword(user)) {
       const changeUrl = request.nextUrl.clone();
       changeUrl.pathname = CHANGE_PASSWORD_PATH;
       changeUrl.search = "";

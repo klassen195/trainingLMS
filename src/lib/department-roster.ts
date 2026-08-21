@@ -1,5 +1,6 @@
-export function excludePlatformOperatorsFromRoster<
-  T extends { eq: (column: string, value: boolean) => T },
->(query: T): T {
-  return query.eq("is_platform_operator", false);
+export function excludePlatformOperatorsFromRoster<Query>(query: Query): Query {
+  return (query as { eq: (column: string, value: boolean) => Query }).eq(
+    "is_platform_operator",
+    false
+  );
 }
