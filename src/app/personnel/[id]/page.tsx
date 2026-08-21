@@ -20,16 +20,21 @@ import {
   collectExpiringPersonnelItems,
   isCertExpired,
   isRankOnProbation,
+  effectiveRankPromotedOn,
   formatSwingUpRanks,
+  isTitleOnlyRank,
   personnelDisplayName,
   personnelShiftLabel,
   isPersonnelSupervisorOf,
   familyDateEventLabel,
   familyDateTitle,
+  rankShowsPromotionDate,
   listFamilyDates,
   rankHasTitle,
 } from "@/lib/personnel-types";
 import { permissionLevelName } from "@/lib/permission-levels";
+import { formatPhoneNumber } from "@/lib/phone";
+import { formatPostalAddressDisplay } from "@/lib/address";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
 import { listEmsLevels } from "@/lib/ems-levels";
@@ -166,8 +171,8 @@ export default async function PersonnelDetailPage({
     { label: "First name", value: profile.first_name?.trim() || "—" },
     { label: "Last name", value: profile.last_name?.trim() || "—" },
     { label: "Email", value: profile.email || "—" },
-    { label: "Phone", value: profile.phone || "—" },
-    { label: "Home address", value: profile.home_address || "—", fullWidth: true },
+    { label: "Phone", value: formatPhoneNumber(profile.phone) },
+    { label: "Home address", value: formatPostalAddressDisplay(profile.home_address), fullWidth: true },
     {
       label: "Emergency contact(s)",
       value: profile.emergency_contacts || "—",
@@ -178,38 +183,59 @@ export default async function PersonnelDetailPage({
 
   const familyDates = listFamilyDates(profile);
 
-  const onProbation = isRankOnProbation(profile.rank, profile.rank_promoted_on);
+  const rankPromotedOn = effectiveRankPromotedOn(
+    profile.rank,
+    profile.rank_promoted_on,
+    profile.hire_date
+  );
+  const onProbation = isRankOnProbation(profile.rank, rankPromotedOn);
 
   const workRows = [
-    {
-      label: "Rank",
-      value: (
-        <span className="inline-flex flex-wrap items-center gap-2">
-          <span>{profile.rank || "—"}</span>
-          {profile.rank && onProbation ? (
-            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
-              Probation
-            </Badge>
-          ) : null}
-        </span>
-      ),
-    },
-    ...(rankHasTitle(profile.rank)
-      ? [{ label: "Title", value: profile.job_title || "—" }]
+    ...(isTitleOnlyRank(profile.rank)
+      ? []
+      : [
+          {
+            label: "Rank",
+            value: (
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <span>{profile.rank || "—"}</span>
+                {profile.rank && onProbation ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300 bg-amber-50 text-amber-900"
+                  >
+                    Probation
+                  </Badge>
+                ) : null}
+              </span>
+            ),
+          },
+        ]),
+    ...(rankShowsPromotionDate(profile.rank)
+      ? [
+          {
+            label: "Promoted to this rank",
+            value: formatDate(rankPromotedOn),
+          },
+        ]
       : []),
-    { label: "Swing up", value: formatSwingUpRanks(profile.swing_up) },
+    ...(rankHasTitle(profile.rank)
+      ? [{ label: "Title", value: profile.job_title || "—", fullWidth: true as const }]
+      : []),
     {
-      label: "Promoted to this rank",
-      value: formatDate(profile.rank_promoted_on),
+      label: "Swing up",
+      value: formatSwingUpRanks(profile.swing_up),
+      fullWidth: true as const,
     },
     { label: "Shift", value: personnelShiftLabel(profile.shift) },
-    { label: "Employee #", value: profile.employee_number || "—" },
-    { label: "Hire date", value: formatDate(profile.hire_date) },
     { label: "Station", value: profile.primary_location?.name || "—" },
     {
       label: "Supervisor",
       value: profile.supervisor ? personnelDisplayName(profile.supervisor) : "—",
+      fullWidth: true as const,
     },
+    { label: "Employee #", value: profile.employee_number || "—" },
+    { label: "Hire date", value: formatDate(profile.hire_date) },
   ];
 
   const securityRows = [
@@ -260,9 +286,9 @@ export default async function PersonnelDetailPage({
       id: "work",
       label: "Work",
       content: (
-        <Card>
+        <Card className="max-w-2xl">
           <CardContent className="pt-6">
-            <PersonnelFieldGrid rows={workRows} />
+            <PersonnelFieldGrid rows={workRows} variant="compact" />
           </CardContent>
         </Card>
       ),
@@ -356,8 +382,29 @@ export default async function PersonnelDetailPage({
             label: "Security",
             content: (
               <Card>
-                <CardContent className="pt-6">
+                <CardContent className="space-y-6 pt-6">
                   <PersonnelFieldGrid rows={securityRows} />
+                  <div className="space-y-3 border-t pt-6">
+                    <div>
+                      <p className="text-sm font-medium">Temporary password</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Share it with them directly; it will not be emailed. They will have to
+                        change it on first sign-in.
+                      </p>
+                    </div>
+                    {profile.is_active !== false && profile.email ? (
+                      <IssueTemporaryPasswordButton
+                        userId={profile.id}
+                        hasPasswordIssued={Boolean(profile.invited_at)}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {profile.is_active === false
+                          ? "Reactivate this account before issuing a temporary password."
+                          : "Add an email address before issuing a temporary password."}
+                      </p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ),
@@ -422,7 +469,9 @@ export default async function PersonnelDetailPage({
             {profile.is_active === false ? <Badge variant="outline">Inactive</Badge> : null}
             {!profile.invited_at ? <Badge variant="outline">No password issued</Badge> : null}
             {profile.is_admin ? <Badge variant="outline">System admin</Badge> : null}
-            {profile.rank ? <Badge variant="outline">{profile.rank}</Badge> : null}
+            {profile.rank && !isTitleOnlyRank(profile.rank) ? (
+              <Badge variant="outline">{profile.rank}</Badge>
+            ) : null}
             {rankHasTitle(profile.rank) && profile.job_title ? (
               <Badge variant="outline">{profile.job_title}</Badge>
             ) : null}
@@ -440,17 +489,7 @@ export default async function PersonnelDetailPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <PersonnelDirectoryButton />
-          {canManage ? (
-            <>
-              {profile.is_active !== false && profile.email ? (
-                <IssueTemporaryPasswordButton
-                  userId={profile.id}
-                  hasPasswordIssued={Boolean(profile.invited_at)}
-                />
-              ) : null}
-              <PersonnelEditButton personId={id} />
-            </>
-          ) : null}
+          {canManage ? <PersonnelEditButton personId={id} /> : null}
         </div>
       </div>
 

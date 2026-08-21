@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   replaceApprovalCommitteeMembers,
   replaceApprovalStageMembers,
 } from "@/app/approval-tracker/actions";
 import { ApprovalPersonnelPicker } from "@/components/ApprovalPersonnelPicker";
-import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Input";
@@ -21,7 +20,7 @@ import {
   type ApprovalProfileOption,
   type ApprovalStageMember,
 } from "@/lib/approval-tracker-types";
-import { personnelDisplayName } from "@/lib/personnel-types";
+import { personnelDisplayName, comparePersonnelByName } from "@/lib/personnel-types";
 
 export function ApprovalStageMembersAdmin({
   profiles,
@@ -33,6 +32,7 @@ export function ApprovalStageMembersAdmin({
   committeeMembers: ApprovalCommitteeMember[];
 }) {
   const router = useRouter();
+  const saveGeneration = useRef<Record<string, number>>({});
   const [selected, setSelected] = useState<Record<string, string[]>>(() => {
     const initial: Record<string, string[]> = Object.fromEntries(
       APPROVAL_ASSIGNMENT_SLOTS.map((slot) => [slot.key, [] as string[]])
@@ -66,62 +66,86 @@ export function ApprovalStageMembersAdmin({
   });
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
-  function saveStage(slot: ApprovalAssignmentSlot) {
+  function beginSave(key: string) {
+    const generation = (saveGeneration.current[key] ?? 0) + 1;
+    saveGeneration.current[key] = generation;
     setError(null);
-    setPendingKey(slot.key);
+    setPendingKey(key);
+    return generation;
+  }
+
+  function finishSave(key: string, generation: number) {
+    if (saveGeneration.current[key] !== generation) return false;
+    setPendingKey((current) => (current === key ? null : current));
+    return true;
+  }
+
+  function saveStage(slot: ApprovalAssignmentSlot, profileIds: string[]) {
+    const generation = beginSave(slot.key);
     startTransition(async () => {
       try {
         await replaceApprovalStageMembers({
           stage: slot.stage,
-          profileIds: selected[slot.key] ?? [],
+          profileIds,
         });
+        if (!finishSave(slot.key, generation)) return;
         router.refresh();
       } catch (err) {
+        if (!finishSave(slot.key, generation)) return;
         setError(err instanceof Error ? err.message : "Failed to save stage members.");
-      } finally {
-        setPendingKey(null);
       }
     });
   }
 
-  function saveCommittee(slot: ApprovalCommitteeSlot) {
-    setError(null);
-    setPendingKey(slot.key);
+  function saveCommittee(
+    slot: ApprovalCommitteeSlot,
+    profileIds: string[],
+    chairId: string
+  ) {
+    const generation = beginSave(slot.key);
     startTransition(async () => {
       try {
         await replaceApprovalCommitteeMembers({
           committee: slot.committee,
           subcommittee: slot.subcommittee,
-          profileIds: committeeSelected[slot.key] ?? [],
-          chairId: chairs[slot.key] || null,
+          profileIds,
+          chairId: chairId || null,
         });
+        if (!finishSave(slot.key, generation)) return;
         router.refresh();
       } catch (err) {
+        if (!finishSave(slot.key, generation)) return;
         setError(err instanceof Error ? err.message : "Failed to save committee members.");
-      } finally {
-        setPendingKey(null);
       }
     });
+  }
+
+  function savingLabel(key: string) {
+    return pendingKey === key ? (
+      <span className="text-xs font-normal text-muted-foreground">Saving…</span>
+    ) : null;
   }
 
   function stageCard(slot: ApprovalAssignmentSlot) {
     return (
       <Card key={slot.key}>
         <CardHeader>
-          <CardTitle className="text-lg">{slot.label}</CardTitle>
+          <CardTitle className="flex items-center justify-between gap-3 text-lg">
+            <span>{slot.label}</span>
+            {savingLabel(slot.key)}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <ApprovalPersonnelPicker
             profiles={profiles}
             selectedIds={selected[slot.key] ?? []}
-            onChange={(ids) => setSelected((current) => ({ ...current, [slot.key]: ids }))}
-            disabled={pending}
+            onChange={(ids) => {
+              setSelected((current) => ({ ...current, [slot.key]: ids }));
+              saveStage(slot, ids);
+            }}
           />
-          <Button type="button" size="sm" disabled={pending} onClick={() => saveStage(slot)}>
-            {pending && pendingKey === slot.key ? "Saving…" : "Save"}
-          </Button>
         </CardContent>
       </Card>
     );
@@ -135,35 +159,39 @@ export function ApprovalStageMembersAdmin({
 
       {APPROVAL_COMMITTEE_SLOTS.map((slot) => {
         const memberIds = committeeSelected[slot.key] ?? [];
-        const chairOptions = profiles.filter((person) => memberIds.includes(person.id));
+        const chairOptions = profiles
+          .filter((person) => memberIds.includes(person.id))
+          .sort(comparePersonnelByName);
         return (
           <Card key={slot.key}>
             <CardHeader>
-              <CardTitle className="text-lg">{slot.label}</CardTitle>
+              <CardTitle className="flex items-center justify-between gap-3 text-lg">
+                <span>{slot.label}</span>
+                {savingLabel(slot.key)}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <ApprovalPersonnelPicker
                 profiles={profiles}
                 selectedIds={memberIds}
                 onChange={(ids) => {
+                  const nextChair =
+                    chairs[slot.key] && ids.includes(chairs[slot.key]) ? chairs[slot.key] : "";
                   setCommitteeSelected((current) => ({ ...current, [slot.key]: ids }));
-                  setChairs((current) =>
-                    current[slot.key] && ids.includes(current[slot.key])
-                      ? current
-                      : { ...current, [slot.key]: "" }
-                  );
+                  setChairs((current) => ({ ...current, [slot.key]: nextChair }));
+                  saveCommittee(slot, ids, nextChair);
                 }}
-                disabled={pending}
               />
               <div className="space-y-1.5">
                 <FieldLabel htmlFor={`chair-${slot.key}`}>Chair</FieldLabel>
                 <Select
                   id={`chair-${slot.key}`}
                   value={chairs[slot.key] ?? ""}
-                  disabled={pending}
-                  onChange={(e) =>
-                    setChairs((current) => ({ ...current, [slot.key]: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const nextChair = e.target.value;
+                    setChairs((current) => ({ ...current, [slot.key]: nextChair }));
+                    saveCommittee(slot, memberIds, nextChair);
+                  }}
                 >
                   <option value="">No chair</option>
                   {chairOptions.map((person) => (
@@ -173,14 +201,6 @@ export function ApprovalStageMembersAdmin({
                   ))}
                 </Select>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                disabled={pending}
-                onClick={() => saveCommittee(slot)}
-              >
-                {pending && pendingKey === slot.key ? "Saving…" : "Save"}
-              </Button>
             </CardContent>
           </Card>
         );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -31,6 +31,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Plus,
+  ShieldAlert,
   Sun,
   Truck,
   Wind,
@@ -46,6 +47,7 @@ import {
   type HomeWidgetType,
   type WeatherSnapshot,
 } from "@/lib/home-dashboard-types";
+import { formatDate } from "@/lib/dates";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -65,6 +67,12 @@ import {
 } from "@/components/ui/Sheet";
 import { FireDangerMeter } from "@/components/FireDangerMeter";
 import { cn } from "@/lib/cn";
+
+function credentialUrgencyClass(daysUntil: number) {
+  if (daysUntil < 0) return "text-destructive";
+  if (daysUntil <= 30) return "text-amber-800";
+  return "text-muted-foreground";
+}
 
 function weatherIcon(forecast: string) {
   const text = forecast.toLowerCase();
@@ -91,34 +99,34 @@ function WeatherBody({ weather }: { weather: WeatherSnapshot | { error: string }
   if ("error" in weather) return <WidgetError message={weather.error} />;
   const Icon = weatherIcon(weather.currentForecast);
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs text-muted-foreground">{weather.locationLabel}</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-4xl font-semibold tracking-tight">
+          <div className="mt-0.5 flex items-baseline gap-1.5">
+            <span className="text-3xl font-semibold tracking-tight">
               {weather.currentTemp === null ? "—" : `${weather.currentTemp}°`}
             </span>
-            <span className="text-sm text-muted-foreground">{weather.currentUnit}</span>
+            <span className="text-xs text-muted-foreground">{weather.currentUnit}</span>
           </div>
-          <p className="mt-1 text-sm">{weather.currentForecast}</p>
+          <p className="mt-0.5 text-sm">{weather.currentForecast}</p>
           {weather.currentWind ? (
-            <p className="mt-1 text-xs text-muted-foreground">{weather.currentWind}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{weather.currentWind}</p>
           ) : null}
         </div>
-        <Icon className="h-10 w-10 text-primary" />
+        <Icon className="h-8 w-8 text-primary" />
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         {weather.days.map((day) => (
-          <div key={day.dateKey} className="rounded-md border bg-muted/40 px-2 py-2">
-            <p className="text-xs font-medium">{day.name}</p>
-            <p className="mt-1 text-sm font-semibold">
+          <div key={day.dateKey} className="rounded-md border bg-muted/40 px-1.5 py-1.5">
+            <p className="text-[11px] font-medium">{day.name}</p>
+            <p className="mt-0.5 text-sm font-semibold">
               {day.high === null ? "—" : `${day.high}°`}
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
+              <span className="ml-1 text-[11px] font-normal text-muted-foreground">
                 {day.low === null ? "" : `/ ${day.low}°`}
               </span>
             </p>
-            <p className="mt-1 line-clamp-2 text-[11px] leading-tight text-muted-foreground">{day.forecast}</p>
+            <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-muted-foreground">{day.forecast}</p>
           </div>
         ))}
       </div>
@@ -140,14 +148,14 @@ function FlagBody({
   if (!flag) return <WidgetEmpty message="Fire danger is not loaded." />;
   const warning = flag.alerts[0] ?? null;
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <FireDangerMeter
         level={flag.level}
         canEdit={canEdit && !pending}
         onSelect={canEdit ? onSetLevel : undefined}
       />
       <div className="text-center">
-        <p className="text-lg font-semibold leading-none">{flagLevelLabel(flag.level)}</p>
+        <p className="text-base font-semibold leading-none">{flagLevelLabel(flag.level)}</p>
         {flag.updatedAt ? (
           <p className="mt-1 text-xs text-muted-foreground">
             Posted
@@ -158,7 +166,7 @@ function FlagBody({
         )}
       </div>
       {warning ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5">
           <p className="text-sm font-medium text-destructive">{warning.event}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{warning.headline}</p>
         </div>
@@ -219,16 +227,16 @@ function FlagMastBody({ flagMast }: { flagMast: HomeDashboardPayload["data"]["fl
   if ("error" in flagMast) return <WidgetError message={flagMast.error} />;
   const half = flagMast.position === "half";
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="relative h-[4.5rem] w-[3.6rem] shrink-0">
+    <div className="space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="relative h-14 w-11 shrink-0">
           <div className="absolute inset-y-0 left-1 w-1.5 rounded-sm bg-zinc-400" />
-          <div className={cn("absolute left-2.5 h-8 w-[2.85rem] overflow-hidden rounded-[1px] shadow-sm", half ? "top-8" : "top-0.5")}>
+          <div className={cn("absolute left-2.5 h-6 w-9 overflow-hidden rounded-[1px] shadow-sm", half ? "top-6" : "top-0.5")}>
             <UsFlagGlyph />
           </div>
         </div>
         <div>
-          <p className="text-2xl font-semibold leading-none">{half ? "Half-staff" : "Full staff"}</p>
+          <p className="text-xl font-semibold leading-none">{half ? "Half-staff" : "Full staff"}</p>
           {half ? (
             <>
               {flagMast.reason ? <p className="mt-1 text-sm text-muted-foreground">{flagMast.reason}</p> : null}
@@ -321,30 +329,73 @@ function WidgetBody({
     );
   }
 
-  const rows = payload.data.taskbooks;
-  if (!rows) return <WidgetEmpty message="Taskbooks are not loaded." />;
-  if ("error" in rows) return <WidgetError message={rows.error} />;
-  if (rows.length === 0) return <WidgetEmpty message="You have no open taskbooks." />;
-  return (
-    <ul className="space-y-2">
-      {rows.map((row) => (
-        <li key={row.id}>
-          <Link
-            href={`/personnel/${payload.profileId}`}
-            className="flex items-center justify-between gap-2 rounded-md px-1 py-1 hover:bg-muted/50"
-          >
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-              {row.rank}
-            </span>
-            <span className={cn("text-xs", row.overdue ? "text-destructive" : "text-muted-foreground")}>
-              {row.dueLabel ?? row.statusLabel}
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
+  if (type === "open_taskbooks") {
+    const rows = payload.data.taskbooks;
+    if (!rows) return <WidgetEmpty message="Taskbooks are not loaded." />;
+    if ("error" in rows) return <WidgetError message={rows.error} />;
+    if (rows.length === 0) return <WidgetEmpty message="You have no open taskbooks." />;
+    return (
+      <ul className="space-y-2">
+        {rows.map((row) => (
+          <li key={row.id}>
+            <Link
+              href={`/personnel/${payload.profileId}`}
+              className="flex items-center justify-between gap-2 rounded-md px-1 py-1 hover:bg-muted/50"
+            >
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+                {row.rank}
+              </span>
+              <span className={cn("text-xs", row.overdue ? "text-destructive" : "text-muted-foreground")}>
+                {row.dueLabel ?? row.statusLabel}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (type === "expiring_credentials") {
+    const rows = payload.data.expiringCredentials;
+    if (!rows) return <WidgetEmpty message="Expiring certifications are not loaded." />;
+    if ("error" in rows) return <WidgetError message={rows.error} />;
+    if (rows.length === 0) {
+      return <WidgetEmpty message="No certifications or EMS licenses expire in the next six months." />;
+    }
+    return (
+      <ul className="space-y-2">
+        {rows.map((row) => (
+          <li key={`${row.kind}-${row.id}`}>
+            <Link
+              href={`/personnel/${payload.profileId}#${row.sectionId}`}
+              className="block rounded-md px-1 py-1 hover:bg-muted/50"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                  <ShieldAlert className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{row.label}</span>
+                </span>
+                <span
+                  className={cn(
+                    "max-w-[7.5rem] shrink-0 text-right text-xs font-medium",
+                    credentialUrgencyClass(row.daysUntil)
+                  )}
+                >
+                  {row.whenLabel}
+                </span>
+              </div>
+              <p className="mt-0.5 pl-6 text-xs text-muted-foreground">
+                {row.kindLabel} · {formatDate(row.expiresOn)}
+              </p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return <WidgetEmpty message="This widget is unavailable." />;
 }
 
 function SortableWidgetCard({
@@ -363,45 +414,47 @@ function SortableWidgetCard({
     disabled,
   });
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: CSS.Transform.toString(transform) || undefined,
+    transition: transition || undefined,
   };
 
   return (
     <div ref={setNodeRef} style={style} className={cn(isDragging && "z-10 opacity-80")}>
       <Card className="h-full">
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-          <CardTitle className="text-base font-semibold">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 pb-2">
+          <CardTitle className="text-sm font-semibold">
             {HOME_WIDGET_CATALOG[type]?.title ?? type}
           </CardTitle>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
-              className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-40"
+              className="flex h-7 w-7 cursor-grab items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-40"
               aria-label={`Reorder ${HOME_WIDGET_CATALOG[type]?.title ?? type}`}
               disabled={disabled}
+              suppressHydrationWarning
               {...attributes}
               {...listeners}
             >
-              <GripVertical className="h-4 w-4" />
+              <GripVertical className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               aria-label={`Remove ${HOME_WIDGET_CATALOG[type]?.title ?? type}`}
               onClick={onRemove}
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         </CardHeader>
-        <CardContent>{children}</CardContent>
+        <CardContent className="p-3 pt-0">{children}</CardContent>
       </Card>
     </div>
   );
 }
 
 export function HomeDashboard({ payload }: { payload: HomeDashboardPayload }) {
+  const dndContextId = useId();
   const [widgets, setWidgets] = useState<HomeWidgetType[]>(payload.widgets);
   const [addOpen, setAddOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -521,9 +574,14 @@ export function HomeDashboard({ payload }: { payload: HomeDashboardPayload }) {
           </Button>
         </div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          id={dndContextId}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext items={widgets} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {widgets.filter((type) => HOME_WIDGET_CATALOG[type]).map((type) => (
                 <SortableWidgetCard key={type} type={type} disabled={pending} onRemove={() => removeWidget(type)}>
                   <WidgetBody type={type} payload={payload} pending={pending} onSetFlag={handleSetFlag} />

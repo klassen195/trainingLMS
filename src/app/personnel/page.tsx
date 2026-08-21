@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardList, Plus, Users } from "lucide-react";
-import { requireUserProfile, isAdmin } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { fetchPersonnelDirectory, viewerHasDirectReports } from "@/lib/personnel";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -12,7 +13,7 @@ import { PersonnelDatabaseSetup } from "@/components/PersonnelDatabaseSetup";
 import { Button } from "@/components/ui/Button";
 
 export default async function PersonnelPage() {
-  const profile = await requireUserProfile();
+  const profile = await requireCapability("access_personnel");
   const admin = isAdmin(profile);
 
   const supabase = await createSupabaseServerClient();

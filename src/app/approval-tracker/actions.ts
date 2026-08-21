@@ -38,7 +38,7 @@ import {
   type ApprovalSubcommittee,
   type ApprovalSubmissionKind,
 } from "@/lib/approval-tracker-types";
-import { personnelDisplayName } from "@/lib/personnel-types";
+import { comparePersonnelByName } from "@/lib/personnel-types";
 import { excludePlatformOperatorsFromRoster } from "@/lib/department-roster";
 import {
   isMissingApprovalTrackerTables,
@@ -141,14 +141,11 @@ export async function listApprovalProfiles(): Promise<ApprovalProfileOption[]> {
     .select(APPROVAL_PROFILE_OPTION_SELECT)
     .eq("is_active", true)
     .eq("is_platform_operator", false)
-    .order("display_name", { ascending: true });
+    .order("last_name", { ascending: true, nullsFirst: false })
+    .order("first_name", { ascending: true, nullsFirst: false });
   throwIfDbError(error);
 
-  return ((data ?? []) as unknown as ApprovalProfileOption[]).sort((a, b) =>
-    personnelDisplayName(a).localeCompare(personnelDisplayName(b), undefined, {
-      sensitivity: "base",
-    })
-  );
+  return ((data ?? []) as unknown as ApprovalProfileOption[]).sort(comparePersonnelByName);
 }
 
 export async function listAdminApprovalProfiles(): Promise<ApprovalProfileOption[]> {
@@ -159,14 +156,11 @@ export async function listAdminApprovalProfiles(): Promise<ApprovalProfileOption
     .select(APPROVAL_PROFILE_OPTION_SELECT)
     .eq("is_active", true)
     .eq("is_platform_operator", false)
-    .order("display_name", { ascending: true });
+    .order("last_name", { ascending: true, nullsFirst: false })
+    .order("first_name", { ascending: true, nullsFirst: false });
   throwIfDbError(error);
 
-  return ((data ?? []) as unknown as ApprovalProfileOption[]).sort((a, b) =>
-    personnelDisplayName(a).localeCompare(personnelDisplayName(b), undefined, {
-      sensitivity: "base",
-    })
-  );
+  return ((data ?? []) as unknown as ApprovalProfileOption[]).sort(comparePersonnelByName);
 }
 
 export async function listApprovalStageMembers(): Promise<ApprovalStageMember[]> {

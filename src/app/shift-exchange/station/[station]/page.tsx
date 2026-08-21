@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeftRight } from "lucide-react";
 import { getAuthContext } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingShiftExchangeTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { defaultShiftDateIso } from "@/lib/dates";
@@ -30,6 +31,7 @@ export default async function ShiftExchangeStationPage({
   if (auth.kind === "unauthenticated") redirect("/login");
   if (auth.kind === "missing_tables") return <DatabaseSetup />;
   if (auth.kind === "missing_profile") return <MissingProfileSetup userId={auth.userId} />;
+  await requireCapability("access_shift_exchange");
 
   const { station } = await params;
   const stationNumber = parseStation(station);

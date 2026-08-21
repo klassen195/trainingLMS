@@ -35,8 +35,13 @@ export async function AppHeader() {
         actingClientId={ctx.kind === "authenticated" ? ctx.clientId : null}
         actingClients={actingClients}
         showInstructor={Boolean(capabilities?.author_training)}
+        showShiftExchange={Boolean(capabilities?.access_shift_exchange)}
+        showPrograms={Boolean(capabilities?.access_programs)}
+        showAssets={Boolean(capabilities?.access_assets)}
         showIncidents={Boolean(capabilities?.manage_incidents)}
         showFleet={Boolean(capabilities?.view_fleet)}
+        showPersonnel={Boolean(capabilities?.access_personnel)}
+        showDocumentTraining={Boolean(capabilities?.document_training)}
         showApprovals={Boolean(capabilities?.approval_tracker)}
         showAdmin={Boolean(
           profile?.is_admin ||

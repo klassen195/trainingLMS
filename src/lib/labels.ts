@@ -142,6 +142,7 @@ export const fireRanks = [
   "Assistant Chief",
   "Division Chief",
   "Fire Chief",
+  "Administration",
 ] as const;
 
 export type FireRank = (typeof fireRanks)[number];
@@ -151,16 +152,40 @@ export const ranksWithoutProbation = [
   "Assistant Chief",
   "Division Chief",
   "Fire Chief",
+  "Administration",
 ] as const satisfies readonly FireRank[];
 
 /** Ranks that carry an associated title (e.g. division or functional assignment). */
 export const ranksWithTitle = [
   "Assistant Chief",
   "Division Chief",
+  "Administration",
 ] as const satisfies readonly FireRank[];
+
+/** Non-fire ranks shown as title only (rank itself is hidden in displays). */
+export const titleOnlyRanks = ["Administration"] as const satisfies readonly FireRank[];
 
 export function rankHasTitle(rank: string | null | undefined) {
   return Boolean(rank && (ranksWithTitle as readonly string[]).includes(rank));
+}
+
+export function isTitleOnlyRank(rank: string | null | undefined) {
+  return Boolean(rank && (titleOnlyRanks as readonly string[]).includes(rank));
+}
+
+/** Rank column / badge text: title-only ranks show the title, never the rank name. */
+export function formatPersonnelRankDisplay(
+  rank: string | null | undefined,
+  jobTitle?: string | null
+) {
+  if (isTitleOnlyRank(rank)) {
+    return jobTitle?.trim() || "—";
+  }
+  if (!rank) return "—";
+  if (rankHasTitle(rank) && jobTitle?.trim()) {
+    return `${rank} · ${jobTitle.trim()}`;
+  }
+  return rank;
 }
 
 /** Ranks available for swing-up qualification (excludes entry and chief ranks). */

@@ -7,7 +7,7 @@ import { PermissionMatrixEditor } from "./ui";
 
 export default async function AdminPermissionsPage() {
   await requireAdmin();
-  const { levels, matrix } = await loadCapabilityMatrix();
+  const { levels, matrix, capabilityPlacements } = await loadCapabilityMatrix();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -21,11 +21,16 @@ export default async function AdminPermissionsPage() {
         </div>
         <p className="text-lg text-muted-foreground">
           Create named permission levels for this department, then choose what each level can access.
-          System admins always have every capability.
+          System admins always have every capability. Use Modules toggles to show or hide whole app
+          areas in navigation.
         </p>
       </div>
 
-      <PermissionMatrixEditor levels={levels} initialMatrix={matrix} />
+      <PermissionMatrixEditor
+        levels={levels}
+        initialMatrix={matrix}
+        capabilityPlacements={capabilityPlacements}
+      />
     </div>
   );
 }

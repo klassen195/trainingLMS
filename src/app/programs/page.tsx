@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, GraduationCap } from "lucide-react";
-import { requireUserProfile } from "@/lib/auth";
-import { getProfileCapabilities } from "@/lib/capability-access";
+import { requireCapability, getProfileCapabilities } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
@@ -24,7 +23,7 @@ export default async function ProgramsPage({
 }: {
   searchParams: Promise<{ tag?: string; category?: string }>;
 }) {
-  const profile = await requireUserProfile();
+  const profile = await requireCapability("access_programs");
   const caps = await getProfileCapabilities(profile);
   const limitedCatalog = !caps.browse_program_catalog;
   const params = await searchParams;

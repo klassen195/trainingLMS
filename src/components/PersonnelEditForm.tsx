@@ -17,13 +17,16 @@ import type {
   PersonnelTrainingProgram,
 } from "@/lib/personnel-types";
 import {
+  effectiveRankPromotedOn,
   isRankOnProbation,
+  isTitleOnlyRank,
   normalizeSwingUpRanks,
   parseFamilyKids,
   personnelDisplayName,
   personnelShiftLabel,
   personnelShifts,
   rankHasTitle,
+  rankShowsPromotionDate,
   serializeFamilyKids,
   type FamilyKidInput,
 } from "@/lib/personnel-types";
@@ -34,6 +37,14 @@ import type { EmsClearanceLevel } from "@/lib/ems-clearance-levels-types";
 import type { EmsLevel } from "@/lib/ems-levels-types";
 import type { Qualification } from "@/lib/qualifications-types";
 import { fireRanks, swingUpRanks } from "@/lib/labels";
+import {
+  formatPostalCodeInput,
+  formatStateInput,
+  parsePostalAddress,
+  serializePostalAddress,
+  type PostalAddress,
+} from "@/lib/address";
+import { formatPhoneInput } from "@/lib/phone";
 import { PersonnelCertificationsPanel } from "@/components/PersonnelCertificationsPanel";
 import { PersonnelDocumentsPanel } from "@/components/PersonnelDocumentsPanel";
 import { PersonnelEmsPanel } from "@/components/PersonnelEmsPanel";
@@ -100,12 +111,16 @@ export function PersonnelEditForm({
   const [rank, setRank] = useState(person.rank ?? "");
   const [jobTitle, setJobTitle] = useState(person.job_title ?? "");
   const [swingUp, setSwingUp] = useState<string[]>(() => normalizeSwingUpRanks(person.swing_up));
-  const [rankPromotedOn, setRankPromotedOn] = useState(person.rank_promoted_on ?? "");
+  const [rankPromotedOn, setRankPromotedOn] = useState(
+    () => effectiveRankPromotedOn(person.rank, person.rank_promoted_on, person.hire_date) ?? ""
+  );
   const [employeeNumber, setEmployeeNumber] = useState(person.employee_number ?? "");
-  const [phone, setPhone] = useState(person.phone ?? "");
+  const [phone, setPhone] = useState(() => formatPhoneInput(person.phone ?? ""));
   const [hireDate, setHireDate] = useState(person.hire_date ?? "");
   const [shift, setShift] = useState<PersonnelShift | "">(person.shift ?? "");
-  const [homeAddress, setHomeAddress] = useState(person.home_address ?? "");
+  const [homeAddress, setHomeAddress] = useState<PostalAddress>(() =>
+    parsePostalAddress(person.home_address)
+  );
   const [emergencyContacts, setEmergencyContacts] = useState(person.emergency_contacts ?? "");
   const [hrInfo, setHrInfo] = useState(person.hr_info ?? "");
   const [anniversary, setAnniversary] = useState(person.anniversary ?? "");
@@ -150,12 +165,12 @@ export function PersonnelEditForm({
           rank: rank || null,
           jobTitle: jobTitle || null,
           swingUp,
-          rankPromotedOn: rankPromotedOn || null,
+          rankPromotedOn: effectiveRankPromotedOn(rank, rankPromotedOn || null, hireDate || null),
           employeeNumber: employeeNumber || null,
-          phone: phone || null,
+          phone: phone ? formatPhoneInput(phone) || null : null,
           hireDate: hireDate || null,
           shift: shift || null,
-          homeAddress: homeAddress || null,
+          homeAddress: serializePostalAddress(homeAddress),
           emergencyContacts: emergencyContacts || null,
           hrInfo: hrInfo || null,
           anniversary: anniversary || null,
@@ -247,16 +262,78 @@ export function PersonnelEditForm({
               </div>
               <div className="space-y-2">
                 <FieldLabel htmlFor="phone">Phone</FieldLabel>
-                <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input
+                  id="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  placeholder="(123) 456-7890"
+                  value={phone}
+                  onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <FieldLabel htmlFor="homeAddress">Home address</FieldLabel>
-                <Textarea
-                  id="homeAddress"
-                  rows={3}
-                  value={homeAddress}
-                  onChange={(e) => setHomeAddress(e.target.value)}
-                />
+                <FieldLabel htmlFor="addressLine1">Home address</FieldLabel>
+                <div className="grid gap-3 sm:grid-cols-6">
+                  <Input
+                    id="addressLine1"
+                    className="sm:col-span-6"
+                    autoComplete="address-line1"
+                    placeholder="Street address"
+                    value={homeAddress.line1}
+                    onChange={(e) =>
+                      setHomeAddress((current) => ({ ...current, line1: e.target.value }))
+                    }
+                  />
+                  <Input
+                    id="addressLine2"
+                    className="sm:col-span-6"
+                    autoComplete="address-line2"
+                    placeholder="Apt, suite, etc. (optional)"
+                    value={homeAddress.line2}
+                    onChange={(e) =>
+                      setHomeAddress((current) => ({ ...current, line2: e.target.value }))
+                    }
+                  />
+                  <Input
+                    id="addressCity"
+                    className="sm:col-span-3"
+                    autoComplete="address-level2"
+                    placeholder="City"
+                    value={homeAddress.city}
+                    onChange={(e) =>
+                      setHomeAddress((current) => ({ ...current, city: e.target.value }))
+                    }
+                  />
+                  <Input
+                    id="addressState"
+                    className="sm:col-span-1"
+                    autoComplete="address-level1"
+                    placeholder="ST"
+                    maxLength={2}
+                    value={homeAddress.state}
+                    onChange={(e) =>
+                      setHomeAddress((current) => ({
+                        ...current,
+                        state: formatStateInput(e.target.value),
+                      }))
+                    }
+                  />
+                  <Input
+                    id="addressPostalCode"
+                    className="sm:col-span-2"
+                    autoComplete="postal-code"
+                    placeholder="ZIP"
+                    inputMode="numeric"
+                    value={homeAddress.postalCode}
+                    onChange={(e) =>
+                      setHomeAddress((current) => ({
+                        ...current,
+                        postalCode: formatPostalCodeInput(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <FieldLabel htmlFor="emergencyContacts">Emergency contact(s)</FieldLabel>
@@ -398,11 +475,14 @@ export function PersonnelEditForm({
                   onChange={(e) => {
                     const next = e.target.value;
                     setRank(next);
-                    if (next && next !== (person.rank ?? "")) {
+                    if (!next || isTitleOnlyRank(next)) {
+                      setRankPromotedOn("");
+                    } else if (next === "Firefighter") {
+                      setRankPromotedOn(hireDate);
+                    } else if (next !== (person.rank ?? "")) {
                       const today = new Date().toISOString().slice(0, 10);
                       setRankPromotedOn(today);
                     }
-                    if (!next) setRankPromotedOn("");
                     if (!rankHasTitle(next)) setJobTitle("");
                   }}
                 >
@@ -413,7 +493,10 @@ export function PersonnelEditForm({
                     </option>
                   ))}
                 </Select>
-                {isRankOnProbation(rank, rankPromotedOn || null) ? (
+                {isRankOnProbation(
+                  rank,
+                  effectiveRankPromotedOn(rank, rankPromotedOn || null, hireDate || null)
+                ) ? (
                   <p className="text-xs text-amber-800">On probation (first year in rank)</p>
                 ) : null}
               </div>
@@ -424,7 +507,11 @@ export function PersonnelEditForm({
                     id="jobTitle"
                     value={jobTitle}
                     onChange={(e) => setJobTitle(e.target.value)}
-                    placeholder="e.g. Training, Operations"
+                    placeholder={
+                      isTitleOnlyRank(rank)
+                        ? "e.g. HR Manager, Finance"
+                        : "e.g. Training, Operations"
+                    }
                   />
                 </div>
               ) : null}
@@ -459,16 +546,18 @@ export function PersonnelEditForm({
                   })}
                 </div>
               </div>
-              <div className="space-y-2">
-                <FieldLabel htmlFor="rankPromotedOn">Promoted to this rank</FieldLabel>
-                <Input
-                  id="rankPromotedOn"
-                  type="date"
-                  value={rankPromotedOn}
-                  onChange={(e) => setRankPromotedOn(e.target.value)}
-                  disabled={!rank}
-                />
-              </div>
+              {rankShowsPromotionDate(rank) ? (
+                <div className="space-y-2">
+                  <FieldLabel htmlFor="rankPromotedOn">Promoted to this rank</FieldLabel>
+                  <Input
+                    id="rankPromotedOn"
+                    type="date"
+                    value={rankPromotedOn}
+                    onChange={(e) => setRankPromotedOn(e.target.value)}
+                    disabled={!rank}
+                  />
+                </div>
+              ) : null}
               <div className="space-y-2">
                 <FieldLabel htmlFor="shift">Shift</FieldLabel>
                 <Select
@@ -494,12 +583,16 @@ export function PersonnelEditForm({
               </div>
               <div className="space-y-2">
                 <FieldLabel htmlFor="hireDate">Hire date</FieldLabel>
-                <Input
-                  id="hireDate"
-                  type="date"
-                  value={hireDate}
-                  onChange={(e) => setHireDate(e.target.value)}
-                />
+                  <Input
+                    id="hireDate"
+                    type="date"
+                    value={hireDate}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setHireDate(next);
+                      if (rank === "Firefighter") setRankPromotedOn(next);
+                    }}
+                  />
               </div>
               <div className="space-y-2">
                 <FieldLabel htmlFor="location">Primary station / location</FieldLabel>

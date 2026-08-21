@@ -11,6 +11,7 @@ import {
   PERSONNEL_TASKBOOK_WITH_PROFILE_SELECT,
   PERSONNEL_TASKBOOK_PREREQ_CHECK_SELECT,
   PROFILE_ORG_COLUMNS,
+  comparePersonnelByName,
   isBattalionChiefRank,
   normalizeSwingUpRanks,
   type PersonnelCertification,
@@ -42,11 +43,7 @@ function mergeProfilesById(lists: PersonnelProfile[][]) {
       byId.set(person.id, person);
     }
   }
-  return [...byId.values()].sort((a, b) => {
-    const an = (a.display_name || a.email || "").toLowerCase();
-    const bn = (b.display_name || b.email || "").toLowerCase();
-    return an.localeCompare(bn);
-  });
+  return [...byId.values()].sort(comparePersonnelByName);
 }
 
 async function fetchAssignedReports(supabase: SupabaseClient, supervisorId: string) {
@@ -55,7 +52,8 @@ async function fetchAssignedReports(supabase: SupabaseClient, supervisorId: stri
   )
     .eq("supervisor_id", supervisorId)
     .eq("is_active", true)
-    .order("display_name", { ascending: true, nullsFirst: false });
+    .order("last_name", { ascending: true, nullsFirst: false })
+    .order("first_name", { ascending: true, nullsFirst: false });
 
   if (error) {
     const fallback = await excludePlatformOperatorsFromRoster(
@@ -63,7 +61,8 @@ async function fetchAssignedReports(supabase: SupabaseClient, supervisorId: stri
     )
       .eq("supervisor_id", supervisorId)
       .eq("is_active", true)
-      .order("display_name", { ascending: true, nullsFirst: false });
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false });
     if (fallback.error) {
       return { rows: [] as PersonnelProfile[], error: error as PostgrestError };
     }
@@ -99,7 +98,8 @@ async function fetchShiftReports(
     .eq("shift", viewer.shift)
     .eq("is_active", true)
     .neq("id", viewer.id)
-    .order("display_name", { ascending: true, nullsFirst: false });
+    .order("last_name", { ascending: true, nullsFirst: false })
+    .order("first_name", { ascending: true, nullsFirst: false });
 
   if (error) {
     const fallback = await excludePlatformOperatorsFromRoster(
@@ -108,7 +108,8 @@ async function fetchShiftReports(
       .eq("shift", viewer.shift)
       .eq("is_active", true)
       .neq("id", viewer.id)
-      .order("display_name", { ascending: true, nullsFirst: false });
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false });
     if (fallback.error) {
       return { rows: [] as PersonnelProfile[], error: error as PostgrestError };
     }
@@ -268,35 +269,97 @@ async function attachSupervisors(supabase: SupabaseClient, rows: PersonnelProfil
   });
 }
 
+async function attachPrimaryLocations(supabase: SupabaseClient, rows: PersonnelProfile[]) {
+  const missingIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.primary_location_id && !row.primary_location)
+        .map((row) => row.primary_location_id as string)
+    ),
+  ];
+  if (missingIds.length === 0) return rows;
+
+  const { data, error } = await supabase
+    .from("locations")
+    .select("id, name")
+    .in("id", missingIds);
+  if (error || !data?.length) return rows;
+
+  const byId = new Map(
+    data.map((row) => [row.id as string, { id: row.id as string, name: row.name as string }])
+  );
+  return rows.map((row) => {
+    if (row.primary_location || !row.primary_location_id) return row;
+    const primary_location = byId.get(row.primary_location_id);
+    return primary_location ? { ...row, primary_location } : row;
+  });
+}
+
+async function attachEmsClearedLevels(supabase: SupabaseClient, rows: PersonnelProfile[]) {
+  const missingIds = [
+    ...new Set(
+      rows
+        .filter((row) => row.ems_cleared_level_id && !row.ems_cleared_level)
+        .map((row) => row.ems_cleared_level_id as string)
+    ),
+  ];
+  if (missingIds.length === 0) return rows;
+
+  const { data, error } = await supabase
+    .from("ems_clearance_levels")
+    .select("id, name")
+    .in("id", missingIds);
+  if (error || !data?.length) return rows;
+
+  const byId = new Map(
+    data.map((row) => [row.id as string, { id: row.id as string, name: row.name as string }])
+  );
+  return rows.map((row) => {
+    if (row.ems_cleared_level || !row.ems_cleared_level_id) return row;
+    const ems_cleared_level = byId.get(row.ems_cleared_level_id);
+    return ems_cleared_level ? { ...row, ems_cleared_level } : row;
+  });
+}
+
 async function finalizePersonnelProfiles(supabase: SupabaseClient, rows: PersonnelProfile[]) {
   const withPermissions = await attachProfilePermissionLevels(supabase, rows);
-  return attachSupervisors(supabase, withPermissions);
+  const withSupervisors = await attachSupervisors(supabase, withPermissions);
+  const withLocations = await attachPrimaryLocations(supabase, withSupervisors);
+  return attachEmsClearedLevels(supabase, withLocations);
 }
 
 export async function fetchPersonnelDirectory(supabase: SupabaseClient) {
   const { data, error } = await excludePlatformOperatorsFromRoster(
     supabase.from("profiles").select(PERSONNEL_PROFILE_SELECT)
-  ).order("display_name", { ascending: true, nullsFirst: false });
+  )
+    .order("last_name", { ascending: true, nullsFirst: false })
+    .order("first_name", { ascending: true, nullsFirst: false });
 
   if (error) {
     const fallback = await excludePlatformOperatorsFromRoster(
       supabase.from("profiles").select(PROFILE_ORG_COLUMNS)
-    ).order("display_name", { ascending: true, nullsFirst: false });
+    )
+      .order("last_name", { ascending: true, nullsFirst: false })
+      .order("first_name", { ascending: true, nullsFirst: false });
     if (fallback.error) return { rows: [] as PersonnelProfile[], error };
     return {
-      rows: await finalizePersonnelProfiles(
-        supabase,
-        (fallback.data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
-      ),
+      rows: (
+        await finalizePersonnelProfiles(
+          supabase,
+          (fallback.data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+        )
+      ).sort(comparePersonnelByName),
       error: null as PostgrestError | null,
     };
   }
 
   return {
-    rows: await finalizePersonnelProfiles(
-      supabase,
-      (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
-    ),
+    rows: (
+      await finalizePersonnelProfiles(
+        supabase,
+        (data ?? []).map((row) => normalizePersonnelProfile(row as Record<string, unknown>))
+      )
+    ).sort(comparePersonnelByName),
     error: null as PostgrestError | null,
   };
 }

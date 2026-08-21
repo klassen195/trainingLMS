@@ -5,6 +5,7 @@ export const HOME_WIDGET_TYPES = [
   "apparatus_oos",
   "approvals_queue",
   "open_taskbooks",
+  "expiring_credentials",
 ] as const;
 
 export type HomeWidgetType = (typeof HOME_WIDGET_TYPES)[number];
@@ -49,6 +50,10 @@ export const HOME_WIDGET_CATALOG: Record<HomeWidgetType, Omit<HomeWidgetCatalogI
   open_taskbooks: {
     title: "Open taskbooks",
     description: "Taskbooks you have requested or are working.",
+  },
+  expiring_credentials: {
+    title: "Expiring certifications",
+    description: "Your certifications and EMS licenses due within six months.",
   },
 };
 
@@ -149,6 +154,17 @@ export type OpenTaskbookItem = {
   overdue: boolean;
 };
 
+export type ExpiringCredentialItem = {
+  id: string;
+  kind: "certification" | "ems_license";
+  kindLabel: string;
+  label: string;
+  expiresOn: string;
+  daysUntil: number;
+  whenLabel: string;
+  sectionId: "certifications" | "ems";
+};
+
 export type FlagMastPosition = "full" | "half";
 
 export type FlagMastSnapshot = {
@@ -165,6 +181,7 @@ export type HomeDashboardData = {
   apparatus: ApparatusOosItem[] | { error: string } | null;
   approvals: ApprovalQueueItem[] | { error: string } | null;
   taskbooks: OpenTaskbookItem[] | { error: string } | null;
+  expiringCredentials: ExpiringCredentialItem[] | { error: string } | null;
 };
 
 export type HomeDashboardPayload = {

@@ -5,12 +5,16 @@ import type {
   PersonnelTaskbook,
 } from "@/lib/personnel-types";
 import {
+  formatPersonnelRankDisplay,
   formatSwingUpRanks,
   familyDateEventLabel,
   familyDateTitle,
   isCertExpired,
   isRankOnProbation,
+  effectiveRankPromotedOn,
   isTaskbookOverdue,
+  isTitleOnlyRank,
+  normalizeSwingUpRanks,
   personnelDisplayName,
   personnelShiftLabel,
   rankHasTitle,
@@ -58,7 +62,10 @@ export function SupervisorDashboard({
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-4">
       {rows.map((person) => {
-        const onProbation = isRankOnProbation(person.rank, person.rank_promoted_on);
+        const onProbation = isRankOnProbation(
+          person.rank,
+          effectiveRankPromotedOn(person.rank, person.rank_promoted_on, person.hire_date)
+        );
         const station = person.primary_location?.name || "—";
         const shift = personnelShiftLabel(person.shift);
         const openBooks = taskbooksByProfile[person.id] ?? [];
@@ -115,16 +122,26 @@ export function SupervisorDashboard({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Rank</dt>
-                  <dd className="mt-0.5 font-medium">{person.rank || "—"}</dd>
-                  {rankHasTitle(person.rank) && person.job_title ? (
+                  <dt className="text-xs text-muted-foreground">
+                    {isTitleOnlyRank(person.rank) ? "Title" : "Rank"}
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {formatPersonnelRankDisplay(person.rank, person.job_title)}
+                  </dd>
+                  {rankHasTitle(person.rank) &&
+                  !isTitleOnlyRank(person.rank) &&
+                  person.job_title ? (
                     <dd className="text-xs text-muted-foreground">{person.job_title}</dd>
                   ) : null}
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Swing-up</dt>
-                  <dd className="mt-0.5 font-medium">{formatSwingUpRanks(person.swing_up)}</dd>
-                </div>
+                {normalizeSwingUpRanks(person.swing_up).length > 0 ? (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Swing-up</dt>
+                    <dd className="mt-0.5 font-medium">
+                      {formatSwingUpRanks(person.swing_up)}
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
 
               {upcomingDates.length > 0 ? (

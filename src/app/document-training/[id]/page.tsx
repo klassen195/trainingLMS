@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClipboardPen } from "lucide-react";
-import { requireCapability } from "@/lib/capability-access";
+import { requireCapability, getProfileCapabilities } from "@/lib/capability-access";
 import { getTrainingSession } from "@/app/document-training/actions";
 import { TrainingSessionFileDownloadButton } from "@/components/TrainingSessionFileDownloadButton";
+import { DeleteTrainingSessionButton } from "@/components/DeleteTrainingSessionButton";
 import {
   trainingSessionDayLabel,
   trainingSessionDisplayDate,
@@ -21,7 +22,8 @@ export default async function DocumentTrainingDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireCapability("document_training");
+  const profile = await requireCapability("document_training");
+  const caps = await getProfileCapabilities(profile);
   const { id } = await params;
   const session = await getTrainingSession(id);
   if (!session) notFound();
@@ -34,9 +36,14 @@ export default async function DocumentTrainingDetailPage({
         <Button asChild variant="outline" size="sm">
           <Link href="/document-training">Back to list</Link>
         </Button>
-        <Button asChild size="sm">
-          <Link href={`/document-training/${id}/edit`}>Edit report</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {caps.delete_training_reports ? (
+            <DeleteTrainingSessionButton sessionId={id} title={session.title} />
+          ) : null}
+          <Button asChild size="sm">
+            <Link href={`/document-training/${id}/edit`}>Edit report</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="mb-8">

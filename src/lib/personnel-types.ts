@@ -1,8 +1,14 @@
 import type { Profile } from "@/lib/training-lms-types";
-import { rankHasTitle, ranksWithoutProbation, swingUpRanks } from "@/lib/labels";
+import {
+  formatPersonnelRankDisplay,
+  isTitleOnlyRank,
+  rankHasTitle,
+  ranksWithoutProbation,
+  swingUpRanks,
+} from "@/lib/labels";
 import { PROFILE_PERMISSION_LEVELS_EMBED } from "@/lib/permission-levels-types";
 
-export { rankHasTitle };
+export { formatPersonnelRankDisplay, isTitleOnlyRank, rankHasTitle };
 
 export type ProfileSummary = {
   id: string;
@@ -88,6 +94,9 @@ export type PersonnelCertification = {
   issued_on: string | null;
   expires_on: string | null;
   notes: string | null;
+  file_name: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -213,10 +222,10 @@ export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_
 
 // Use the FK constraint name — `profiles!supervisor_id` is ambiguous on self-joins
 // and can resolve as "reports" (empty) instead of the assigned supervisor.
-export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!primary_location_id(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!ems_cleared_level_id(id, name)`;
+export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!profiles_primary_location_id_fkey(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)`;
 
 export const PERSONNEL_CERTIFICATION_SELECT =
-  "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, created_by, created_at";
+  "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, file_name, storage_path, mime_type, created_by, created_at";
 
 export const PERSONNEL_DOCUMENT_SELECT =
   "id, profile_id, title, file_name, storage_path, mime_type, uploaded_by, created_at";
@@ -277,6 +286,15 @@ export function buildPersonnelDocumentStoragePath(
   return `${profileId}/${documentId}/${sanitizePersonnelFileName(fileName)}`;
 }
 
+/** Same path layout as documents so existing storage RLS applies. */
+export function buildPersonnelCertificationStoragePath(
+  profileId: string,
+  certificationId: string,
+  fileName: string
+) {
+  return buildPersonnelDocumentStoragePath(profileId, certificationId, fileName);
+}
+
 export function composePersonnelDisplayName(
   firstName: string | null | undefined,
   lastName: string | null | undefined
@@ -296,6 +314,47 @@ export function personnelDisplayName(person: {
     person.display_name?.trim() ||
     person.email ||
     "Unnamed member"
+  );
+}
+
+/** Sort key: last name, then first name, then display fallback. */
+export function comparePersonnelByName(
+  a: {
+    first_name?: string | null;
+    last_name?: string | null;
+    display_name?: string | null;
+    email?: string | null;
+  },
+  b: {
+    first_name?: string | null;
+    last_name?: string | null;
+    display_name?: string | null;
+    email?: string | null;
+  }
+) {
+  const opts = { sensitivity: "base" as const };
+  const lastCmp = (a.last_name?.trim() || "").localeCompare(b.last_name?.trim() || "", undefined, opts);
+  if (lastCmp !== 0) return lastCmp;
+  const firstCmp = (a.first_name?.trim() || "").localeCompare(
+    b.first_name?.trim() || "",
+    undefined,
+    opts
+  );
+  if (firstCmp !== 0) return firstCmp;
+  return personnelDisplayName({
+    first_name: a.first_name,
+    last_name: a.last_name,
+    display_name: a.display_name ?? null,
+    email: a.email ?? null,
+  }).localeCompare(
+    personnelDisplayName({
+      first_name: b.first_name,
+      last_name: b.last_name,
+      display_name: b.display_name ?? null,
+      email: b.email ?? null,
+    }),
+    undefined,
+    opts
   );
 }
 
@@ -717,6 +776,21 @@ export function isRankOnProbation(
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
   return today >= start && today < end;
+}
+
+/** Rank promotion date shown in UI / used for probation. Firefighter uses hire date. */
+export function effectiveRankPromotedOn(
+  rank: string | null | undefined,
+  rankPromotedOn: string | null | undefined,
+  hireDate: string | null | undefined
+) {
+  if (rank === "Firefighter") return hireDate || null;
+  return rankPromotedOn || null;
+}
+
+/** Entry firefighter rank has no separate promotion date. */
+export function rankShowsPromotionDate(rank: string | null | undefined) {
+  return Boolean(rank) && !isTitleOnlyRank(rank) && rank !== "Firefighter";
 }
 
 export function isTaskbookOverdue(taskbook: {

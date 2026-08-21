@@ -12,13 +12,16 @@ import {
 } from "@/lib/supabase/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
+  buildPersonnelCertificationStoragePath,
   buildPersonnelDocumentStoragePath,
   PERSONNEL_DOCUMENTS_BUCKET,
   sanitizePersonnelFileName,
   composePersonnelDisplayName,
   addYearsToDate,
+  effectiveRankPromotedOn,
   normalizeSwingUpRanks,
   isPersonnelSupervisorOf,
+  isTitleOnlyRank,
   rankHasTitle,
   type PersonnelShift,
 } from "@/lib/personnel-types";
@@ -26,6 +29,8 @@ import { listShiftBattalionChiefIds, personHasSupervisorCoverage } from "@/lib/p
 import { autoIssuedTaskbooks, swingUpRanks, taskbookRanks, getTaskbookPrerequisites } from "@/lib/labels";
 import { isRecognitionAwardId } from "@/lib/recognition-awards";
 import { normalizeAuthEmail } from "@/lib/auth-messages";
+import { formatPhoneInput } from "@/lib/phone";
+import { serializePostalAddress, parsePostalAddress } from "@/lib/address";
 import {
   generateTemporaryPassword,
   withMustChangePassword,
@@ -262,6 +267,10 @@ export async function updatePersonnelProfile(input: {
   const displayName = composePersonnelDisplayName(firstName, lastName);
   const rank = input.rank?.trim() || null;
   const jobTitle = rankHasTitle(rank) ? input.jobTitle?.trim() || null : null;
+  const hireDate = input.hireDate || null;
+  const rankPromotedOn = isTitleOnlyRank(rank)
+    ? null
+    : effectiveRankPromotedOn(rank, input.rankPromotedOn || null, hireDate);
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
@@ -280,12 +289,14 @@ export async function updatePersonnelProfile(input: {
         const order = new Map<string, number>(swingUpRanks.map((rank, index) => [rank, index]));
         return [...selected].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
       })(),
-      rank_promoted_on: input.rankPromotedOn || null,
+      rank_promoted_on: rankPromotedOn,
       employee_number: input.employeeNumber?.trim() || null,
-      phone: input.phone?.trim() || null,
-      hire_date: input.hireDate || null,
+      phone: input.phone ? formatPhoneInput(input.phone.trim()) || null : null,
+      hire_date: hireDate,
       shift: input.shift,
-      home_address: input.homeAddress?.trim() || null,
+      home_address: input.homeAddress
+        ? serializePostalAddress(parsePostalAddress(input.homeAddress))
+        : null,
       emergency_contacts: input.emergencyContacts?.trim() || null,
       hr_info: input.hrInfo?.trim() || null,
       anniversary: input.anniversary || null,
@@ -404,23 +415,40 @@ export async function createPersonnelCertification(input: {
   issuedOn?: string;
   expiresOn?: string;
   notes?: string;
+  fileName?: string | null;
+  mimeType?: string | null;
 }) {
   const admin = await requireAdmin();
   const name = input.name.trim();
   if (!name) throw new Error("Certification name is required.");
 
+  const hasFile = Boolean(input.fileName?.trim());
+  const fileName = hasFile ? sanitizePersonnelFileName(input.fileName!) : null;
+  if (hasFile && !fileName) throw new Error("File name is required.");
+
+  const certificationId = crypto.randomUUID();
+  const storagePath =
+    hasFile && fileName
+      ? buildPersonnelCertificationStoragePath(input.profileId, certificationId, fileName)
+      : null;
+
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("personnel_certifications").insert({
+    id: certificationId,
     profile_id: input.profileId,
     name,
     issuing_authority: input.issuingAuthority?.trim() || null,
     issued_on: input.issuedOn || null,
     expires_on: input.expiresOn || null,
     notes: input.notes?.trim() || null,
+    file_name: fileName,
+    storage_path: storagePath,
+    mime_type: hasFile ? input.mimeType?.trim() || null : null,
     created_by: admin.id,
   });
   throwIfDbError(error);
   revalidatePersonnel(input.profileId);
+  return { certificationId, storagePath };
 }
 
 export async function updatePersonnelCertification(input: {
@@ -431,30 +459,89 @@ export async function updatePersonnelCertification(input: {
   issuedOn?: string;
   expiresOn?: string;
   notes?: string;
+  /** When set with fileName, attach or replace the certification file. */
+  fileName?: string | null;
+  mimeType?: string | null;
+  /** When true, remove any attached file. */
+  removeFile?: boolean;
 }) {
   await requireAdmin();
   const name = input.name.trim();
   if (!name) throw new Error("Certification name is required.");
 
   const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("personnel_certifications")
+    .select("id, storage_path")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(existingError);
+  if (!existing) throw new Error("Certification not found.");
+
+  const patch: Record<string, string | null> = {
+    name,
+    issuing_authority: input.issuingAuthority?.trim() || null,
+    issued_on: input.issuedOn || null,
+    expires_on: input.expiresOn || null,
+    notes: input.notes?.trim() || null,
+  };
+
+  let storagePath: string | null = null;
+  const attachingFile = Boolean(input.fileName?.trim()) && !input.removeFile;
+
+  if (input.removeFile || attachingFile) {
+    if (existing.storage_path) {
+      await supabase.storage.from(PERSONNEL_DOCUMENTS_BUCKET).remove([existing.storage_path]);
+    }
+    if (input.removeFile) {
+      patch.file_name = null;
+      patch.storage_path = null;
+      patch.mime_type = null;
+    } else if (attachingFile) {
+      const fileName = sanitizePersonnelFileName(input.fileName!);
+      if (!fileName) throw new Error("File name is required.");
+      storagePath = buildPersonnelCertificationStoragePath(input.profileId, input.id, fileName);
+      patch.file_name = fileName;
+      patch.storage_path = storagePath;
+      patch.mime_type = input.mimeType?.trim() || null;
+    }
+  }
+
   const { error } = await supabase
     .from("personnel_certifications")
-    .update({
-      name,
-      issuing_authority: input.issuingAuthority?.trim() || null,
-      issued_on: input.issuedOn || null,
-      expires_on: input.expiresOn || null,
-      notes: input.notes?.trim() || null,
-    })
+    .update(patch)
     .eq("id", input.id)
     .eq("profile_id", input.profileId);
   throwIfDbError(error);
   revalidatePersonnel(input.profileId);
+  return { storagePath };
 }
 
-export async function deletePersonnelCertification(input: { id: string; profileId: string }) {
+export async function deletePersonnelCertification(input: {
+  id: string;
+  profileId: string;
+  storagePath?: string | null;
+}) {
   await requireAdmin();
   const supabase = await createSupabaseServerClient();
+
+  let storagePath = input.storagePath ?? null;
+  if (!storagePath) {
+    const { data, error: fetchError } = await supabase
+      .from("personnel_certifications")
+      .select("storage_path")
+      .eq("id", input.id)
+      .eq("profile_id", input.profileId)
+      .maybeSingle();
+    throwIfDbError(fetchError);
+    storagePath = data?.storage_path ?? null;
+  }
+
+  if (storagePath) {
+    await supabase.storage.from(PERSONNEL_DOCUMENTS_BUCKET).remove([storagePath]);
+  }
+
   const { error } = await supabase
     .from("personnel_certifications")
     .delete()
@@ -462,6 +549,33 @@ export async function deletePersonnelCertification(input: { id: string; profileI
     .eq("profile_id", input.profileId);
   throwIfDbError(error);
   revalidatePersonnel(input.profileId);
+}
+
+export async function getPersonnelCertificationDownloadUrl(input: {
+  id: string;
+  profileId: string;
+}) {
+  const profile = await requireUserProfile();
+  if (!profile.is_admin && profile.id !== input.profileId) {
+    throw new Error("Not allowed to download this certification.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: cert, error } = await supabase
+    .from("personnel_certifications")
+    .select("storage_path, profile_id")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!cert?.storage_path) throw new Error("Certification file not found.");
+
+  const { data, error: signedError } = await supabase.storage
+    .from(PERSONNEL_DOCUMENTS_BUCKET)
+    .createSignedUrl(cert.storage_path, 60);
+  if (signedError) throw new Error(signedError.message);
+  if (!data?.signedUrl) throw new Error("Could not create download link.");
+  return { url: data.signedUrl };
 }
 
 export async function createPersonnelQualification(input: {

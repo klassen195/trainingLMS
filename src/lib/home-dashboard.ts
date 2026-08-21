@@ -22,6 +22,7 @@ import {
   parseHomeWidgetTypes,
   type ApparatusOosItem,
   type ApprovalQueueItem,
+  type ExpiringCredentialItem,
   type FlagLevel,
   type FlagSnapshot,
   type HomeDashboardPayload,
@@ -32,8 +33,15 @@ import {
 import { apparatusTypeLabel } from "@/lib/labels";
 import { loadNwsFlagAlerts, loadNwsWeather } from "@/lib/nws-weather";
 import { loadFlagMastStatus } from "@/lib/flag-mast";
-import { fetchPersonnelTaskbooks } from "@/lib/personnel";
 import {
+  fetchPersonnelCertifications,
+  fetchPersonnelEmsLicenses,
+  fetchPersonnelTaskbooks,
+} from "@/lib/personnel";
+import {
+  collectExpiringPersonnelItems,
+  expiringItemKindLabel,
+  expiringWhenLabel,
   isTaskbookOverdue,
   personnelDisplayName,
   taskbookStatusLabel,
@@ -54,6 +62,7 @@ function availableWidgetTypes(caps: Record<AppCapability, boolean>): HomeWidgetT
   if (caps.view_apparatus || caps.view_fleet || caps.manage_assets) types.push("apparatus_oos");
   if (caps.approval_tracker) types.push("approvals_queue");
   types.push("open_taskbooks");
+  types.push("expiring_credentials");
   return types;
 }
 
@@ -300,6 +309,48 @@ async function loadOpenTaskbooks(
     .map(toOpenTaskbookItem);
 }
 
+async function loadExpiringCredentials(
+  supabase: SupabaseClient,
+  profileId: string
+): Promise<ExpiringCredentialItem[] | { error: string }> {
+  const [certs, licenses] = await Promise.all([
+    fetchPersonnelCertifications(supabase, profileId),
+    fetchPersonnelEmsLicenses(supabase, profileId),
+  ]);
+
+  if (certs.error) {
+    if (isMissingPersonnelTables(certs.error)) {
+      return { error: "Certifications are not set up yet." };
+    }
+    return { error: certs.error.message };
+  }
+  if (licenses.error) {
+    if (isMissingPersonnelTables(licenses.error)) {
+      return { error: "EMS licenses are not set up yet." };
+    }
+    return { error: licenses.error.message };
+  }
+
+  return collectExpiringPersonnelItems({
+    certifications: certs.rows,
+    emsLicenses: licenses.rows,
+  })
+    .filter(
+      (item): item is typeof item & { kind: "certification" | "ems_license"; sectionId: "certifications" | "ems" } =>
+        item.kind === "certification" || item.kind === "ems_license"
+    )
+    .map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      kindLabel: expiringItemKindLabel(item.kind),
+      label: item.label,
+      expiresOn: item.expiresOn,
+      daysUntil: item.daysUntil,
+      whenLabel: expiringWhenLabel(item.daysUntil),
+      sectionId: item.sectionId,
+    }));
+}
+
 export async function loadHomeDashboard(input: {
   profile: Profile;
   capabilities: Record<AppCapability, boolean>;
@@ -312,25 +363,29 @@ export async function loadHomeDashboard(input: {
   const needsWeather = available.includes("weather") || available.includes("fire_danger");
   const settings = needsWeather ? await loadOpsSettings(input.supabase) : null;
 
-  const [weatherAndFlag, flagMast, apparatus, approvals, taskbooks] = await Promise.all([
-    needsWeather
-      ? loadWeatherAndFlag(settings)
-      : Promise.resolve({ weather: null, flag: null as FlagSnapshot | null }),
-    available.includes("flag_mast")
-      ? loadFlagMastStatus().catch((err: unknown) => ({
-          error: err instanceof Error ? err.message : "Flag status is unavailable.",
-        }))
-      : Promise.resolve(null),
-    available.includes("apparatus_oos")
-      ? loadApparatusOos(input.supabase)
-      : Promise.resolve(null),
-    available.includes("approvals_queue")
-      ? loadApprovalsQueue(input.supabase, input.profile.id)
-      : Promise.resolve(null),
-    available.includes("open_taskbooks")
-      ? loadOpenTaskbooks(input.supabase, input.profile.id)
-      : Promise.resolve(null),
-  ]);
+  const [weatherAndFlag, flagMast, apparatus, approvals, taskbooks, expiringCredentials] =
+    await Promise.all([
+      needsWeather
+        ? loadWeatherAndFlag(settings)
+        : Promise.resolve({ weather: null, flag: null as FlagSnapshot | null }),
+      available.includes("flag_mast")
+        ? loadFlagMastStatus().catch((err: unknown) => ({
+            error: err instanceof Error ? err.message : "Flag status is unavailable.",
+          }))
+        : Promise.resolve(null),
+      available.includes("apparatus_oos")
+        ? loadApparatusOos(input.supabase)
+        : Promise.resolve(null),
+      available.includes("approvals_queue")
+        ? loadApprovalsQueue(input.supabase, input.profile.id)
+        : Promise.resolve(null),
+      available.includes("open_taskbooks")
+        ? loadOpenTaskbooks(input.supabase, input.profile.id)
+        : Promise.resolve(null),
+      available.includes("expiring_credentials")
+        ? loadExpiringCredentials(input.supabase, input.profile.id)
+        : Promise.resolve(null),
+    ]);
 
   return {
     profileId: input.profile.id,
@@ -346,6 +401,7 @@ export async function loadHomeDashboard(input: {
       apparatus,
       approvals,
       taskbooks,
+      expiringCredentials,
     },
   };
 }

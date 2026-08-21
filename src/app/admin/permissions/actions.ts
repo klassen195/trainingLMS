@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
-import { APP_CAPABILITIES, type AppCapability } from "@/lib/capabilities";
+import { APP_CAPABILITIES, capabilityMeta, type AppCapability } from "@/lib/capabilities";
 import {
   PERMISSION_LEVEL_SELECT,
   type PermissionLevel,
@@ -140,6 +140,113 @@ export async function deletePermissionLevel(input: { id: string }) {
     if (nextDefault?.id) {
       await supabase.from("permission_levels").update({ is_default: true }).eq("id", nextDefault.id);
     }
+  }
+
+  revalidatePermissions();
+}
+
+export async function reorderPermissionLevels(input: { permissionLevelIds: string[] }) {
+  await requireAdmin();
+  if (input.permissionLevelIds.length === 0) return;
+
+  const supabase = await createSupabaseServerClient();
+
+  for (const [index, id] of input.permissionLevelIds.entries()) {
+    const { error } = await supabase
+      .from("permission_levels")
+      .update({ sort_order: index + 1 })
+      .eq("id", id);
+    if (error) throw new Error(supabaseErrorMessage(error));
+  }
+
+  revalidatePermissions();
+}
+
+export async function reorderCapabilities(input: {
+  items: { capability: string; group: string; label?: string }[];
+}) {
+  const profile = await requireAdmin();
+  if (input.items.length === 0) return;
+
+  const known = new Set<string>(APP_CAPABILITIES);
+  const seen = new Set<string>();
+  const items: { capability: AppCapability; group: string; label: string }[] = [];
+
+  for (const item of input.items) {
+    if (!known.has(item.capability) || seen.has(item.capability)) continue;
+    const group = item.group.trim();
+    if (!group) continue;
+    const capability = item.capability as AppCapability;
+    const label = item.label?.trim() || capabilityMeta[capability].label;
+    seen.add(item.capability);
+    items.push({ capability, group, label });
+  }
+
+  for (const capability of APP_CAPABILITIES) {
+    if (seen.has(capability)) continue;
+    items.push({
+      capability,
+      group: capabilityMeta[capability].group,
+      label: capabilityMeta[capability].label,
+    });
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("capability_display_order").upsert(
+    items.map((item, index) => ({
+      client_id: profile.client_id,
+      capability: item.capability,
+      group_name: item.group,
+      label: item.label,
+      sort_order: index + 1,
+    })),
+    { onConflict: "client_id,capability" }
+  );
+  if (error) throw new Error(supabaseErrorMessage(error));
+
+  revalidatePermissions();
+}
+
+export async function renameCapability(input: { capability: string; label: string }) {
+  const profile = await requireAdmin();
+  if (!(APP_CAPABILITIES as readonly string[]).includes(input.capability)) {
+    throw new Error("Unknown capability.");
+  }
+  const capability = input.capability as AppCapability;
+  const label = input.label.trim();
+  if (!label) throw new Error("Enter a capability name.");
+
+  const supabase = await createSupabaseServerClient();
+  const meta = capabilityMeta[capability];
+
+  const { data: existing, error: existingError } = await supabase
+    .from("capability_display_order")
+    .select("capability, group_name, sort_order")
+    .eq("capability", capability)
+    .maybeSingle();
+  if (existingError) throw new Error(supabaseErrorMessage(existingError));
+
+  if (existing) {
+    const { error } = await supabase
+      .from("capability_display_order")
+      .update({ label })
+      .eq("capability", capability);
+    if (error) throw new Error(supabaseErrorMessage(error));
+  } else {
+    const { data: maxRow } = await supabase
+      .from("capability_display_order")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { error } = await supabase.from("capability_display_order").insert({
+      client_id: profile.client_id,
+      capability,
+      group_name: meta.group,
+      label,
+      sort_order: (maxRow?.sort_order ?? 0) + 1,
+    });
+    if (error) throw new Error(supabaseErrorMessage(error));
   }
 
   revalidatePermissions();

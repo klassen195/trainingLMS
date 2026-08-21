@@ -44,21 +44,32 @@ import {
   SheetTrigger,
 } from "@/components/ui/Sheet";
 
-function authNavItemsFor(showIncidents: boolean, showFleet: boolean, showApprovals: boolean) {
+function authNavItemsFor(options: {
+  showShiftExchange: boolean;
+  showPrograms: boolean;
+  showAssets: boolean;
+  showFleet: boolean;
+  showIncidents: boolean;
+  showPersonnel: boolean;
+  showDocumentTraining: boolean;
+  showApprovals: boolean;
+}) {
   return [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight },
-    { href: "/programs", label: "Programs", icon: GraduationCap },
-    { href: "/assets", label: "Assets", icon: Package },
-    ...(showFleet ? [{ href: "/fleet", label: "Fleet", icon: Wrench }] : []),
-    ...(showIncidents ? [{ href: "/incidents", label: "Incidents", icon: Siren }] : []),
-    {
-      href: "/personnel",
-      label: "Personnel",
-      icon: Users,
-    },
-    { href: "/document-training", label: "Training", icon: ClipboardPen },
-    ...(showApprovals ? [{ href: "/approval-tracker", label: "Policy Tracker", icon: ListChecks }] : []),
+    ...(options.showShiftExchange
+      ? [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }]
+      : []),
+    ...(options.showPrograms ? [{ href: "/programs", label: "Programs", icon: GraduationCap }] : []),
+    ...(options.showAssets ? [{ href: "/assets", label: "Assets", icon: Package }] : []),
+    ...(options.showFleet ? [{ href: "/fleet", label: "Fleet", icon: Wrench }] : []),
+    ...(options.showIncidents ? [{ href: "/incidents", label: "Incidents", icon: Siren }] : []),
+    ...(options.showPersonnel ? [{ href: "/personnel", label: "Personnel", icon: Users }] : []),
+    ...(options.showDocumentTraining
+      ? [{ href: "/document-training", label: "Training", icon: ClipboardPen }]
+      : []),
+    ...(options.showApprovals
+      ? [{ href: "/approval-tracker", label: "Policy Tracker", icon: ListChecks }]
+      : []),
   ];
 }
 
@@ -67,8 +78,13 @@ export function MainNav({
   mustChangePassword = false,
   showInstructor = false,
   showAdmin = false,
+  showShiftExchange = false,
+  showPrograms = false,
+  showAssets = false,
   showIncidents = false,
   showFleet = false,
+  showPersonnel = false,
+  showDocumentTraining = false,
   showApprovals = false,
   actingClientId = null,
   actingClients = [],
@@ -77,8 +93,13 @@ export function MainNav({
   mustChangePassword?: boolean;
   showInstructor?: boolean;
   showAdmin?: boolean;
+  showShiftExchange?: boolean;
+  showPrograms?: boolean;
+  showAssets?: boolean;
   showIncidents?: boolean;
   showFleet?: boolean;
+  showPersonnel?: boolean;
+  showDocumentTraining?: boolean;
   showApprovals?: boolean;
   actingClientId?: string | null;
   actingClients?: Pick<Client, "id" | "code" | "name" | "is_active">[];
@@ -109,7 +130,18 @@ export function MainNav({
   const loggedInNavItems = mustChangePassword
     ? []
     : [
-        ...(profile ? authNavItemsFor(showIncidents, showFleet, showApprovals) : []),
+        ...(profile
+          ? authNavItemsFor({
+              showShiftExchange,
+              showPrograms,
+              showAssets,
+              showFleet,
+              showIncidents,
+              showPersonnel,
+              showDocumentTraining,
+              showApprovals,
+            })
+          : []),
         ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
         ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
       ];
@@ -121,25 +153,25 @@ export function MainNav({
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
-      <div className="container relative mx-auto flex h-20 items-center px-4">
+      <div className="container mx-auto flex h-20 items-center gap-2 px-4">
         <Link
           href={mustChangePassword ? "/account/change-password" : "/"}
-          className="relative z-10 flex shrink-0 items-center gap-3 hover:opacity-80 transition-opacity"
+          className="flex shrink-0 items-center gap-3 hover:opacity-80 transition-opacity"
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
             FD
           </div>
-          <span className="hidden lg:inline text-xl font-bold">Anchor Point</span>
+          <span className="hidden xl:inline text-xl font-bold">Anchor Point</span>
         </Link>
 
-        <div className="absolute inset-x-0 hidden justify-center pointer-events-none md:flex">
-          <div className="pointer-events-auto flex items-start gap-1">
+        <div className="hidden min-w-0 flex-1 justify-center overflow-x-auto [scrollbar-width:none] lg:flex [&::-webkit-scrollbar]:hidden">
+          <div className="flex max-w-full items-start justify-center">
             {allNavItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex w-[4.5rem] flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex w-14 shrink-0 flex-col items-center gap-1 rounded-md px-0.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground xl:w-16 xl:px-1",
                   isActive(item.href) && "bg-accent text-accent-foreground"
                 )}
               >
@@ -159,12 +191,12 @@ export function MainNav({
           </div>
         </div>
 
-        <div className="relative z-10 ml-auto hidden items-center gap-2 md:flex">
+        <div className="hidden shrink-0 items-center gap-2 lg:flex">
           {showDepartmentSwitcher && actingClientId ? (
             <DepartmentSwitcher
               clients={actingClients}
               actingClientId={actingClientId}
-              className="h-10 w-[11.5rem] py-1 text-xs"
+              className="h-10 w-28 py-1 text-xs xl:w-[11.5rem]"
             />
           ) : null}
           {profile ? (
@@ -225,7 +257,7 @@ export function MainNav({
           )}
         </div>
 
-        <div className="relative z-10 ml-auto flex items-center gap-2 md:hidden">
+        <div className="ml-auto flex items-center gap-2 lg:hidden">
           {profile ? (
             <Avatar className="h-8 w-8 rounded-md">
               <AvatarFallback className="rounded-md">{initials}</AvatarFallback>

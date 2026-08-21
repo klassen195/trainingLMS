@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { assertCapability, requireCapability } from "@/lib/capability-access";
 import {
@@ -555,6 +556,47 @@ export async function createTrainingSession(input: {
 
   revalidateTraining(session.id);
   return { sessionId: session.id };
+}
+
+export async function deleteTrainingSession(sessionId: string) {
+  await assertCapability("delete_training_reports");
+  const supabase = await createSupabaseServerClient();
+
+  const { data: session, error: sessionError } = await supabase
+    .from("training_sessions")
+    .select("id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  throwIfDbError(sessionError);
+  if (!session) throw new Error("Training report not found.");
+
+  const { data: files, error: filesError } = await supabase
+    .from("training_session_files")
+    .select("storage_path")
+    .eq("session_id", sessionId);
+  throwIfDbError(filesError);
+
+  const { error: grantsError } = await supabase
+    .from("personnel_qualifications")
+    .delete()
+    .eq("source_session_id", sessionId);
+  throwIfDbError(grantsError);
+
+  const storagePaths = (files ?? [])
+    .map((file) => file.storage_path as string)
+    .filter(Boolean);
+  if (storagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from(TRAINING_SESSION_FILES_BUCKET)
+      .remove(storagePaths);
+    if (storageError) throw new Error(storageError.message);
+  }
+
+  const { error } = await supabase.from("training_sessions").delete().eq("id", sessionId);
+  throwIfDbError(error);
+
+  revalidateTraining(sessionId);
+  redirect("/document-training");
 }
 
 export async function updateTrainingSession(input: {

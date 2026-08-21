@@ -106,22 +106,45 @@ export function PersonnelFileLayout({
 
 export function PersonnelFieldGrid({
   rows,
+  variant = "default",
 }: {
   rows: { label: string; value: ReactNode; fullWidth?: boolean }[];
+  variant?: "default" | "compact";
 }) {
+  const compact = variant === "compact";
+
   return (
-    <dl className="grid gap-4 sm:grid-cols-2">
+    <dl
+      className={
+        compact ? "grid gap-x-6 gap-y-2.5 sm:grid-cols-2" : "grid gap-4 sm:grid-cols-2"
+      }
+    >
       {rows.map((row) => {
         const isMultiline = typeof row.value === "string" && row.value.includes("\n");
         return (
           <div
             key={row.label}
-            className={row.fullWidth || isMultiline ? "sm:col-span-2" : undefined}
+            className={cn(
+              row.fullWidth || isMultiline ? "sm:col-span-2" : undefined,
+              compact && "flex items-baseline gap-3"
+            )}
           >
-            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <dt
+              className={cn(
+                "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                compact && "w-36 shrink-0 leading-tight"
+              )}
+            >
               {row.label}
             </dt>
-            <dd className="mt-1 whitespace-pre-wrap text-sm">{row.value}</dd>
+            <dd
+              className={cn(
+                "whitespace-pre-wrap text-sm",
+                compact ? "min-w-0 flex-1" : "mt-1"
+              )}
+            >
+              {row.value}
+            </dd>
           </div>
         );
       })}

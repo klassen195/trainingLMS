@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { HardHat, Package, Plus, Truck } from "lucide-react";
-import { requireUserProfile } from "@/lib/auth";
-import { getProfileCapabilities } from "@/lib/capability-access";
+import { requireCapability, getProfileCapabilities } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
@@ -9,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 
 export default async function AssetsPage() {
-  const profile = await requireUserProfile();
+  const profile = await requireCapability("access_assets");
   const caps = await getProfileCapabilities(profile);
   const supabase = await createSupabaseServerClient();
 
