@@ -26,6 +26,7 @@ function throwIfDbError(error: PostgrestError | null) {
 
 function revalidateAssets(assetId?: string) {
   revalidatePath("/assets", "layout");
+  revalidatePath("/fleet");
   if (assetId) {
     revalidatePath(`/assets/${assetId}`);
     revalidatePath(`/assets/${assetId}/edit`);
@@ -62,6 +63,7 @@ export type AssetFormInput = {
   apparatus_type?: ApparatusType | null;
   year?: number | null;
   build_number?: string;
+  show_on_fleet_cards?: boolean;
   vehicle_check_template_ids?: string[];
 };
 
@@ -170,6 +172,7 @@ function buildAssetRow(input: AssetFormInput, createdBy?: string) {
     apparatus_type: input.kind === "apparatus" ? input.apparatus_type ?? null : null,
     year: input.kind === "apparatus" ? input.year ?? null : null,
     build_number: input.kind === "apparatus" ? emptyToNull(input.build_number) : null,
+    show_on_fleet_cards: input.kind === "apparatus" ? input.show_on_fleet_cards !== false : true,
   };
 
   if (createdBy) {

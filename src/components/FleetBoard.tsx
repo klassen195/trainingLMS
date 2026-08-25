@@ -1,9 +1,26 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, Fragment, type HTMLAttributes } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Wrench } from "lucide-react";
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Eye, EyeOff, GripVertical, LayoutGrid, LayoutList, Plus, Wrench } from "lucide-react";
 import type { AssetListRow, AssetStatus } from "@/lib/assets-types";
 import { assetDisplayLabel } from "@/lib/assets-types";
 import type { MaintenanceRequest, MaintenanceShopStatus } from "@/lib/maintenance-types";
@@ -13,6 +30,7 @@ import {
   isScheduleOverdue,
   nextDueSchedule,
 } from "@/lib/maintenance-schedules";
+import { groupFleetRows } from "@/lib/fleet-groups";
 import {
   apparatusTypeLabel,
   assetStatusBadgeClass,
@@ -27,6 +45,14 @@ import { cn } from "@/lib/cn";
 import { formatDate, isoDateLocal } from "@/lib/dates";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/Card";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import {
@@ -42,17 +68,33 @@ import {
   createMaintenanceSchedule,
   deleteMaintenanceSchedule,
   resolveFleetWorkOrder,
+  setFleetCardVisibility,
+  reorderFleetCards,
   updateFleetWorkOrder,
 } from "@/app/fleet/actions";
 
 type Mechanic = { id: string; display_name: string | null; email: string | null };
 type StatusFilter = "all" | AssetStatus;
 type ShopFilter = "all" | "needs_shop";
+type BoardView = "table" | "cards";
 type Panel =
   | { kind: "workorder"; requestId: string }
   | { kind: "create-wo"; assetId?: string }
   | { kind: "schedules"; assetId: string }
   | null;
+
+const VIEW_STORAGE_KEY = "fleet-board-view-v1";
+
+function loadBoardView(): BoardView {
+  if (typeof window === "undefined") return "table";
+  try {
+    const raw = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    if (raw === "table" || raw === "cards") return raw;
+  } catch {
+    // Ignore storage errors and keep the table default.
+  }
+  return "table";
+}
 
 function personLabel(person: Mechanic | null | undefined) {
   return person?.display_name || person?.email || "Unassigned";
@@ -69,6 +111,20 @@ function lastOpenOos(request: MaintenanceRequest, open: MaintenanceRequest[]) {
       other.id !== request.id &&
       other.service_status === "out_of_service"
   );
+}
+
+function assetShopMeta(
+  asset: AssetListRow,
+  openRequestsByAssetId: Record<string, MaintenanceRequest[]>,
+  schedulesByAssetId: Record<string, AssetMaintenanceSchedule[]>
+) {
+  const requests = openRequestsByAssetId[asset.id] ?? [];
+  const schedules = schedulesByAssetId[asset.id] ?? [];
+  const nextPm = nextDueSchedule(schedules);
+  const assignees = [
+    ...new Set(requests.map((request) => request.assigned_to).filter(Boolean)),
+  ] as string[];
+  return { requests, nextPm, assignees };
 }
 
 export function FleetBoard({
@@ -93,8 +149,27 @@ export function FleetBoard({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [shopFilter, setShopFilter] = useState<ShopFilter>("all");
+  const [view, setView] = useState<BoardView>("table");
+  const [viewHydrated, setViewHydrated] = useState(false);
+  const [customizingCards, setCustomizingCards] = useState(false);
+  const [sortOverride, setSortOverride] = useState<Record<string, number>>({});
   const [panel, setPanel] = useState<Panel>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  useEffect(() => {
+    setView(loadBoardView());
+    setViewHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!viewHydrated) return;
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  }, [view, viewHydrated]);
 
   const today = isoDateLocal(new Date());
 
@@ -142,6 +217,25 @@ export function FleetBoard({
     });
   }, [openRequestsByAssetId, query, rows, schedulesByAssetId, shopFilter, statusFilter, today]);
 
+  const groupedRows = useMemo(() => {
+    const source =
+      view === "cards" && !customizingCards
+        ? filteredRows.filter((asset) => asset.show_on_fleet_cards !== false)
+        : filteredRows;
+    return groupFleetRows(source, sortOverride);
+  }, [customizingCards, filteredRows, sortOverride, view]);
+
+  const canReorderCards =
+    view === "cards" &&
+    !query.trim() &&
+    statusFilter === "all" &&
+    shopFilter === "all" &&
+    !station;
+
+  useEffect(() => {
+    setSortOverride({});
+  }, [rows]);
+
   const selectedRequest = useMemo(() => {
     if (panel?.kind !== "workorder") return null;
     for (const list of Object.values(openRequestsByAssetId)) {
@@ -171,6 +265,34 @@ export function FleetBoard({
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
+    });
+  }
+
+  function handleCardDragEnd(groupRows: AssetListRow[], event: DragEndEvent) {
+    if (!canReorderCards) return;
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = groupRows.map((asset) => asset.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const nextIds = arrayMove(ids, oldIndex, newIndex);
+    const previous = sortOverride;
+    const nextOverride = { ...sortOverride };
+    nextIds.forEach((id, index) => {
+      nextOverride[id] = index + 1;
+    });
+    setSortOverride(nextOverride);
+    setError(null);
+    startTransition(async () => {
+      try {
+        await reorderFleetCards({ assetIds: nextIds });
+        router.refresh();
+      } catch (err) {
+        setSortOverride(previous);
+        setError(err instanceof Error ? err.message : "Could not save card order.");
       }
     });
   }
@@ -246,19 +368,119 @@ export function FleetBoard({
             <option value="needs_shop">Needs shop</option>
           </Select>
         </div>
-        <Button size="sm" className="h-8" onClick={() => setPanel({ kind: "create-wo" })}>
-          <Plus className="h-3.5 w-3.5" />
-          New work order
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <ViewToggle
+            view={view}
+            onChange={(next) => {
+              setView(next);
+              if (next !== "cards") setCustomizingCards(false);
+            }}
+          />
+          {view === "cards" ? (
+            <Button
+              size="sm"
+              variant={customizingCards ? "default" : "outline"}
+              className="h-8"
+              onClick={() => setCustomizingCards((open) => !open)}
+            >
+              {customizingCards ? "Done" : "Customize"}
+            </Button>
+          ) : null}
+          <Button size="sm" className="h-8" onClick={() => setPanel({ kind: "create-wo" })}>
+            <Plus className="h-3.5 w-3.5" />
+            New work order
+          </Button>
+        </div>
       </div>
 
       {error ? <FieldError>{error}</FieldError> : null}
+
+      {view === "cards" && customizingCards ? (
+        <p className="text-sm text-muted-foreground">
+          Choose which units appear on the card board. Hidden units stay on the table.
+        </p>
+      ) : null}
+
+      {view === "cards" && !canReorderCards && groupedRows.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Clear search, filters, and location to drag cards into a new order.
+        </p>
+      ) : null}
 
       {filteredRows.length === 0 ? (
         <div className="rounded-md border py-8 text-center">
           <p className="text-sm text-muted-foreground">
             {rows.length === 0 ? "No apparatus recorded yet." : "No units match those filters."}
           </p>
+        </div>
+      ) : groupedRows.length === 0 ? (
+        <div className="rounded-md border py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            No units are set to show on the card board.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-3 h-8"
+            onClick={() => setCustomizingCards(true)}
+          >
+            Customize
+          </Button>
+        </div>
+      ) : view === "cards" ? (
+        <div className="space-y-6">
+          {groupedRows.map((group) => (
+            <section key={group.id} className="space-y-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                {group.label}
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
+                  {group.rows.length}
+                </Badge>
+              </h2>
+              <DndContext
+                id={`fleet-cards-${group.id}`}
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleCardDragEnd(group.rows, event)}
+              >
+                <SortableContext
+                  items={group.rows.map((asset) => asset.id)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.rows.map((asset) => {
+                      const meta = assetShopMeta(asset, openRequestsByAssetId, schedulesByAssetId);
+                      return (
+                        <SortableFleetUnitCard
+                          key={asset.id}
+                          asset={asset}
+                          requests={meta.requests}
+                          nextPm={meta.nextPm}
+                          assignees={meta.assignees}
+                          mechanics={mechanics}
+                          today={today}
+                          customizing={customizingCards}
+                          pending={pending}
+                          sortable={canReorderCards}
+                          onOpenWorkOrder={(requestId) => setPanel({ kind: "workorder", requestId })}
+                          onOpenSchedules={() => setPanel({ kind: "schedules", assetId: asset.id })}
+                          onCreateWorkOrder={() => setPanel({ kind: "create-wo", assetId: asset.id })}
+                          onToggleVisible={() =>
+                            run(() =>
+                              setFleetCardVisibility({
+                                assetId: asset.id,
+                                visible: asset.show_on_fleet_cards === false,
+                              })
+                            )
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </section>
+          ))}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border">
@@ -280,100 +502,84 @@ export function FleetBoard({
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((asset) => {
-                const requests = openRequestsByAssetId[asset.id] ?? [];
-                const schedules = schedulesByAssetId[asset.id] ?? [];
-                const nextPm = nextDueSchedule(schedules);
-                const assignees = [
-                  ...new Set(requests.map((request) => request.assigned_to).filter(Boolean)),
-                ] as string[];
-                return (
-                  <tr key={asset.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                    <td className="px-2 py-1.5 align-top">
-                      <Link href={`/assets/${asset.id}`} className="font-medium hover:underline">
-                        {assetDisplayLabel(asset)}
-                      </Link>
-                    </td>
-                    <td className="px-2 py-1.5 align-top">
-                      {asset.apparatus_type ? apparatusTypeLabel(asset.apparatus_type) : "—"}
-                    </td>
-                    <td className="px-2 py-1.5 align-top">{asset.station || "—"}</td>
-                    <td className="px-2 py-1.5 align-top">
-                      <Badge className={cn(assetStatusBadgeClass(asset.status), "px-1.5 py-0 text-[10px]")}>
-                        {assetStatusLabel(asset.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-2 py-1.5 align-top">
-                      {requests.length === 0 ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {requests.map((request) => (
-                            <button
-                              key={request.id}
-                              type="button"
-                              onClick={() => setPanel({ kind: "workorder", requestId: request.id })}
-                              className="inline-flex max-w-[14rem] items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-left text-[10px] text-amber-950 hover:bg-amber-100"
-                            >
-                              <Wrench className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate">{request.title}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-1.5 align-top">
-                      {assignees.length === 0
-                        ? "—"
-                        : assignees
-                            .map((id) => personLabel(mechanicById(mechanics, id)))
-                            .join(", ")}
-                    </td>
-                    <td className="px-2 py-1.5 align-top">
-                      {nextPm ? (
-                        <button
-                          type="button"
-                          onClick={() => setPanel({ kind: "schedules", assetId: asset.id })}
-                          className={cn(
-                            "text-left hover:underline",
-                            isScheduleOverdue(nextPm.next_due_on, today) && "font-medium text-destructive"
-                          )}
-                        >
-                          <span className="block">{nextPm.title}</span>
-                          <span className="text-muted-foreground">{formatDate(nextPm.next_due_on)}</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setPanel({ kind: "schedules", assetId: asset.id })}
-                          className="text-muted-foreground hover:underline"
-                        >
-                          Add
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-2 py-1.5 align-top">{formatDate(asset.latest_daily_checked_at)}</td>
-                    <td className="px-2 py-1.5 align-top">{formatDate(asset.latest_weekly_checked_at)}</td>
-                    <td className="px-2 py-1.5 align-top text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-primary hover:underline"
-                          onClick={() => setPanel({ kind: "create-wo", assetId: asset.id })}
-                        >
-                          WO
-                        </button>
-                        <Link
-                          href={`/assets/${asset.id}`}
-                          className="text-xs font-medium text-primary hover:underline"
-                        >
-                          View
-                        </Link>
-                      </div>
-                    </td>
+              {groupedRows.map((group) => (
+                <Fragment key={group.id}>
+                  <tr>
+                    <th
+                      colSpan={10}
+                      scope="colgroup"
+                      className="border-b bg-muted/40 px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                      {group.label}
+                      <span className="ml-1.5 font-normal">({group.rows.length})</span>
+                    </th>
                   </tr>
-                );
-              })}
+                  {group.rows.map((asset) => {
+                    const { requests, nextPm, assignees } = assetShopMeta(
+                      asset,
+                      openRequestsByAssetId,
+                      schedulesByAssetId
+                    );
+                    return (
+                      <tr key={asset.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                        <td className="px-2 py-1.5 align-top">
+                          <Link href={`/assets/${asset.id}`} className="font-medium hover:underline">
+                            {assetDisplayLabel(asset)}
+                          </Link>
+                        </td>
+                        <td className="px-2 py-1.5 align-top">
+                          {asset.apparatus_type ? apparatusTypeLabel(asset.apparatus_type) : "—"}
+                        </td>
+                        <td className="px-2 py-1.5 align-top">{asset.station || "—"}</td>
+                        <td className="px-2 py-1.5 align-top">
+                          <Badge className={cn(assetStatusBadgeClass(asset.status), "px-1.5 py-0 text-[10px]")}>
+                            {assetStatusLabel(asset.status)}
+                          </Badge>
+                        </td>
+                        <td className="px-2 py-1.5 align-top">
+                          <WorkOrderChips
+                            requests={requests}
+                            onOpen={(requestId) => setPanel({ kind: "workorder", requestId })}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 align-top">
+                          {assignees.length === 0
+                            ? "—"
+                            : assignees
+                                .map((id) => personLabel(mechanicById(mechanics, id)))
+                                .join(", ")}
+                        </td>
+                        <td className="px-2 py-1.5 align-top">
+                          <NextPmControl
+                            nextPm={nextPm}
+                            today={today}
+                            onOpen={() => setPanel({ kind: "schedules", assetId: asset.id })}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 align-top">{formatDate(asset.latest_daily_checked_at)}</td>
+                        <td className="px-2 py-1.5 align-top">{formatDate(asset.latest_weekly_checked_at)}</td>
+                        <td className="px-2 py-1.5 align-top text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-primary hover:underline"
+                              onClick={() => setPanel({ kind: "create-wo", assetId: asset.id })}
+                            >
+                              WO
+                            </button>
+                            <Link
+                              href={`/assets/${asset.id}`}
+                              className="text-xs font-medium text-primary hover:underline"
+                            >
+                              View
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
@@ -453,6 +659,331 @@ export function FleetBoard({
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: BoardView;
+  onChange: (view: BoardView) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Fleet layout"
+      className="inline-flex h-8 overflow-hidden rounded-md border"
+    >
+      <button
+        type="button"
+        aria-pressed={view === "table"}
+        onClick={() => onChange("table")}
+        className={cn(
+          "inline-flex items-center gap-1.5 px-2.5 text-sm font-medium transition-colors",
+          view === "table"
+            ? "bg-primary text-primary-foreground"
+            : "bg-background hover:bg-accent"
+        )}
+      >
+        <LayoutList className="h-3.5 w-3.5" />
+        Table
+      </button>
+      <button
+        type="button"
+        aria-pressed={view === "cards"}
+        onClick={() => onChange("cards")}
+        className={cn(
+          "inline-flex items-center gap-1.5 border-l px-2.5 text-sm font-medium transition-colors",
+          view === "cards"
+            ? "bg-primary text-primary-foreground"
+            : "bg-background hover:bg-accent"
+        )}
+      >
+        <LayoutGrid className="h-3.5 w-3.5" />
+        Cards
+      </button>
+    </div>
+  );
+}
+
+function WorkOrderChips({
+  requests,
+  onOpen,
+  emptyLabel = "—",
+}: {
+  requests: MaintenanceRequest[];
+  onOpen: (requestId: string) => void;
+  emptyLabel?: string;
+}) {
+  if (requests.length === 0) {
+    return <span className="text-muted-foreground">{emptyLabel}</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {requests.map((request) => (
+        <button
+          key={request.id}
+          type="button"
+          onClick={() => onOpen(request.id)}
+          className="inline-flex max-w-[14rem] items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-left text-[10px] text-amber-950 hover:bg-amber-100"
+        >
+          <Wrench className="h-2.5 w-2.5 shrink-0" />
+          <span className="truncate">{request.title}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NextPmControl({
+  nextPm,
+  today,
+  onOpen,
+}: {
+  nextPm: AssetMaintenanceSchedule | null;
+  today: string;
+  onOpen: () => void;
+}) {
+  if (!nextPm) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="text-muted-foreground hover:underline"
+      >
+        Add
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "text-left hover:underline",
+        isScheduleOverdue(nextPm.next_due_on, today) && "font-medium text-destructive"
+      )}
+    >
+      <span className="block">{nextPm.title}</span>
+      <span className="text-muted-foreground">{formatDate(nextPm.next_due_on)}</span>
+    </button>
+  );
+}
+
+function statusAccentClass(status: AssetStatus) {
+  switch (status) {
+    case "out_of_service":
+      return "border-l-red-500";
+    case "reserve":
+      return "border-l-amber-400";
+    case "retired":
+      return "border-l-slate-400";
+    default:
+      return "border-l-emerald-500";
+  }
+}
+
+function SortableFleetUnitCard({
+  sortable,
+  ...props
+}: {
+  asset: AssetListRow;
+  requests: MaintenanceRequest[];
+  nextPm: AssetMaintenanceSchedule | null;
+  assignees: string[];
+  mechanics: Mechanic[];
+  today: string;
+  customizing: boolean;
+  pending: boolean;
+  sortable: boolean;
+  onOpenWorkOrder: (requestId: string) => void;
+  onOpenSchedules: () => void;
+  onCreateWorkOrder: () => void;
+  onToggleVisible: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.asset.id,
+    disabled: !sortable,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform) || undefined,
+    transition: transition || undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && "z-10 opacity-80")}>
+      <FleetUnitCard
+        {...props}
+        dragHandle={
+          sortable ? { attributes, listeners, disabled: props.pending } : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function FleetUnitCard({
+  asset,
+  requests,
+  nextPm,
+  assignees,
+  mechanics,
+  today,
+  customizing,
+  pending,
+  dragHandle,
+  onOpenWorkOrder,
+  onOpenSchedules,
+  onCreateWorkOrder,
+  onToggleVisible,
+}: {
+  asset: AssetListRow;
+  requests: MaintenanceRequest[];
+  nextPm: AssetMaintenanceSchedule | null;
+  assignees: string[];
+  mechanics: Mechanic[];
+  today: string;
+  customizing: boolean;
+  pending: boolean;
+  dragHandle?: {
+    attributes: HTMLAttributes<HTMLButtonElement>;
+    listeners?: HTMLAttributes<HTMLButtonElement>;
+    disabled?: boolean;
+  };
+  onOpenWorkOrder: (requestId: string) => void;
+  onOpenSchedules: () => void;
+  onCreateWorkOrder: () => void;
+  onToggleVisible: () => void;
+}) {
+  const typeLabel = asset.apparatus_type ? apparatusTypeLabel(asset.apparatus_type) : null;
+  const location = asset.station || "—";
+  const overduePm = nextPm ? isScheduleOverdue(nextPm.next_due_on, today) : false;
+  const dueSoonPm = nextPm ? isScheduleDueSoon(nextPm.next_due_on, 7, today) : false;
+  const hidden = asset.show_on_fleet_cards === false;
+
+  return (
+    <Card
+      className={cn(
+        "flex h-full flex-col border-l-4",
+        statusAccentClass(asset.status),
+        customizing && hidden && "opacity-60"
+      )}
+    >
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 p-4 pb-3">
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="text-lg leading-snug">
+            <Link
+              href={`/assets/${asset.id}`}
+              className="hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              {assetDisplayLabel(asset)}
+            </Link>
+          </CardTitle>
+          <CardDescription>
+            {[typeLabel, location].filter(Boolean).join(" · ")}
+            {customizing && hidden ? " · Hidden from cards" : ""}
+          </CardDescription>
+        </div>
+        <div className="flex shrink-0 items-start gap-1.5">
+          {dragHandle ? (
+            <button
+              type="button"
+              disabled={dragHandle.disabled}
+              className="inline-flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground active:cursor-grabbing disabled:opacity-50"
+              aria-label={`Reorder ${assetDisplayLabel(asset)}`}
+              {...dragHandle.attributes}
+              {...dragHandle.listeners}
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          {customizing ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onToggleVisible}
+              aria-pressed={!hidden}
+              aria-label={hidden ? "Show on card board" : "Hide from card board"}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+            >
+              {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </button>
+          ) : null}
+          <Badge className={cn(assetStatusBadgeClass(asset.status), "px-1.5 py-0 text-[10px]")}>
+            {assetStatusLabel(asset.status)}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-3 p-4 pt-0 text-sm">
+        <div>
+          <p className="text-xs text-muted-foreground">Open work</p>
+          <div className="mt-1">
+            <WorkOrderChips
+              requests={requests}
+              onOpen={onOpenWorkOrder}
+              emptyLabel="No open work"
+            />
+          </div>
+          {assignees.length > 0 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {assignees.map((id) => personLabel(mechanicById(mechanics, id))).join(", ")}
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Next PM</p>
+          <div className="mt-0.5">
+            {nextPm ? (
+              <button
+                type="button"
+                onClick={onOpenSchedules}
+                className={cn(
+                  "text-left text-sm hover:underline",
+                  overduePm && "font-medium text-destructive",
+                  dueSoonPm && !overduePm && "font-medium text-amber-800"
+                )}
+              >
+                <span className="block">{nextPm.title}</span>
+                <span className={cn(!overduePm && !dueSoonPm && "text-muted-foreground")}>
+                  {formatDate(nextPm.next_due_on)}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenSchedules}
+                className="text-sm text-muted-foreground hover:underline"
+              >
+                Add schedule
+              </button>
+            )}
+          </div>
+        </div>
+        <dl className="mt-auto grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <dt className="text-muted-foreground">Last daily</dt>
+            <dd className="mt-0.5 font-medium">{formatDate(asset.latest_daily_checked_at)}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Last weekly</dt>
+            <dd className="mt-0.5 font-medium">{formatDate(asset.latest_weekly_checked_at)}</dd>
+          </div>
+        </dl>
+      </CardContent>
+      <CardFooter className="justify-end gap-3 p-4 pt-0">
+        <button
+          type="button"
+          className="text-xs font-medium text-primary hover:underline"
+          onClick={onCreateWorkOrder}
+        >
+          WO
+        </button>
+        <Link href={`/assets/${asset.id}`} className="text-xs font-medium text-primary hover:underline">
+          View
+        </Link>
+      </CardFooter>
+    </Card>
   );
 }
 

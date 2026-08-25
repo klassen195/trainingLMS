@@ -54,6 +54,7 @@ const apparatusTypeLabels: Record<ApparatusType, string> = {
   ambulance: "Ambulance",
   rescue: "Rescue",
   tender: "Tender",
+  brush: "Brush",
   boat: "Boat",
   other: "Other",
 };

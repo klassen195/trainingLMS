@@ -83,6 +83,7 @@ export function apparatusTypeToIncidentUnitKind(
   if (apparatusType === "engine") return "engine";
   if (apparatusType === "ladder") return "ladder";
   if (apparatusType === "tender") return "tender";
+  if (apparatusType === "brush") return "brush";
   if (apparatusType === "ambulance") return "medic";
   return null;
 }

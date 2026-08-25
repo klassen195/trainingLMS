@@ -19,6 +19,7 @@ export type ApparatusType =
   | "ambulance"
   | "rescue"
   | "tender"
+  | "brush"
   | "boat"
   | "other";
 
@@ -78,6 +79,8 @@ export type Asset = {
   apparatus_type: ApparatusType | null;
   year: number | null;
   build_number: string | null;
+  show_on_fleet_cards: boolean;
+  fleet_card_sort: number;
 };
 
 export type AssetInspection = {
@@ -123,7 +126,7 @@ export type ApparatusUnitAssignmentWithActor = ApparatusUnitAssignment & {
 };
 
 export const ASSET_SELECT =
-  "id, created_at, updated_at, created_by, kind, name, status, station, manufacturer, model, serial_number, notes, assigned_to, assignment_type, assigned_station, assigned_apparatus_id, ppe_category, equipment_category_id, subcategory, equipment_subcategory_id, description, purchase_cost, in_service_on, size, manufactured_on, expires_on, unit_number, apparatus_type, year, build_number";
+  "id, created_at, updated_at, created_by, kind, name, status, station, manufacturer, model, serial_number, notes, assigned_to, assignment_type, assigned_station, assigned_apparatus_id, ppe_category, equipment_category_id, subcategory, equipment_subcategory_id, description, purchase_cost, in_service_on, size, manufactured_on, expires_on, unit_number, apparatus_type, year, build_number, show_on_fleet_cards, fleet_card_sort";
 
 export const ASSET_WITH_ASSIGNEE_SELECT = `${ASSET_SELECT}, assignee:profiles!assigned_to(id, display_name, email), assigned_apparatus:assets!assigned_apparatus_id(id, name, unit_number, build_number, kind), equipment_category:equipment_categories!equipment_category_id(id, name), equipment_subcategory:equipment_subcategories!equipment_subcategory_id(id, name, equipment_category_id)`;
 

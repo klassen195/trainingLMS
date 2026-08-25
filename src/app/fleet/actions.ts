@@ -20,6 +20,7 @@ import {
 } from "@/lib/supabase/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveMaintenanceRequest } from "@/app/assets/maintenance-actions";
+import { fleetTypeGroupId } from "@/lib/fleet-groups";
 
 const SHOP_STATUSES = new Set<MaintenanceShopStatus>([
   "new",
@@ -303,4 +304,50 @@ export async function deleteMaintenanceSchedule(input: { scheduleId: string }) {
     .eq("id", input.scheduleId);
   throwIfDbError(error);
   revalidateFleet(existing.asset_id);
+}
+
+export async function setFleetCardVisibility(input: {
+  assetId: string;
+  visible: boolean;
+}) {
+  await assertFleetShopAccess();
+  const supabase = await requireApparatus(input.assetId);
+  const { error } = await supabase.rpc("set_asset_show_on_fleet_cards", {
+    p_asset_id: input.assetId,
+    p_visible: input.visible,
+  });
+  throwIfDbError(error);
+  revalidateFleet(input.assetId);
+}
+
+export async function reorderFleetCards(input: { assetIds: string[] }) {
+  await assertFleetShopAccess();
+  const assetIds = [...new Set(input.assetIds.filter(Boolean))];
+  if (assetIds.length < 2) return;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("assets")
+    .select("id, kind, apparatus_type")
+    .in("id", assetIds);
+  throwIfDbError(error);
+
+  const rows = data ?? [];
+  if (rows.length !== assetIds.length) {
+    throw new Error("One or more units could not be reordered.");
+  }
+  if (rows.some((row) => row.kind !== "apparatus")) {
+    throw new Error("Fleet card order is limited to apparatus.");
+  }
+
+  const groups = new Set(rows.map((row) => fleetTypeGroupId(row.apparatus_type)));
+  if (groups.size !== 1) {
+    throw new Error("Units can only be reordered within the same category.");
+  }
+
+  const { error: reorderError } = await supabase.rpc("reorder_fleet_cards", {
+    p_asset_ids: assetIds,
+  });
+  throwIfDbError(reorderError);
+  revalidateFleet();
 }

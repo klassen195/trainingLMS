@@ -111,6 +111,9 @@ export function AssetForm({
   );
   const [year, setYear] = useState(asset?.year?.toString() ?? "");
   const [buildNumber, setBuildNumber] = useState(asset?.build_number ?? "");
+  const [showOnFleetCards, setShowOnFleetCards] = useState(
+    asset?.show_on_fleet_cards !== false
+  );
   const [vehicleCheckTemplateIds, setVehicleCheckTemplateIds] = useState<string[]>(
     assignedCheckTemplateIds
   );
@@ -179,6 +182,7 @@ export function AssetForm({
       apparatus_type: kind === "apparatus" && apparatusType ? apparatusType : null,
       year: year ? Number(year) : null,
       build_number: buildNumber,
+      show_on_fleet_cards: kind === "apparatus" ? showOnFleetCards : true,
       vehicle_check_template_ids: kind === "apparatus" ? vehicleCheckTemplateIds : [],
     };
   }
@@ -575,6 +579,20 @@ export function AssetForm({
               Selecting any list replaces those defaults for this build only.
             </p>
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={showOnFleetCards}
+              onChange={(e) => setShowOnFleetCards(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">Show on fleet card board</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Uncheck to keep this unit on the Fleet table without showing it as a card.
+              </span>
+            </span>
+          </label>
         </>
       )}
 
