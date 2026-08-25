@@ -7,8 +7,11 @@ import {
   type AssetWithAssignee,
 } from "@/lib/assets-types";
 import {
+  MAINTENANCE_PHOTO_BUCKET,
   MAINTENANCE_REQUEST_SELECT,
+  MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT,
   type MaintenanceRequest,
+  type MaintenanceRequestWithRequester,
 } from "@/lib/maintenance-types";
 import { isMissingMaintenanceRequestsTable, isMissingVehicleChecksTable } from "@/lib/supabase/errors";
 
@@ -207,4 +210,46 @@ export async function fetchOpenMaintenanceRequestsByAssetIds(
   }
 
   return { byAssetId, error: null };
+}
+
+export async function fetchMaintenanceRequestsForAsset(
+  supabase: SupabaseClient,
+  assetId: string
+): Promise<{ requests: MaintenanceRequestWithRequester[]; error: PostgrestError | null }> {
+  const { data: maintenanceRows, error } = await supabase
+    .from("maintenance_requests")
+    .select(MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT)
+    .eq("asset_id", assetId)
+    .order("requested_at", { ascending: false });
+
+  if (isMissingMaintenanceRequestsTable(error)) return { requests: [], error: null };
+  if (error) return { requests: [], error };
+
+  const requests = await Promise.all(
+    ((maintenanceRows ?? []) as Record<string, unknown>[]).map(async (item) => {
+      const { requester, ...rest } = item;
+      const rowRequest: MaintenanceRequestWithRequester = {
+        ...(rest as Omit<MaintenanceRequestWithRequester, "requester" | "photo_url">),
+        requester: asSingleProfile(
+          requester as
+            | { id: string; display_name: string | null; email: string | null }
+            | { id: string; display_name: string | null; email: string | null }[]
+            | null
+            | undefined
+        ),
+        photo_url: null,
+      };
+
+      if (rowRequest.photo_storage_path) {
+        const { data: signed } = await supabase.storage
+          .from(MAINTENANCE_PHOTO_BUCKET)
+          .createSignedUrl(rowRequest.photo_storage_path, 3600);
+        rowRequest.photo_url = signed?.signedUrl ?? null;
+      }
+
+      return rowRequest;
+    })
+  );
+
+  return { requests, error: null };
 }

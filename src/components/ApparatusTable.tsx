@@ -229,10 +229,12 @@ export function ApparatusTable({
   rows,
   openRequestsByAssetId,
   emptyMessage,
+  canRequestMaintenance = false,
 }: {
   rows: AssetListRow[];
   openRequestsByAssetId: Record<string, MaintenanceRequest[]>;
   emptyMessage: string;
+  canRequestMaintenance?: boolean;
 }) {
   const [visibility, setVisibility] = useState(defaultVisibility);
   const [hydrated, setHydrated] = useState(false);
@@ -417,12 +419,22 @@ export function ApparatusTable({
                       </td>
                     ))}
                     <td className="px-2 py-1 align-middle text-right">
-                      <Link
-                        href={`/assets/${asset.id}`}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        View
-                      </Link>
+                      <div className="flex flex-wrap items-center justify-end gap-x-2">
+                        <Link
+                          href={`/assets/${asset.id}`}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          View
+                        </Link>
+                        {canRequestMaintenance ? (
+                          <Link
+                            href={`/assets/${asset.id}/maintenance/new`}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            Request
+                          </Link>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                   {requests.length > 0 ? (

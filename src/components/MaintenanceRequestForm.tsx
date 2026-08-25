@@ -9,6 +9,7 @@ import {
   prepareMaintenancePhotoUpload,
 } from "@/app/assets/maintenance-actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { AssetKind } from "@/lib/assets-types";
 import {
   MAINTENANCE_PHOTO_ACCEPT,
   MAINTENANCE_PHOTO_BUCKET,
@@ -29,11 +30,13 @@ import { Select, Textarea, Input } from "@/components/ui/Input";
 
 export function MaintenanceRequestForm({
   assetId,
+  assetKind = "apparatus",
   vehicleCheckId = null,
   initialTitle = "",
   initialDescription = "",
 }: {
   assetId: string;
+  assetKind?: AssetKind;
   vehicleCheckId?: string | null;
   initialTitle?: string;
   initialDescription?: string;
@@ -121,7 +124,9 @@ export function MaintenanceRequestForm({
           }}
         >
           <div className="grid gap-1.5">
-            <FieldLabel htmlFor="maint-service-status">Vehicle status</FieldLabel>
+            <FieldLabel htmlFor="maint-service-status">
+              {assetKind === "apparatus" ? "Vehicle status" : "Equipment status"}
+            </FieldLabel>
             <Select
               id="maint-service-status"
               value={serviceStatus}
@@ -138,8 +143,9 @@ export function MaintenanceRequestForm({
             </Select>
             {serviceStatus === "out_of_service" ? (
               <FieldHint>
-                Submitting will mark this apparatus Out of service until an admin changes
-                it.
+                Submitting will mark this{" "}
+                {assetKind === "apparatus" ? "apparatus" : "item"} Out of service until
+                an admin changes it.
               </FieldHint>
             ) : null}
           </div>

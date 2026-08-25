@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowDown,
@@ -9,12 +9,16 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Columns3,
+  Wrench,
 } from "lucide-react";
 import type { AssetListRow } from "@/lib/assets-types";
 import { assetDisplayLabel, equipmentAssignmentLabel } from "@/lib/assets-types";
+import type { MaintenanceRequest } from "@/lib/maintenance-types";
 import {
   assetStatusBadgeClass,
   assetStatusLabel,
+  maintenanceRequestTypeLabel,
+  maintenanceServiceStatusLabel,
   ppeCategoryLabel,
 } from "@/lib/labels";
 import { cn } from "@/lib/cn";
@@ -324,10 +328,14 @@ export function EquipmentTable({
   rows,
   showAssignee,
   emptyMessage,
+  canRequestMaintenance = false,
+  openRequestsByAssetId = {},
 }: {
   rows: AssetListRow[];
   showAssignee: boolean;
   emptyMessage: string;
+  canRequestMaintenance?: boolean;
+  openRequestsByAssetId?: Record<string, MaintenanceRequest[]>;
 }) {
   const [visibility, setVisibility] = useState(() => defaultVisibility(showAssignee));
   const [hydrated, setHydrated] = useState(false);
@@ -527,23 +535,76 @@ export function EquipmentTable({
             </tr>
           </thead>
           <tbody>
-            {groupRowsList.map((asset) => (
-              <tr key={asset.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
-                {visibleColumns.map((col) => (
-                  <td key={col.id} className="px-2 py-1 align-middle">
-                    {renderCell(asset, col.id)}
-                  </td>
-                ))}
-                <td className="px-2 py-1 align-middle text-right">
-                  <Link
-                    href={`/assets/${asset.id}`}
-                    className="text-xs font-medium text-primary hover:underline"
+            {groupRowsList.map((asset) => {
+              const requests = openRequestsByAssetId[asset.id] ?? [];
+              return (
+                <Fragment key={asset.id}>
+                  <tr
+                    className={cn(
+                      "hover:bg-muted/20",
+                      requests.length === 0 && "border-b border-border/70 last:border-0"
+                    )}
                   >
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                    {visibleColumns.map((col) => (
+                      <td key={col.id} className="px-2 py-1 align-middle">
+                        {renderCell(asset, col.id)}
+                      </td>
+                    ))}
+                    <td className="px-2 py-1 align-middle text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-x-2">
+                        <Link
+                          href={`/assets/${asset.id}`}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          View
+                        </Link>
+                        {canRequestMaintenance ? (
+                          <Link
+                            href={`/assets/${asset.id}/maintenance/new`}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            Request
+                          </Link>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                  {requests.length > 0 ? (
+                    <tr className="border-b border-border/70 last:border-0 bg-amber-50/60">
+                      <td
+                        colSpan={visibleColumns.length + 1}
+                        className="px-2 py-1.5 align-top"
+                      >
+                        <ul className="space-y-0.5">
+                          {requests.map((request) => (
+                            <li
+                              key={request.id}
+                              className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-amber-950"
+                            >
+                              <Wrench className="h-3 w-3 shrink-0 text-amber-800" />
+                              <Link
+                                href={`/assets/${asset.id}`}
+                                className="font-medium hover:underline"
+                              >
+                                {request.title}
+                              </Link>
+                              <span className="text-muted-foreground">
+                                {maintenanceRequestTypeLabel(request.request_type)}
+                                {request.service_status === "out_of_service"
+                                  ? ` · ${maintenanceServiceStatusLabel(request.service_status)}`
+                                  : ""}
+                                {" · "}
+                                {formatDate(request.requested_at)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

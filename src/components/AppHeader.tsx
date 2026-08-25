@@ -49,7 +49,6 @@ export async function AppHeader() {
             capabilities?.manage_locations ||
             capabilities?.manage_vehicle_check_templates ||
             capabilities?.manage_quiz_banks ||
-            capabilities?.resolve_maintenance ||
             capabilities?.manage_assets
         )}
       />

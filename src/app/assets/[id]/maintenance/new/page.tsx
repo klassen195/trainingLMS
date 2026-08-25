@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Wrench } from "lucide-react";
-import { requireUserProfile } from "@/lib/auth";
+import { requireCapability } from "@/lib/capability-access";
 import { ASSET_SELECT, assetDisplayLabel, type Asset } from "@/lib/assets-types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -13,7 +13,7 @@ import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { MaintenanceRequestForm } from "@/components/MaintenanceRequestForm";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { apparatusTypeLabel } from "@/lib/labels";
+import { apparatusTypeLabel, ppeCategoryLabel } from "@/lib/labels";
 
 export default async function NewMaintenanceRequestPage({
   params,
@@ -22,7 +22,7 @@ export default async function NewMaintenanceRequestPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ checkId?: string }>;
 }) {
-  await requireUserProfile();
+  await requireCapability("submit_maintenance");
   const { id } = await params;
   const { checkId } = await searchParams;
   const supabase = await createSupabaseServerClient();
@@ -38,15 +38,12 @@ export default async function NewMaintenanceRequestPage({
   if (!asset) notFound();
 
   const row = asset as Asset;
-  if (row.kind !== "apparatus") {
-    redirect(`/assets/${row.id}`);
-  }
 
   let vehicleCheckId: string | null = null;
   let initialTitle = "";
   let initialDescription = "";
 
-  if (checkId) {
+  if (checkId && row.kind === "apparatus") {
     const { data: check, error: checkError } = await supabase
       .from("vehicle_checks")
       .select("id, asset_id")
@@ -94,8 +91,11 @@ export default async function NewMaintenanceRequestPage({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
             <span>{assetDisplayLabel(row)}</span>
-            {row.apparatus_type ? (
+            {row.kind === "apparatus" && row.apparatus_type ? (
               <Badge variant="outline">{apparatusTypeLabel(row.apparatus_type)}</Badge>
+            ) : null}
+            {row.kind === "ppe" && row.ppe_category ? (
+              <Badge variant="outline">{ppeCategoryLabel(row.ppe_category)}</Badge>
             ) : null}
           </div>
         </div>
@@ -106,6 +106,7 @@ export default async function NewMaintenanceRequestPage({
 
       <MaintenanceRequestForm
         assetId={row.id}
+        assetKind={row.kind}
         vehicleCheckId={vehicleCheckId}
         initialTitle={initialTitle}
         initialDescription={initialDescription}

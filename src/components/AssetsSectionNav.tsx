@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HardHat, Truck } from "lucide-react";
+import { HardHat, Truck, Wrench } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-const allTabs = [
-  { href: "/assets/ppe", label: "Equipment", icon: HardHat },
-  { href: "/assets/apparatus", label: "Apparatus", icon: Truck },
-] as const;
-
-export function AssetsSectionNav({ showApparatus = true }: { showApparatus?: boolean }) {
+export function AssetsSectionNav({
+  showApparatus = true,
+  showMaintenance = false,
+}: {
+  showApparatus?: boolean;
+  showMaintenance?: boolean;
+}) {
   const pathname = usePathname();
-  const tabs = showApparatus ? allTabs : allTabs.filter((tab) => tab.href !== "/assets/apparatus");
+  const tabs = [
+    { href: "/assets/ppe", label: "Equipment", icon: HardHat, show: true },
+    { href: "/assets/apparatus", label: "Apparatus", icon: Truck, show: showApparatus },
+    { href: "/assets/maintenance", label: "Maintenance", icon: Wrench, show: showMaintenance },
+  ].filter((tab) => tab.show);
 
   return (
     <div className="mb-3 flex flex-wrap gap-1.5">

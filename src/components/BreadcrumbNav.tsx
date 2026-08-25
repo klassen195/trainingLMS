@@ -58,6 +58,8 @@ export function BreadcrumbNav() {
       breadcrumbs.push({ label: "Equipment" });
     } else if (paths[1] === "apparatus") {
       breadcrumbs.push({ label: "Apparatus" });
+    } else if (paths[1] === "maintenance") {
+      breadcrumbs.push({ label: "Maintenance requests" });
     } else if (paths[1] === "new") {
       breadcrumbs.push({ label: "New" });
     } else if (paths[1]) {

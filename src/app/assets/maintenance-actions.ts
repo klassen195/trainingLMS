@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { requireUserProfile } from "@/lib/auth";
-import { assertFleetShopAccess } from "@/lib/capability-access";
+import { assertCapability, assertFleetShopAccess } from "@/lib/capability-access";
 import {
   buildMaintenancePhotoStoragePath,
   type MaintenanceRequestType,
@@ -27,6 +27,7 @@ function throwIfDbError(error: PostgrestError | null) {
 
 function revalidateMaintenance(assetId?: string) {
   revalidatePath("/assets", "layout");
+  revalidatePath("/assets/maintenance");
   revalidatePath("/admin/maintenance");
   revalidatePath("/fleet");
   if (assetId) {
@@ -43,7 +44,7 @@ export async function createMaintenanceRequest(input: {
   description?: string;
   vehicleCheckId?: string | null;
 }) {
-  const profile = await requireUserProfile();
+  const profile = await assertCapability("submit_maintenance");
   const title = input.title.trim();
   if (!title) throw new Error("Title is required.");
   const description = input.description?.trim() ?? "";
@@ -56,12 +57,15 @@ export async function createMaintenanceRequest(input: {
     .eq("id", input.assetId)
     .maybeSingle();
   throwIfDbError(assetError);
-  if (!asset) throw new Error("Apparatus not found.");
-  if (asset.kind !== "apparatus") {
-    throw new Error("Maintenance requests can only be created for apparatus.");
+  if (!asset) throw new Error("Asset not found.");
+  if (asset.kind !== "apparatus" && asset.kind !== "ppe") {
+    throw new Error("Maintenance requests can only be created for equipment or apparatus.");
   }
 
   if (input.vehicleCheckId) {
+    if (asset.kind !== "apparatus") {
+      throw new Error("Vehicle checks can only be linked to apparatus maintenance requests.");
+    }
     const { data: check, error: checkError } = await supabase
       .from("vehicle_checks")
       .select("id, asset_id")
@@ -109,7 +113,7 @@ export async function finalizeMaintenanceRequest(input: {
   throwIfDbError(fetchError);
   if (!request) throw new Error("Maintenance request not found.");
   if (request.asset_id !== input.assetId) {
-    throw new Error("Maintenance request does not match this apparatus.");
+    throw new Error("Maintenance request does not match this asset.");
   }
   if (request.status !== "open") {
     throw new Error("Maintenance request is not open.");
@@ -144,7 +148,7 @@ export async function prepareMaintenancePhotoUpload(input: {
   throwIfDbError(fetchError);
   if (!request) throw new Error("Maintenance request not found.");
   if (request.asset_id !== input.assetId) {
-    throw new Error("Maintenance request does not match this apparatus.");
+    throw new Error("Maintenance request does not match this asset.");
   }
   if (request.status !== "open") {
     throw new Error("Photos can only be added to open requests.");

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { HardHat, Plus } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
 import { getProfileCapabilities } from "@/lib/capability-access";
-import { fetchAssetsWithLatestInspection } from "@/lib/assets";
+import { fetchAssetsWithLatestInspection, fetchOpenMaintenanceRequestsByAssetIds } from "@/lib/assets";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingAssetsTable } from "@/lib/supabase/errors";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
@@ -23,6 +23,13 @@ export default async function AssetsPpePage() {
 
   if (isMissingAssetsTable(error)) return <AssetsDatabaseSetup />;
   if (error) throw error;
+
+  const { byAssetId: openRequestsByAssetId, error: maintenanceError } =
+    await fetchOpenMaintenanceRequestsByAssetIds(
+      supabase,
+      rows.map((asset) => asset.id)
+    );
+  if (maintenanceError) throw maintenanceError;
 
   return (
     <div className="container mx-auto px-4 py-5">
@@ -53,11 +60,16 @@ export default async function AssetsPpePage() {
         ) : null}
       </div>
 
-      <AssetsSectionNav showApparatus={caps.view_apparatus || canManage} />
+      <AssetsSectionNav
+        showApparatus={caps.view_apparatus || canManage}
+        showMaintenance={caps.resolve_maintenance}
+      />
 
       <EquipmentTable
         rows={rows}
         showAssignee={viewAll}
+        canRequestMaintenance={caps.submit_maintenance}
+        openRequestsByAssetId={openRequestsByAssetId}
         emptyMessage={
           viewAll
             ? "No equipment recorded yet. Add the first item."

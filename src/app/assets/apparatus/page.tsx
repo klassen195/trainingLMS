@@ -74,7 +74,10 @@ export default async function AssetsApparatusPage({
         ) : null}
       </div>
 
-      <AssetsSectionNav />
+      <AssetsSectionNav
+        showApparatus
+        showMaintenance={caps.resolve_maintenance}
+      />
 
       <div className="mb-3 flex flex-wrap gap-1.5">
         <Link
@@ -107,6 +110,7 @@ export default async function AssetsApparatusPage({
       <ApparatusTable
         rows={rows}
         openRequestsByAssetId={openRequestsByAssetId}
+        canRequestMaintenance={caps.submit_maintenance}
         emptyMessage={
           station
             ? `No apparatus recorded for ${station}.`

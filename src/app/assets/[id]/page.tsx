@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Package } from "lucide-react";
+import { Package, Wrench } from "lucide-react";
 import { isAdmin, requireUserProfile } from "@/lib/auth";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import {
   ASSET_WITH_ASSIGNEE_SELECT,
   INSPECTION_WITH_INSPECTOR_SELECT,
@@ -25,7 +26,6 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   isMissingAssetsTable,
-  isMissingMaintenanceRequestsTable,
   isMissingVehicleChecksTable,
 } from "@/lib/supabase/errors";
 import {
@@ -34,7 +34,7 @@ import {
   type VehicleCheckResponse,
   type VehicleCheckWithDetails,
 } from "@/lib/vehicle-checks-types";
-import { asSingleProfile, normalizeAssetRow } from "@/lib/assets";
+import { asSingleProfile, fetchMaintenanceRequestsForAsset, normalizeAssetRow } from "@/lib/assets";
 import { AssetInspectionForm } from "@/components/AssetInspectionForm";
 import { AssetsDatabaseSetup } from "@/components/AssetsDatabaseSetup";
 import { DeleteAssetButton } from "@/components/DeleteAssetButton";
@@ -45,11 +45,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import {
-  MAINTENANCE_PHOTO_BUCKET,
-  MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT,
-  type MaintenanceRequestWithRequester,
-} from "@/lib/maintenance-types";
+import type { MaintenanceRequestWithRequester } from "@/lib/maintenance-types";
 
 function formatPerson(
   person: { display_name: string | null; email: string | null } | null | undefined
@@ -71,6 +67,7 @@ export default async function AssetDetailPage({
 }) {
   const profile = await requireUserProfile();
   const admin = isAdmin(profile);
+  const caps = await getProfileCapabilities(profile);
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
@@ -251,42 +248,12 @@ export default async function AssetDetailPage({
       });
     }
 
-    const { data: maintenanceRows, error: maintenanceError } = await supabase
-      .from("maintenance_requests")
-      .select(MAINTENANCE_REQUEST_WITH_REQUESTER_SELECT)
-      .eq("asset_id", id)
-      .order("requested_at", { ascending: false });
-
-    if (maintenanceError && !isMissingMaintenanceRequestsTable(maintenanceError)) {
-      throw maintenanceError;
-    } else if (!maintenanceError) {
-      maintenanceRequests = await Promise.all(
-        ((maintenanceRows ?? []) as Record<string, unknown>[]).map(async (item) => {
-          const { requester, ...rest } = item;
-          const rowRequest: MaintenanceRequestWithRequester = {
-            ...(rest as Omit<MaintenanceRequestWithRequester, "requester" | "photo_url">),
-            requester: asSingleProfile(
-              requester as
-                | { id: string; display_name: string | null; email: string | null }
-                | { id: string; display_name: string | null; email: string | null }[]
-                | null
-                | undefined
-            ),
-            photo_url: null,
-          };
-
-          if (rowRequest.photo_storage_path) {
-            const { data: signed } = await supabase.storage
-              .from(MAINTENANCE_PHOTO_BUCKET)
-              .createSignedUrl(rowRequest.photo_storage_path, 3600);
-            rowRequest.photo_url = signed?.signedUrl ?? null;
-          }
-
-          return rowRequest;
-        })
-      );
-    }
   }
+
+  const { requests: loadedMaintenance, error: maintenanceError } =
+    await fetchMaintenanceRequestsForAsset(supabase, id);
+  if (maintenanceError) throw maintenanceError;
+  maintenanceRequests = loadedMaintenance;
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -326,6 +293,14 @@ export default async function AssetDetailPage({
           <Button variant="outline" asChild>
             <Link href={listHref}>Back</Link>
           </Button>
+          {caps.submit_maintenance ? (
+            <Button asChild className="bg-[#C11B2B] text-white">
+              <Link href={`/assets/${row.id}/maintenance/new`}>
+                <Wrench className="h-4 w-4" />
+                Request maintenance
+              </Link>
+            </Button>
+          ) : null}
           {admin ? (
             <>
               <Button variant="outline" asChild>
@@ -510,10 +485,11 @@ export default async function AssetDetailPage({
           </Card>
 
           {row.kind === "ppe" ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Inspection history</CardTitle>
-              </CardHeader>
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Inspection history</CardTitle>
+                </CardHeader>
               <CardContent>
                 {inspectionHistory.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No inspections logged yet.</p>
@@ -568,7 +544,9 @@ export default async function AssetDetailPage({
                 )}
               </CardContent>
             </Card>
-          ) : (
+            <MaintenanceRequestHistory requests={maintenanceRequests} />
+              </>
+            ) : (
             <>
               <VehicleCheckHistory assetId={row.id} checks={vehicleChecks} />
               <MaintenanceRequestHistory requests={maintenanceRequests} />
@@ -622,8 +600,25 @@ export default async function AssetDetailPage({
         </div>
 
         {row.kind === "ppe" ? (
-          admin ? (
-            <AssetInspectionForm assetId={row.id} />
+          caps.submit_maintenance || admin ? (
+            <div className="space-y-6">
+              {caps.submit_maintenance ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Maintenance</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button asChild className="w-full bg-[#C11B2B] text-white">
+                      <Link href={`/assets/${row.id}/maintenance/new`}>
+                        <Wrench className="h-4 w-4" />
+                        Request maintenance
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : null}
+              {admin ? <AssetInspectionForm assetId={row.id} /> : null}
+            </div>
           ) : null
         ) : (
           <Card>
@@ -650,9 +645,11 @@ export default async function AssetDetailPage({
                   </Button>
                 ))
               )}
-              <Button variant="outline" asChild className="w-full">
-                <Link href={`/assets/${row.id}/maintenance/new`}>Request maintenance</Link>
-              </Button>
+              {caps.submit_maintenance ? (
+                <Button variant="outline" asChild className="w-full">
+                  <Link href={`/assets/${row.id}/maintenance/new`}>Request maintenance</Link>
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         )}

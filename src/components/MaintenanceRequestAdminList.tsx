@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { resolveMaintenanceRequest } from "@/app/assets/maintenance-actions";
 import { assetDisplayLabel } from "@/lib/assets-types";
@@ -105,14 +106,23 @@ export function MaintenanceRequestAdminList({
           filtered.map((request) => {
             const assetLabel = request.asset
               ? assetDisplayLabel(request.asset)
-              : "Unknown apparatus";
+              : "Unknown asset";
             return (
               <div
                 key={request.id}
                 className="rounded-md border border-border px-3 py-3 text-sm"
               >
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{assetLabel}</span>
+                  {request.asset ? (
+                    <Link
+                      href={`/assets/${request.asset.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {assetLabel}
+                    </Link>
+                  ) : (
+                    <span className="font-medium">{assetLabel}</span>
+                  )}
                   <Badge className={maintenanceRequestStatusBadgeClass(request.status)}>
                     {maintenanceRequestStatusLabel(request.status)}
                   </Badge>

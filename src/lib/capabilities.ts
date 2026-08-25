@@ -126,7 +126,7 @@ export const capabilityMeta: Record<
   submit_maintenance: {
     group: "Assets & operations",
     label: "Submit maintenance requests",
-    description: "File apparatus maintenance requests.",
+    description: "File maintenance requests for equipment and apparatus.",
   },
   manage_assets: {
     group: "Administration",
@@ -151,7 +151,7 @@ export const capabilityMeta: Record<
   resolve_maintenance: {
     group: "Administration",
     label: "Resolve maintenance",
-    description: "Review and resolve maintenance requests.",
+    description: "Review and resolve maintenance requests. Shows Maintenance requests on Assets.",
   },
   manage_users: {
     group: "Administration",

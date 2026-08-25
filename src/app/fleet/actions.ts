@@ -41,6 +41,7 @@ function throwIfDbError(error: PostgrestError | null) {
 
 function revalidateFleet(assetId?: string) {
   revalidatePath("/fleet");
+  revalidatePath("/assets/maintenance");
   revalidatePath("/admin/maintenance");
   revalidatePath("/assets", "layout");
   if (assetId) {
