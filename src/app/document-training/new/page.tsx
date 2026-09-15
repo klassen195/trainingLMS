@@ -6,6 +6,7 @@ import { listTrainingCategories } from "@/lib/training-categories";
 import { listQualifications } from "@/lib/qualifications";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DocumentTrainingForm } from "@/components/DocumentTrainingForm";
+import { TrainingSectionNav } from "@/components/TrainingSectionNav";
 import { Button } from "@/components/ui/Button";
 
 export default async function NewDocumentTrainingPage() {
@@ -25,6 +26,7 @@ export default async function NewDocumentTrainingPage() {
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
+      <TrainingSectionNav pathname="/document-training" />
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-3">
           <ClipboardPen className="h-7 w-7 text-primary" />

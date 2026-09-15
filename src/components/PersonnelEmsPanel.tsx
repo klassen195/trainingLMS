@@ -3,20 +3,27 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  createPersonnelEmsClearanceLogEntry,
   createPersonnelEmsLicense,
+  deletePersonnelEmsClearanceLogEntry,
   deletePersonnelEmsLicense,
   setPersonnelEmsClearance,
+  updatePersonnelEmsClearanceLogEntry,
   updatePersonnelEmsLicense,
 } from "@/app/personnel/actions";
 import type { EmsClearanceLevel } from "@/lib/ems-clearance-levels-types";
 import type { EmsLevel } from "@/lib/ems-levels-types";
-import type { PersonnelEmsLicense } from "@/lib/personnel-types";
-import { isCertExpired } from "@/lib/personnel-types";
+import type { PersonnelEmsClearanceLogEntry, PersonnelEmsLicense } from "@/lib/personnel-types";
+import {
+  EMS_CLEARANCE_NOT_SET_LABEL,
+  isCertExpired,
+  personnelDisplayName,
+} from "@/lib/personnel-types";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
-import { formatDate } from "@/lib/dates";
+import { formatDate, isoDateLocal } from "@/lib/dates";
 
 export function PersonnelEmsPanel({
   profileId,
@@ -25,7 +32,9 @@ export function PersonnelEmsPanel({
   clearanceCatalog,
   clearedLevelId,
   clearedLevel = null,
+  clearanceLog = [],
   canManage,
+  canEditLog = false,
 }: {
   profileId: string;
   licenses: PersonnelEmsLicense[];
@@ -33,12 +42,17 @@ export function PersonnelEmsPanel({
   clearanceCatalog: EmsClearanceLevel[];
   clearedLevelId: string | null;
   clearedLevel?: { id: string; name: string } | null;
+  clearanceLog?: PersonnelEmsClearanceLogEntry[];
   canManage: boolean;
+  canEditLog?: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [addingLog, setAddingLog] = useState(false);
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [clearanceId, setClearanceId] = useState(clearedLevelId ?? "");
+  const [clearanceNotes, setClearanceNotes] = useState("");
   const [clearanceError, setClearanceError] = useState<string | null>(null);
   const [clearancePending, startClearanceTransition] = useTransition();
 
@@ -97,7 +111,9 @@ export function PersonnelEmsPanel({
                   await setPersonnelEmsClearance({
                     profileId,
                     clearanceLevelId: clearanceId || null,
+                    notes: clearanceNotes,
                   });
+                  setClearanceNotes("");
                   router.refresh();
                 } catch (err) {
                   setClearanceError(
@@ -131,6 +147,17 @@ export function PersonnelEmsPanel({
             >
               {clearancePending ? "Saving…" : "Save clearance"}
             </Button>
+            <div className="w-full space-y-1.5">
+              <FieldLabel htmlFor="personnel-ems-clearance-notes">Log note (optional)</FieldLabel>
+              <Textarea
+                id="personnel-ems-clearance-notes"
+                value={clearanceNotes}
+                onChange={(e) => setClearanceNotes(e.target.value)}
+                rows={2}
+                disabled={clearancePending}
+                placeholder="Recorded with this clearance change"
+              />
+            </div>
             {clearanceError ? <FieldError className="w-full">{clearanceError}</FieldError> : null}
           </form>
         ) : (
@@ -214,6 +241,85 @@ export function PersonnelEmsPanel({
           ) : (
             <Button type="button" size="sm" variant="secondary" onClick={() => setAdding(true)}>
               Add license
+            </Button>
+          )
+        ) : null}
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-medium">Clearance log</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            History of EMS clearances given to this person.
+          </p>
+        </div>
+
+        {clearanceLog.length === 0 && !addingLog ? (
+          <p className="text-sm text-muted-foreground">No clearance history yet.</p>
+        ) : (
+          <ul className="space-y-3">
+            {clearanceLog.map((row) =>
+              editingLogId === row.id ? (
+                <li key={row.id} className="rounded-lg border p-4">
+                  <ClearanceLogForm
+                    profileId={profileId}
+                    catalog={clearanceOptions}
+                    initial={row}
+                    onDone={() => setEditingLogId(null)}
+                    onCancel={() => setEditingLogId(null)}
+                  />
+                </li>
+              ) : (
+                <li key={row.id} className="rounded-lg border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{row.clearance_level_name}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatDate(row.granted_on)}
+                        {row.created_by_profile
+                          ? ` · ${personnelDisplayName(row.created_by_profile)}`
+                          : null}
+                      </p>
+                      {row.previous_clearance_level_name ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Changed from {row.previous_clearance_level_name}
+                        </p>
+                      ) : null}
+                      {row.notes ? <p className="mt-2 text-sm">{row.notes}</p> : null}
+                    </div>
+                    {canEditLog ? (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setEditingLogId(row.id)}
+                        >
+                          Edit
+                        </Button>
+                        <DeleteClearanceLogButton id={row.id} profileId={profileId} />
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              )
+            )}
+          </ul>
+        )}
+
+        {canEditLog ? (
+          addingLog ? (
+            <div className="rounded-lg border p-4">
+              <ClearanceLogForm
+                profileId={profileId}
+                catalog={clearanceOptions}
+                onDone={() => setAddingLog(false)}
+                onCancel={() => setAddingLog(false)}
+              />
+            </div>
+          ) : (
+            <Button type="button" size="sm" variant="secondary" onClick={() => setAddingLog(true)}>
+              Add log entry
             </Button>
           )
         ) : null}
@@ -384,6 +490,152 @@ function LicenseForm({
       {error ? <FieldError>{error}</FieldError> : null}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={pending || !emsLevelId}>
+          {pending ? "Saving…" : initial ? "Save" : "Add"}
+        </Button>
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function DeleteClearanceLogButton({ id, profileId }: { id: string; profileId: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="secondary"
+      disabled={pending}
+      className="text-destructive"
+      onClick={() => {
+        if (!confirm("Delete this clearance log entry?")) return;
+        startTransition(async () => {
+          await deletePersonnelEmsClearanceLogEntry({ id, profileId });
+          router.refresh();
+        });
+      }}
+    >
+      {pending ? "Deleting…" : "Delete"}
+    </Button>
+  );
+}
+
+function ClearanceLogForm({
+  profileId,
+  catalog,
+  initial,
+  onDone,
+  onCancel,
+}: {
+  profileId: string;
+  catalog: EmsClearanceLevel[];
+  initial?: PersonnelEmsClearanceLogEntry;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const router = useRouter();
+  const fieldId = initial?.id ?? "new";
+  const options = useMemo(() => {
+    const list = [...catalog];
+    if (
+      initial?.clearance_level_id &&
+      !list.some((level) => level.id === initial.clearance_level_id)
+    ) {
+      list.unshift({
+        id: initial.clearance_level_id,
+        name: initial.clearance_level_name,
+        sort_order: 0,
+        is_active: false,
+        notes: "",
+        created_at: "",
+        updated_at: "",
+      });
+    }
+    return list;
+  }, [catalog, initial]);
+
+  const [clearanceLevelId, setClearanceLevelId] = useState(initial?.clearance_level_id ?? "");
+  const [grantedOn, setGrantedOn] = useState(initial?.granted_on ?? isoDateLocal(new Date()));
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        startTransition(async () => {
+          try {
+            if (initial) {
+              await updatePersonnelEmsClearanceLogEntry({
+                id: initial.id,
+                profileId,
+                clearanceLevelId: clearanceLevelId || null,
+                grantedOn,
+                notes,
+              });
+            } else {
+              await createPersonnelEmsClearanceLogEntry({
+                profileId,
+                clearanceLevelId: clearanceLevelId || null,
+                grantedOn,
+                notes,
+              });
+            }
+            router.refresh();
+            onDone();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to save clearance log");
+          }
+        });
+      }}
+    >
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor={`personnel-ems-log-level-${fieldId}`}>Level</FieldLabel>
+        <Select
+          id={`personnel-ems-log-level-${fieldId}`}
+          value={clearanceLevelId}
+          onChange={(e) => setClearanceLevelId(e.target.value)}
+          disabled={pending}
+        >
+          <option value="">{EMS_CLEARANCE_NOT_SET_LABEL}</option>
+          {options.map((level) => (
+            <option key={level.id} value={level.id}>
+              {level.name}
+              {!level.is_active ? " (inactive)" : ""}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor={`personnel-ems-log-granted-${fieldId}`}>Granted on</FieldLabel>
+        <Input
+          id={`personnel-ems-log-granted-${fieldId}`}
+          type="date"
+          value={grantedOn}
+          onChange={(e) => setGrantedOn(e.target.value)}
+          required
+          disabled={pending}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor={`personnel-ems-log-notes-${fieldId}`}>Notes</FieldLabel>
+        <Textarea
+          id={`personnel-ems-log-notes-${fieldId}`}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          disabled={pending}
+        />
+      </div>
+      {error ? <FieldError>{error}</FieldError> : null}
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" disabled={pending || !grantedOn}>
           {pending ? "Saving…" : initial ? "Save" : "Add"}
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onCancel}>

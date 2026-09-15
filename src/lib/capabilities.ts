@@ -3,15 +3,19 @@ import { profilePermissionLevelIds } from "@/lib/permission-levels";
 
 export const APP_CAPABILITIES = [
   "access_shift_exchange",
+  "access_shift_plan",
+  "access_professional_services",
   "access_programs",
   "access_assets",
   "access_personnel",
+  "access_reports",
   "browse_program_catalog",
   "self_enroll",
   "author_training",
   "ems_qi",
   "document_training",
   "delete_training_reports",
+  "manage_upcoming_training",
   "approval_tracker",
   "view_apparatus",
   "view_fleet",
@@ -24,6 +28,7 @@ export const APP_CAPABILITIES = [
   "manage_quiz_banks",
   "resolve_maintenance",
   "manage_users",
+  "edit_ems_clearance_log",
   "manage_incidents",
 ] as const;
 
@@ -53,6 +58,16 @@ export const capabilityMeta: Record<
     label: "Shift Exchange",
     description: "Show the Shift Exchange module in navigation and allow access.",
   },
+  access_shift_plan: {
+    group: "Modules",
+    label: "Shift Plan",
+    description: "Show the Shift Plan module in navigation and allow access.",
+  },
+  access_professional_services: {
+    group: "Modules",
+    label: "Professional Services",
+    description: "Browse and review recommended professional services.",
+  },
   access_programs: {
     group: "Modules",
     label: "Programs",
@@ -67,6 +82,11 @@ export const capabilityMeta: Record<
     group: "Modules",
     label: "Personnel",
     description: "Show the Personnel module in navigation and allow access.",
+  },
+  access_reports: {
+    group: "Modules",
+    label: "Reports",
+    description: "Open the Reports hub and export department reports.",
   },
   browse_program_catalog: {
     group: "Training",
@@ -97,6 +117,11 @@ export const capabilityMeta: Record<
     group: "Training",
     label: "Delete training reports",
     description: "Permanently delete documented training sessions.",
+  },
+  manage_upcoming_training: {
+    group: "Training",
+    label: "Manage upcoming training",
+    description: "Create and publish external training opportunities under Training.",
   },
   approval_tracker: {
     group: "Training",
@@ -157,6 +182,11 @@ export const capabilityMeta: Record<
     group: "Administration",
     label: "Manage users",
     description: "Edit member profiles, permission levels, and admin flags.",
+  },
+  edit_ems_clearance_log: {
+    group: "Administration",
+    label: "Edit EMS clearance log",
+    description: "Add, edit, and delete EMS clearance history on personnel files.",
   },
   manage_incidents: {
     group: "Assets & operations",

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ClipboardPen, Plus } from "lucide-react";
 import { requireCapability } from "@/lib/capability-access";
 import { listTrainingSessions } from "@/app/document-training/actions";
+import { TrainingSectionNav } from "@/components/TrainingSectionNav";
 import { TrainingSessionsTable } from "@/components/TrainingSessionsTable";
 import { Button } from "@/components/ui/Button";
 
@@ -19,6 +20,7 @@ export default async function DocumentTrainingPage() {
 
   return (
     <div className="container mx-auto px-4 py-5">
+      <TrainingSectionNav pathname="/document-training" />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="mb-1 flex items-center gap-2">

@@ -1,4 +1,4 @@
-import type { ShiftColor } from "@/lib/shift-exchange-types";
+export type ShiftColor = "Red" | "Green" | "Blue";
 
 /**
  * Shift color rotation rules (based on Shift Day start date).
@@ -8,11 +8,11 @@ import type { ShiftColor } from "@/lib/shift-exchange-types";
  * - 5/30-6/1  => Blue
  * and it repeats every 2 days.
  */
-/** First shift-day block start (local 08:30 on this calendar date). */
+/** First shift-day block start (local 08:00 on this calendar date). */
 export const SHIFT_DAY_ANCHOR_ISO = "2026-05-26";
 export const SHIFT_DAY_START_HOUR = 8;
-export const SHIFT_DAY_START_MINUTE = 30;
-/** Each shift day spans 48 hours (08:30 to 08:30, two days later). */
+export const SHIFT_DAY_START_MINUTE = 0;
+/** Each shift day spans 48 hours (08:00 to 08:00, two days later). */
 export const SHIFT_BLOCK_MS = 48 * 60 * 60 * 1000;
 
 const ROTATION: ShiftColor[] = ["Green", "Red", "Blue"]; // anchor maps to Green

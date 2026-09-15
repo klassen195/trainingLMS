@@ -3,9 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { normalizeClientCode, type Client } from "@/lib/clients";
+import {
+  isClientModuleKey,
+  masterModuleKeys,
+  normalizeClientModules,
+  type ClientModule,
+  type ClientModuleKey,
+  type PlatformModuleOrderItem,
+} from "@/lib/client-modules";
+import { loadPlatformModuleOrder } from "@/lib/client-modules-server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import { supabaseErrorMessage } from "@/lib/supabase/errors";
+
+export type ClientWithModules = Client & { modules: ClientModule[] };
+
+function revalidateClients() {
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/modules");
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+}
 
 export async function listClients(): Promise<Client[]> {
   await requirePlatformAdmin();
@@ -16,6 +34,83 @@ export async function listClients(): Promise<Client[]> {
     .order("code");
   if (error) throw new Error(supabaseErrorMessage(error));
   return (data ?? []) as Client[];
+}
+
+export async function getPlatformModuleOrder(): Promise<PlatformModuleOrderItem[]> {
+  await requirePlatformAdmin();
+  return loadPlatformModuleOrder();
+}
+
+export async function reorderPlatformModules(input: { moduleKeys: string[] }) {
+  await requirePlatformAdmin();
+  if (input.moduleKeys.length === 0) return;
+
+  const seen = new Set<string>();
+  const keys: ClientModuleKey[] = [];
+  for (const key of input.moduleKeys) {
+    if (!isClientModuleKey(key) || seen.has(key)) continue;
+    seen.add(key);
+    keys.push(key);
+  }
+  for (const key of masterModuleKeys()) {
+    if (seen.has(key)) continue;
+    keys.push(key);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("platform_module_catalog").upsert(
+    keys.map((module_key, index) => ({
+      module_key,
+      sort_order: index + 1,
+    })),
+    { onConflict: "module_key" }
+  );
+  if (error) throw new Error(supabaseErrorMessage(error));
+
+  revalidateClients();
+}
+
+export async function listClientsWithModules(): Promise<ClientWithModules[]> {
+  await requirePlatformAdmin();
+  const masterOrder = await loadPlatformModuleOrder();
+  const supabase = await createSupabaseServerClient();
+  const { data: clients, error } = await supabase
+    .from("clients")
+    .select("id, code, name, is_active, created_at, updated_at")
+    .order("code");
+  if (error) throw new Error(supabaseErrorMessage(error));
+
+  const { data: moduleRows, error: modulesError } = await supabase
+    .from("client_modules")
+    .select("client_id, module_key, enabled, sort_order")
+    .order("sort_order")
+    .order("module_key");
+
+  if (modulesError) {
+    if (
+      modulesError.code === "PGRST205" ||
+      modulesError.message.includes("client_modules") ||
+      modulesError.message.includes("Could not find the table")
+    ) {
+      return ((clients ?? []) as Client[]).map((client) => ({
+        ...client,
+        modules: normalizeClientModules(null, masterOrder),
+      }));
+    }
+    throw new Error(supabaseErrorMessage(modulesError));
+  }
+
+  const byClient = new Map<string, typeof moduleRows>();
+  for (const row of moduleRows ?? []) {
+    const list = byClient.get(row.client_id) ?? [];
+    list.push(row);
+    byClient.set(row.client_id, list);
+  }
+
+  return ((clients ?? []) as Client[]).map((client) => ({
+    ...client,
+    modules: normalizeClientModules(byClient.get(client.id) ?? [], masterOrder),
+  }));
 }
 
 export async function createClient(input: { code: string; name: string }) {
@@ -41,8 +136,7 @@ export async function createClient(input: { code: string; name: string }) {
   });
   if (seedError) throw new Error(seedError.message);
 
-  revalidatePath("/admin/clients");
-  revalidatePath("/admin");
+  revalidateClients();
 }
 
 export async function updateClient(input: {
@@ -73,6 +167,40 @@ export async function updateClient(input: {
   const { error } = await supabase.from("clients").update(patch).eq("id", input.id);
   if (error) throw new Error(supabaseErrorMessage(error));
 
-  revalidatePath("/admin/clients");
-  revalidatePath("/admin");
+  revalidateClients();
+}
+
+export async function setClientModuleEnabled(input: {
+  clientId: string;
+  moduleKey: string;
+  enabled: boolean;
+}) {
+  await requirePlatformAdmin();
+  if (!isClientModuleKey(input.moduleKey)) throw new Error("Unknown module.");
+
+  const masterOrder = await loadPlatformModuleOrder();
+  const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("client_modules")
+    .select("sort_order")
+    .eq("client_id", input.clientId)
+    .eq("module_key", input.moduleKey)
+    .maybeSingle();
+  if (existingError) throw new Error(supabaseErrorMessage(existingError));
+
+  const masterIndex = masterModuleKeys(masterOrder).indexOf(input.moduleKey);
+  const sortOrder = existing?.sort_order ?? (masterIndex >= 0 ? masterIndex + 1 : 99);
+
+  const { error } = await supabase.from("client_modules").upsert(
+    {
+      client_id: input.clientId,
+      module_key: input.moduleKey,
+      enabled: input.enabled,
+      sort_order: sortOrder,
+    },
+    { onConflict: "client_id,module_key" }
+  );
+  if (error) throw new Error(supabaseErrorMessage(error));
+
+  revalidateClients();
 }

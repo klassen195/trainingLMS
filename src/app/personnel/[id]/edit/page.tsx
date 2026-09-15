@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import {
   fetchPersonnelCertifications,
+  fetchPersonnelCertificationSections,
   fetchPersonnelDocuments,
   fetchPersonnelEmsLicenses,
+  fetchPersonnelEmsClearanceLog,
   fetchPersonnelNotes,
   fetchPersonnelProfile,
   fetchPersonnelQualifications,
@@ -52,7 +54,9 @@ export default async function PersonnelEditPage({
     { data: locations },
     { data: supervisors },
     { rows: certifications, error: certError },
+    { rows: certificationSections, error: certSectionError },
     { rows: emsLicenses, error: emsLicensesError },
+    { rows: emsClearanceLog, error: emsClearanceLogError },
     { rows: qualifications, error: qualificationsError },
     { rows: documents, error: docError },
     { rows: notes, error: notesError },
@@ -85,8 +89,10 @@ export default async function PersonnelEditPage({
         )
         .order("display_name", { ascending: true, nullsFirst: false })
     ),
-    fetchPersonnelCertifications(supabase, id),
+    fetchPersonnelCertifications(supabase, id, { withPreviewUrls: true }),
+    fetchPersonnelCertificationSections(supabase, id),
     fetchPersonnelEmsLicenses(supabase, id),
+    fetchPersonnelEmsClearanceLog(supabase, id),
     fetchPersonnelQualifications(supabase, id),
     fetchPersonnelDocuments(supabase, id),
     fetchPersonnelNotes(supabase, id),
@@ -103,8 +109,10 @@ export default async function PersonnelEditPage({
 
   if (
     (certError && isMissingPersonnelTables(certError)) ||
+    (certSectionError && isMissingPersonnelTables(certSectionError)) ||
     (emsLicensesError &&
       (isMissingPersonnelTables(emsLicensesError) || isMissingEmsLevelsTable(emsLicensesError))) ||
+    (emsClearanceLogError && isMissingPersonnelTables(emsClearanceLogError)) ||
     (qualificationsError && isMissingPersonnelTables(qualificationsError)) ||
     (docError && isMissingPersonnelTables(docError)) ||
     (notesError && isMissingPersonnelTables(notesError)) ||
@@ -115,7 +123,9 @@ export default async function PersonnelEditPage({
     return <PersonnelDatabaseSetup />;
   }
   if (certError) throw certError;
+  if (certSectionError) throw certSectionError;
   if (emsLicensesError) throw emsLicensesError;
+  if (emsClearanceLogError) throw emsClearanceLogError;
   if (qualificationsError) throw qualificationsError;
   if (docError) throw docError;
   if (notesError) throw notesError;
@@ -150,7 +160,9 @@ export default async function PersonnelEditPage({
         locations={(locations ?? []) as Location[]}
         supervisors={(supervisors ?? []) as Profile[]}
         certifications={certifications}
+        certificationSections={certificationSections}
         emsLicenses={emsLicenses}
+        emsClearanceLog={emsClearanceLog}
         emsLevelCatalog={emsLevelCatalog}
         emsClearanceCatalog={emsClearanceCatalog}
         qualifications={qualifications}

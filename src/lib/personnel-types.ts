@@ -97,9 +97,47 @@ export type PersonnelCertification = {
   file_name: string | null;
   storage_path: string | null;
   mime_type: string | null;
+  sort_order: number;
   created_by: string | null;
   created_at: string;
+  /** Signed URL for thumbnail/preview; populated when loading a personnel file. */
+  preview_url?: string | null;
 };
+
+export type PersonnelCertificationSection = {
+  id: string;
+  profile_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type PersonnelCertificationLayoutItem =
+  | { kind: "section"; id: string; section: PersonnelCertificationSection }
+  | { kind: "cert"; id: string; cert: PersonnelCertification };
+
+export function certificationLayoutSortOrder(item: PersonnelCertificationLayoutItem) {
+  return item.kind === "section" ? item.section.sort_order : item.cert.sort_order;
+}
+
+export function buildPersonnelCertificationLayout(
+  certifications: PersonnelCertification[],
+  sections: PersonnelCertificationSection[]
+): PersonnelCertificationLayoutItem[] {
+  const items: PersonnelCertificationLayoutItem[] = [
+    ...sections.map((section) => ({ kind: "section" as const, id: section.id, section })),
+    ...certifications.map((cert) => ({ kind: "cert" as const, id: cert.id, cert })),
+  ];
+  items.sort((a, b) => {
+    const order = certificationLayoutSortOrder(a) - certificationLayoutSortOrder(b);
+    if (order !== 0) return order;
+    if (a.kind !== b.kind) return a.kind === "section" ? -1 : 1;
+    const nameA = a.kind === "section" ? a.section.name : a.cert.name;
+    const nameB = b.kind === "section" ? b.section.name : b.cert.name;
+    return nameA.localeCompare(nameB);
+  });
+  return items;
+}
 
 export type PersonnelRecognition = {
   id: string;
@@ -145,6 +183,25 @@ export type PersonnelEmsLicense = {
 
 export const PERSONNEL_EMS_LICENSE_SELECT =
   "id, profile_id, ems_level_id, issued_on, expires_on, license_number, notes, created_by, created_at, ems_level:ems_levels!ems_level_id(id, name)";
+
+export const EMS_CLEARANCE_NOT_SET_LABEL = "Not set";
+
+export type PersonnelEmsClearanceLogEntry = {
+  id: string;
+  profile_id: string;
+  clearance_level_id: string | null;
+  clearance_level_name: string;
+  previous_clearance_level_name: string | null;
+  granted_on: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by_profile?: ProfileSummary | null;
+};
+
+export const PERSONNEL_EMS_CLEARANCE_LOG_SELECT =
+  "id, profile_id, clearance_level_id, clearance_level_name, previous_clearance_level_name, granted_on, notes, created_by, created_at, updated_at, created_by_profile:profiles!created_by(id, display_name, first_name, last_name, email)";
 
 export type PersonnelDocument = {
   id: string;
@@ -225,7 +282,10 @@ export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_
 export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!profiles_primary_location_id_fkey(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)`;
 
 export const PERSONNEL_CERTIFICATION_SELECT =
-  "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, file_name, storage_path, mime_type, created_by, created_at";
+  "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, file_name, storage_path, mime_type, sort_order, created_by, created_at";
+
+export const PERSONNEL_CERTIFICATION_SECTION_SELECT =
+  "id, profile_id, name, sort_order, created_at";
 
 export const PERSONNEL_DOCUMENT_SELECT =
   "id, profile_id, title, file_name, storage_path, mime_type, uploaded_by, created_at";
@@ -270,6 +330,47 @@ export function isPersonnelDocumentFile(file: File) {
   const name = file.name.toLowerCase();
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
   return DOC_MIME_TYPES.has(file.type) || DOC_EXTENSIONS.has(ext);
+}
+
+export function personnelFileExtension(fileName: string | null | undefined) {
+  const name = fileName?.toLowerCase() ?? "";
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot) : "";
+}
+
+const PREVIEWABLE_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence",
+  "image/heif-sequence",
+]);
+const PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".heic",
+  ".heif",
+]);
+
+export type PersonnelFilePreviewKind = "image" | "pdf" | "file";
+
+export function personnelFilePreviewKind(
+  mimeType: string | null | undefined,
+  fileName: string | null | undefined
+): PersonnelFilePreviewKind {
+  const mime = mimeType?.toLowerCase() ?? "";
+  const ext = personnelFileExtension(fileName);
+  if (PREVIEWABLE_IMAGE_MIME_TYPES.has(mime) || PREVIEWABLE_IMAGE_EXTENSIONS.has(ext)) {
+    return "image";
+  }
+  if (mime === "application/pdf" || ext === ".pdf") return "pdf";
+  return "file";
 }
 
 export function sanitizePersonnelFileName(fileName: string) {
@@ -524,9 +625,9 @@ function parseMonthDay(value: string | null | undefined): { month: number; day: 
   }
   const slash = trimmed.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (slash) {
-    // App displays DD/MM/YYYY
-    const day = Number(slash[1]);
-    const month = Number(slash[2]);
+    // App displays MM/DD/YYYY
+    const month = Number(slash[1]);
+    const day = Number(slash[2]);
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return { month, day };
   }
   return null;

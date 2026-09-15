@@ -1,11 +1,14 @@
 import { Building2 } from "lucide-react";
 import { requirePlatformAdmin } from "@/lib/auth";
-import { listClients } from "@/app/admin/clients/actions";
+import { getPlatformModuleOrder, listClientsWithModules } from "@/app/admin/clients/actions";
 import { ClientsAdminUi } from "@/app/admin/clients/ui";
 
 export default async function ClientsAdminPage() {
   await requirePlatformAdmin();
-  const clients = await listClients();
+  const [clients, masterOrder] = await Promise.all([
+    listClientsWithModules(),
+    getPlatformModuleOrder(),
+  ]);
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
@@ -15,10 +18,11 @@ export default async function ClientsAdminPage() {
           <h1 className="text-3xl font-bold">Clients</h1>
         </div>
         <p className="text-muted-foreground">
-          Platform-only: create Client ID codes and silo each department&apos;s data.
+          Platform-only: set the master module order, create Client ID codes, and choose modules per
+          client.
         </p>
       </div>
-      <ClientsAdminUi clients={clients} />
+      <ClientsAdminUi clients={clients} masterOrder={masterOrder} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   getPersonnelDocumentDownloadUrl,
 } from "@/app/personnel/actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { fileAsJpegIfHeic } from "@/lib/heic";
 import type { PersonnelDocument } from "@/lib/personnel-types";
 import {
   isPersonnelDocumentFile,
@@ -150,18 +151,19 @@ function UploadDocumentForm({
         setError(null);
         startTransition(async () => {
           try {
+            const uploadFile = await fileAsJpegIfHeic(file);
             const { storagePath } = await createPersonnelDocument({
               profileId,
-              title: title.trim() || file.name,
-              fileName: file.name,
-              mimeType: file.type || null,
+              title: title.trim() || uploadFile.name,
+              fileName: uploadFile.name,
+              mimeType: uploadFile.type || null,
             });
             const supabase = createSupabaseBrowserClient();
             const { error: uploadError } = await supabase.storage
               .from(PERSONNEL_DOCUMENTS_BUCKET)
-              .upload(storagePath, file, {
+              .upload(storagePath, uploadFile, {
                 upsert: true,
-                contentType: file.type || undefined,
+                contentType: uploadFile.type || undefined,
               });
             if (uploadError) throw new Error(uploadError.message);
             onDone();

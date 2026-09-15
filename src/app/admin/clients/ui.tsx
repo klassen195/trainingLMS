@@ -2,13 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient, updateClient } from "@/app/admin/clients/actions";
-import type { Client } from "@/lib/clients";
+import { createClient, updateClient, type ClientWithModules } from "@/app/admin/clients/actions";
+import { ClientModulesEditor } from "@/components/ClientModulesEditor";
+import { PlatformModuleOrderEditor } from "@/components/PlatformModuleOrderEditor";
+import type { PlatformModuleOrderItem } from "@/lib/client-modules";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 
-export function ClientsAdminUi({ clients }: { clients: Client[] }) {
+export function ClientsAdminUi({
+  clients,
+  masterOrder,
+}: {
+  clients: ClientWithModules[];
+  masterOrder: PlatformModuleOrderItem[];
+}) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -18,6 +26,7 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editName, setEditName] = useState("");
+  const [modulesOpenId, setModulesOpenId] = useState<string | null>(null);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -35,7 +44,7 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
     }
   }
 
-  function startEdit(client: Client) {
+  function startEdit(client: ClientWithModules) {
     setError(null);
     setEditingId(client.id);
     setEditCode(client.code);
@@ -48,7 +57,7 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
     setEditName("");
   }
 
-  async function onSave(client: Client) {
+  async function onSave(client: ClientWithModules) {
     setError(null);
     setRowLoading(client.id);
     try {
@@ -67,7 +76,7 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
     }
   }
 
-  async function onToggleActive(client: Client) {
+  async function onToggleActive(client: ClientWithModules) {
     setError(null);
     setRowLoading(client.id);
     try {
@@ -86,11 +95,14 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
 
   return (
     <div className="space-y-8">
+      <PlatformModuleOrderEditor items={masterOrder} />
+
       <Card>
         <CardHeader>
           <CardTitle>Create client</CardTitle>
           <CardDescription>
-            Hand out the Client ID code for login. New clients get starter permission levels (Recruit, Firefighter, Captain) you can rename.
+            Hand out the Client ID code for login. New clients get starter permission levels (Recruit,
+            Firefighter, Captain) and inherit the master module order with all modules on.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -133,7 +145,8 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
         <CardHeader>
           <CardTitle>Clients</CardTitle>
           <CardDescription>
-            Edit the display name and Client ID. Changing the code means users must sign in with the new value.
+            Edit the display name and Client ID, then open Modules to turn features on/off and set a
+            custom order for that client.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -144,6 +157,8 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
               {clients.map((client) => {
                 const isEditing = editingId === client.id;
                 const busy = rowLoading === client.id;
+                const modulesOpen = modulesOpenId === client.id;
+                const enabledCount = client.modules.filter((module) => module.enabled).length;
                 return (
                   <li key={client.id} className="space-y-3 px-4 py-3">
                     {isEditing ? (
@@ -191,6 +206,9 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
                         <div>
                           <p className="font-medium tracking-wide">{client.code}</p>
                           <p className="text-sm text-muted-foreground">{client.name}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {enabledCount}/{client.modules.length} modules on
+                          </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span
@@ -202,6 +220,17 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
                           >
                             {client.is_active ? "Active" : "Inactive"}
                           </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              setModulesOpenId((current) => (current === client.id ? null : client.id))
+                            }
+                          >
+                            {modulesOpen ? "Hide modules" : "Modules"}
+                          </Button>
                           <Button
                             type="button"
                             variant="outline"
@@ -223,6 +252,15 @@ export function ClientsAdminUi({ clients }: { clients: Client[] }) {
                         </div>
                       </div>
                     )}
+                    {modulesOpen ? (
+                      <ClientModulesEditor
+                        clientId={client.id}
+                        modules={client.modules}
+                        allowToggle
+                        title="Client modules"
+                        description="Turn modules on or off for this client, then drag to set a custom nav order."
+                      />
+                    ) : null}
                   </li>
                 );
               })}

@@ -3,8 +3,10 @@ import { Users } from "lucide-react";
 import { isAdmin, requireUserProfile } from "@/lib/auth";
 import {
   fetchPersonnelCertifications,
+  fetchPersonnelCertificationSections,
   fetchPersonnelDocuments,
   fetchPersonnelEmsLicenses,
+  fetchPersonnelEmsClearanceLog,
   fetchPersonnelNotes,
   fetchPersonnelProfile,
   fetchPersonnelQualifications,
@@ -33,6 +35,7 @@ import {
   rankHasTitle,
 } from "@/lib/personnel-types";
 import { permissionLevelName } from "@/lib/permission-levels";
+import { getProfileCapabilities } from "@/lib/capability-access";
 import { formatPhoneNumber } from "@/lib/phone";
 import { formatPostalAddressDisplay } from "@/lib/address";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -92,7 +95,9 @@ export default async function PersonnelDetailPage({
 
   const [
     { rows: certifications, error: certError },
+    { rows: certificationSections, error: certSectionError },
     { rows: emsLicenses, error: emsLicensesError },
+    { rows: emsClearanceLog, error: emsClearanceLogError },
     { rows: qualifications, error: qualificationsError },
     { rows: documents, error: docError },
     { rows: notes, error: notesError },
@@ -106,9 +111,12 @@ export default async function PersonnelDetailPage({
     { rows: qualificationCatalog, error: catalogError },
     { rows: emsLevelCatalog, error: emsCatalogError },
     { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
+    viewerCaps,
   ] = await Promise.all([
-    fetchPersonnelCertifications(supabase, id),
+    fetchPersonnelCertifications(supabase, id, { withPreviewUrls: true }),
+    fetchPersonnelCertificationSections(supabase, id),
     fetchPersonnelEmsLicenses(supabase, id),
+    fetchPersonnelEmsClearanceLog(supabase, id),
     fetchPersonnelQualifications(supabase, id),
     fetchPersonnelDocuments(supabase, id),
     fetchPersonnelNotes(supabase, id),
@@ -124,12 +132,15 @@ export default async function PersonnelDetailPage({
     listQualifications(supabase, { activeOnly: true }),
     listEmsLevels(supabase, { activeOnly: true }),
     listEmsClearanceLevels(supabase, { activeOnly: true }),
+    getProfileCapabilities(viewer),
   ]);
 
   if (
     (certError && isMissingPersonnelTables(certError)) ||
+    (certSectionError && isMissingPersonnelTables(certSectionError)) ||
     (emsLicensesError &&
       (isMissingPersonnelTables(emsLicensesError) || isMissingEmsLevelsTable(emsLicensesError))) ||
+    (emsClearanceLogError && isMissingPersonnelTables(emsClearanceLogError)) ||
     (qualificationsError && isMissingPersonnelTables(qualificationsError)) ||
     (docError && isMissingPersonnelTables(docError)) ||
     (notesError && isMissingPersonnelTables(notesError)) ||
@@ -142,7 +153,9 @@ export default async function PersonnelDetailPage({
     return <PersonnelDatabaseSetup />;
   }
   if (certError) throw certError;
+  if (certSectionError) throw certSectionError;
   if (emsLicensesError) throw emsLicensesError;
+  if (emsClearanceLogError) throw emsClearanceLogError;
   if (qualificationsError) throw qualificationsError;
   if (docError) throw docError;
   if (notesError) throw notesError;
@@ -306,7 +319,9 @@ export default async function PersonnelDetailPage({
               clearanceCatalog={emsClearanceCatalog}
               clearedLevelId={profile.ems_cleared_level_id}
               clearedLevel={profile.ems_cleared_level}
+              clearanceLog={emsClearanceLog}
               canManage={canManage}
+              canEditLog={viewerCaps.edit_ems_clearance_log}
             />
           </CardContent>
         </Card>
@@ -321,7 +336,9 @@ export default async function PersonnelDetailPage({
             <PersonnelCertificationsPanel
               profileId={id}
               certifications={certifications}
+              sections={certificationSections}
               canManage={canManage}
+              canOrganize={canManage || isSelf}
             />
           </CardContent>
         </Card>

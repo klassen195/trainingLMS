@@ -20,6 +20,27 @@ export function isMissingShiftExchangeTable(error: PostgrestError | null) {
   );
 }
 
+export function isMissingShiftPlanTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("shift_plan_items") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
+export function isMissingProfessionalServicesTable(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("professional_service_providers") ||
+    error.message.includes("professional_service_reviews") ||
+    error.message.includes("professional_service_practitioners") ||
+    error.message.includes("Could not find the table") ||
+    (error.message.includes("Could not find the") && error.message.includes("column"))
+  );
+}
+
 export function isMissingAssetsTable(error: PostgrestError | null) {
   if (!error) return false;
   return (
@@ -105,6 +126,7 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
   return (
     error.code === "PGRST205" ||
     error.message.includes("personnel_certifications") ||
+    error.message.includes("personnel_certification_sections") ||
     error.message.includes("personnel_documents") ||
     error.message.includes("personnel_notes") ||
     error.message.includes("personnel_taskbooks") ||
@@ -112,6 +134,7 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
     error.message.includes("personnel_recognitions") ||
     error.message.includes("personnel_qualifications") ||
     error.message.includes("personnel_ems_licenses") ||
+    error.message.includes("personnel_ems_clearance_log") ||
     error.message.includes("ems_levels") ||
     error.message.includes("ems_clearance_levels") ||
     error.message.includes("ems_cleared_level_id") ||
@@ -204,6 +227,18 @@ export function isMissingApprovalTrackerTables(error: PostgrestError | null) {
     error.message.includes("approval_document_events") ||
     error.message.includes("approval_committee_members") ||
     error.message.includes("approval_document_committee_votes") ||
+    error.message.includes("Could not find the table")
+  );
+}
+
+export function isMissingUpcomingTrainingTables(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.message.includes("upcoming_trainings") ||
+    error.message.includes("upcoming_training_ops_members") ||
+    error.message.includes("training_attendance_requests") ||
+    error.message.includes("training_attendance_request_events") ||
     error.message.includes("Could not find the table")
   );
 }

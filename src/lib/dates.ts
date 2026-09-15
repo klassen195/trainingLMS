@@ -18,7 +18,7 @@ export function isoDateLocal(d: Date) {
 }
 
 /**
- * Display date as DD/MM/YYYY.
+ * Display date as MM/DD/YYYY.
  * Calendar dates (`YYYY-MM-DD`) use the stored day (no timezone shift).
  * Datetimes use the local calendar day.
  */
@@ -27,22 +27,22 @@ export function formatDate(value: string | null | undefined, empty = "—") {
   const trimmed = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     const [y, m, d] = trimmed.split("-");
-    return `${d}/${m}/${y}`;
+    return `${m}/${d}/${y}`;
   }
   const dt = new Date(trimmed);
   if (Number.isNaN(dt.getTime())) return value;
-  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+  return `${pad2(dt.getMonth() + 1)}/${pad2(dt.getDate())}/${dt.getFullYear()}`;
 }
 
-/** Display datetime as DD/MM/YYYY HH:mm (local). */
+/** Display datetime as MM/DD/YYYY HH:mm (24-hour, local). */
 export function formatDateTime(value: string | null | undefined, empty = "—") {
   if (!value) return empty;
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return value;
-  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  return `${pad2(dt.getMonth() + 1)}/${pad2(dt.getDate())}/${dt.getFullYear()} ${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
 }
 
-/** Display a Postgres/HTML time (`HH:MM` or `HH:MM:SS`) as HH:mm. */
+/** Display a Postgres/HTML time (`HH:MM` or `HH:MM:SS`) as 24-hour HH:mm. */
 export function formatTime(value: string | null | undefined, empty = "—") {
   if (!value) return empty;
   const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
@@ -116,7 +116,7 @@ function shiftDayAnchorLocal() {
 
 /**
  * Shift day start for the current local date/time.
- * Blocks run 08:30 → 08:30 two calendar days later (e.g. 5/26 08:30–5/28 08:30 => 5/26).
+ * Blocks run 08:00 → 08:00 two calendar days later (e.g. 5/26 08:00–5/28 08:00 => 5/26).
  */
 export function currentShiftDayStartIso(now = new Date()) {
   const anchor = shiftDayAnchorLocal();
@@ -137,7 +137,7 @@ export function formatShiftDate(isoDate: string) {
 
 /**
  * Shift Day is a 2-day window based on the stored `shift_date` (start day).
- * Example: 2026-05-26 => "26/05-27/05"
+ * Example: 2026-05-26 => "05/26-05/27"
  */
 export function formatShiftDayRange(startIso: string) {
   const [yStr, mStr, dStr] = startIso.split("-");
@@ -153,8 +153,8 @@ export function formatShiftDayRange(startIso: string) {
   const end = new Date(start);
   end.setDate(start.getDate() + 1);
 
-  const startLabel = `${pad2(start.getDate())}/${pad2(start.getMonth() + 1)}`;
-  const endLabel = `${pad2(end.getDate())}/${pad2(end.getMonth() + 1)}`;
+  const startLabel = `${pad2(start.getMonth() + 1)}/${pad2(start.getDate())}`;
+  const endLabel = `${pad2(end.getMonth() + 1)}/${pad2(end.getDate())}`;
 
   if (start.getFullYear() === end.getFullYear()) {
     return `${startLabel}-${endLabel}`;
@@ -165,4 +165,47 @@ export function formatShiftDayRange(startIso: string) {
 
 export function formatTimestamp(iso: string) {
   return formatDateTime(iso, iso);
+}
+
+export function isIsoDateString(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [yStr, mStr, dStr] = value.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const d = Number(dStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+export function addCalendarDaysIso(isoDate: string, days: number) {
+  const [yStr, mStr, dStr] = isoDate.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const d = Number(dStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return isoDate;
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return isoDateLocal(dt);
+}
+
+/**
+ * Shift-day start that owns this calendar date at local noon.
+ * Both labeled days of a 48-hour block map to the same start date.
+ */
+export function shiftDayStartForCalendarDate(isoDate: string) {
+  const [yStr, mStr, dStr] = isoDate.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const d = Number(dStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return isoDate;
+  return currentShiftDayStartIso(new Date(y, m - 1, d, 12, 0, 0, 0));
+}
+
+export function addShiftBlocks(shiftDayStartIso: string, blocks: number) {
+  return addCalendarDaysIso(shiftDayStartIso, blocks * 2);
+}
+
+export function shiftBlockCalendarDays(shiftDayStartIso: string): [string, string] {
+  return [shiftDayStartIso, addCalendarDaysIso(shiftDayStartIso, 1)];
 }

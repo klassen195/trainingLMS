@@ -12,6 +12,7 @@ import {
   trainingSessionTypeLabel,
 } from "@/lib/document-training-types";
 import { personnelDisplayName, formatTrainingHours } from "@/lib/personnel-types";
+import { TrainingSectionNav } from "@/components/TrainingSectionNav";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -32,6 +33,7 @@ export default async function DocumentTrainingDetailPage({
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
+      <TrainingSectionNav pathname="/document-training" />
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="outline" size="sm">
           <Link href="/document-training">Back to list</Link>

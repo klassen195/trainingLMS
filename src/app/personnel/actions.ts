@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { PostgrestError } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin, requireUserProfile } from "@/lib/auth";
+import { assertCapability } from "@/lib/capability-access";
+import { isoDateLocal } from "@/lib/dates";
 import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import {
   isMissingPersonnelTables,
@@ -23,6 +25,7 @@ import {
   isPersonnelSupervisorOf,
   isTitleOnlyRank,
   rankHasTitle,
+  EMS_CLEARANCE_NOT_SET_LABEL,
   type PersonnelShift,
 } from "@/lib/personnel-types";
 import { listShiftBattalionChiefIds, personHasSupervisorCoverage } from "@/lib/personnel";
@@ -60,6 +63,40 @@ function revalidatePersonnel(userId?: string) {
 function personnelFilePath(userId: string, section?: string | null) {
   const id = section?.replace(/^#/, "").trim();
   return id ? `/personnel/${userId}#${id}` : `/personnel/${userId}`;
+}
+
+function clearanceLevelNameFromRelation(
+  value: { name?: string | null } | { name?: string | null }[] | null | undefined
+) {
+  if (!value) return null;
+  const row = Array.isArray(value) ? value[0] : value;
+  return row?.name?.trim() || null;
+}
+
+async function resolveEmsClearanceLevelSnapshot(
+  supabase: SupabaseClient,
+  clearanceLevelId: string | null,
+  currentId?: string | null
+) {
+  if (!clearanceLevelId) {
+    return { id: null as string | null, name: EMS_CLEARANCE_NOT_SET_LABEL };
+  }
+
+  const { data: level, error } = await supabase
+    .from("ems_clearance_levels")
+    .select("id, name, is_active")
+    .eq("id", clearanceLevelId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!level) throw new Error("EMS clearance level not found.");
+  if (!level.is_active && level.id !== currentId) {
+    throw new Error("That clearance level is inactive.");
+  }
+
+  return {
+    id: level.id as string,
+    name: (level.name as string | null)?.trim() || EMS_CLEARANCE_NOT_SET_LABEL,
+  };
 }
 
 export async function createPersonnelMember(input: {
@@ -433,6 +470,7 @@ export async function createPersonnelCertification(input: {
       : null;
 
   const supabase = await createSupabaseServerClient();
+  const sortOrder = await nextCertificationLayoutSortOrder(supabase, input.profileId);
   const { error } = await supabase.from("personnel_certifications").insert({
     id: certificationId,
     profile_id: input.profileId,
@@ -444,6 +482,7 @@ export async function createPersonnelCertification(input: {
     file_name: fileName,
     storage_path: storagePath,
     mime_type: hasFile ? input.mimeType?.trim() || null : null,
+    sort_order: sortOrder,
     created_by: admin.id,
   });
   throwIfDbError(error);
@@ -551,14 +590,167 @@ export async function deletePersonnelCertification(input: {
   revalidatePersonnel(input.profileId);
 }
 
+async function assertCanOrganizePersonnelCertifications(profileId: string) {
+  const viewer = await requireUserProfile();
+  if (isAdmin(viewer) || viewer.id === profileId) return viewer;
+  throw new Error("Not allowed to organize these certifications.");
+}
+
+async function nextCertificationLayoutSortOrder(supabase: SupabaseClient, profileId: string) {
+  const [{ data: certs, error: certError }, { data: sections, error: sectionError }] =
+    await Promise.all([
+      supabase
+        .from("personnel_certifications")
+        .select("sort_order")
+        .eq("profile_id", profileId)
+        .order("sort_order", { ascending: false })
+        .limit(1),
+      supabase
+        .from("personnel_certification_sections")
+        .select("sort_order")
+        .eq("profile_id", profileId)
+        .order("sort_order", { ascending: false })
+        .limit(1),
+    ]);
+  throwIfDbError(certError);
+  throwIfDbError(sectionError);
+  return Math.max(certs?.[0]?.sort_order ?? -1, sections?.[0]?.sort_order ?? -1) + 1;
+}
+
+export async function createPersonnelCertificationSection(input: {
+  profileId: string;
+  name: string;
+}) {
+  await assertCanOrganizePersonnelCertifications(input.profileId);
+  const name = input.name.trim();
+  if (!name) throw new Error("Section name is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const sortOrder = await nextCertificationLayoutSortOrder(supabase, input.profileId);
+  const { error } = await supabase.from("personnel_certification_sections").insert({
+    profile_id: input.profileId,
+    name,
+    sort_order: sortOrder,
+  });
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function updatePersonnelCertificationSection(input: {
+  id: string;
+  profileId: string;
+  name: string;
+}) {
+  await assertCanOrganizePersonnelCertifications(input.profileId);
+  const name = input.name.trim();
+  if (!name) throw new Error("Section name is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_certification_sections")
+    .update({ name })
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function deletePersonnelCertificationSection(input: {
+  id: string;
+  profileId: string;
+}) {
+  await assertCanOrganizePersonnelCertifications(input.profileId);
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_certification_sections")
+    .delete()
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function reorderPersonnelCertificationLayout(input: {
+  profileId: string;
+  orderedItems: { id: string; kind: "cert" | "section" }[];
+}) {
+  await assertCanOrganizePersonnelCertifications(input.profileId);
+  const supabase = await createSupabaseServerClient();
+  const service = createSupabaseServiceClient();
+
+  const [{ data: certs, error: certError }, { data: sections, error: sectionError }] =
+    await Promise.all([
+      supabase.from("personnel_certifications").select("id").eq("profile_id", input.profileId),
+      supabase
+        .from("personnel_certification_sections")
+        .select("id")
+        .eq("profile_id", input.profileId),
+    ]);
+  throwIfDbError(certError);
+  throwIfDbError(sectionError);
+
+  const certIds = new Set((certs ?? []).map((row) => row.id as string));
+  const sectionIds = new Set((sections ?? []).map((row) => row.id as string));
+  const seen = new Set<string>();
+
+  if (input.orderedItems.length !== certIds.size + sectionIds.size) {
+    throw new Error("Certification layout is out of date. Refresh and try again.");
+  }
+
+  for (const item of input.orderedItems) {
+    if (seen.has(item.id)) throw new Error("Certification layout is out of date. Refresh and try again.");
+    seen.add(item.id);
+    if (item.kind === "cert" && !certIds.has(item.id)) {
+      throw new Error("Certification layout is out of date. Refresh and try again.");
+    }
+    if (item.kind === "section" && !sectionIds.has(item.id)) {
+      throw new Error("Certification layout is out of date. Refresh and try again.");
+    }
+  }
+
+  for (const [index, item] of input.orderedItems.entries()) {
+    if (item.kind === "section") {
+      const { error } = await supabase
+        .from("personnel_certification_sections")
+        .update({ sort_order: index })
+        .eq("id", item.id)
+        .eq("profile_id", input.profileId);
+      throwIfDbError(error);
+    } else {
+      const { error } = await service
+        .from("personnel_certifications")
+        .update({ sort_order: index })
+        .eq("id", item.id)
+        .eq("profile_id", input.profileId);
+      throwIfDbError(error);
+    }
+  }
+
+  revalidatePersonnel(input.profileId);
+}
+
+async function assertCanAccessPersonnelFiles(profileId: string) {
+  const viewer = await requireUserProfile();
+  if (isAdmin(viewer) || viewer.id === profileId) return viewer;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: target, error } = await supabase
+    .from("profiles")
+    .select("id, supervisor_id, shift")
+    .eq("id", profileId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!target || !isPersonnelSupervisorOf(viewer, target)) {
+    throw new Error("Not allowed to download this file.");
+  }
+  return viewer;
+}
+
 export async function getPersonnelCertificationDownloadUrl(input: {
   id: string;
   profileId: string;
 }) {
-  const profile = await requireUserProfile();
-  if (!profile.is_admin && profile.id !== input.profileId) {
-    throw new Error("Not allowed to download this certification.");
-  }
+  await assertCanAccessPersonnelFiles(input.profileId);
 
   const supabase = await createSupabaseServerClient();
   const { data: cert, error } = await supabase
@@ -675,37 +867,138 @@ export async function deletePersonnelQualification(input: { id: string; profileI
 export async function setPersonnelEmsClearance(input: {
   profileId: string;
   clearanceLevelId: string | null;
+  notes?: string;
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const supabase = await createSupabaseServerClient();
   const clearanceLevelId = input.clearanceLevelId?.trim() || null;
 
-  if (clearanceLevelId) {
-    const [{ data: level, error: levelError }, { data: profile, error: profileError }] =
-      await Promise.all([
-        supabase
-          .from("ems_clearance_levels")
-          .select("id, is_active")
-          .eq("id", clearanceLevelId)
-          .maybeSingle(),
-        supabase
-          .from("profiles")
-          .select("ems_cleared_level_id")
-          .eq("id", input.profileId)
-          .maybeSingle(),
-      ]);
-    throwIfDbError(levelError);
-    throwIfDbError(profileError);
-    if (!level) throw new Error("EMS clearance level not found.");
-    if (!level.is_active && level.id !== profile?.ems_cleared_level_id) {
-      throw new Error("That clearance level is inactive.");
-    }
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select(
+      "ems_cleared_level_id, client_id, ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)"
+    )
+    .eq("id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(profileError);
+  if (!profile) throw new Error("Personnel record not found.");
+
+  const nextLevel = await resolveEmsClearanceLevelSnapshot(
+    supabase,
+    clearanceLevelId,
+    profile.ems_cleared_level_id
+  );
+  const previousId = profile.ems_cleared_level_id ?? null;
+  if (previousId === nextLevel.id) {
+    revalidatePersonnel(input.profileId);
+    return;
   }
 
   const { error } = await supabase
     .from("profiles")
-    .update({ ems_cleared_level_id: clearanceLevelId })
+    .update({ ems_cleared_level_id: nextLevel.id })
     .eq("id", input.profileId);
+  throwIfDbError(error);
+
+  const previousName =
+    clearanceLevelNameFromRelation(
+      profile.ems_cleared_level as { name?: string | null } | { name?: string | null }[] | null
+    ) ?? (previousId ? "Unknown" : EMS_CLEARANCE_NOT_SET_LABEL);
+
+  const service = createSupabaseServiceClient();
+  const { error: logError } = await service.from("personnel_ems_clearance_log").insert({
+    client_id: profile.client_id,
+    profile_id: input.profileId,
+    clearance_level_id: nextLevel.id,
+    clearance_level_name: nextLevel.name,
+    previous_clearance_level_name: previousName,
+    granted_on: isoDateLocal(new Date()),
+    notes: input.notes?.trim() || null,
+    created_by: admin.id,
+  });
+  throwIfDbError(logError);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function createPersonnelEmsClearanceLogEntry(input: {
+  profileId: string;
+  clearanceLevelId: string | null;
+  grantedOn?: string;
+  notes?: string;
+}) {
+  const actor = await assertCapability("edit_ems_clearance_log");
+  const supabase = await createSupabaseServerClient();
+  const clearanceLevelId = input.clearanceLevelId?.trim() || null;
+  const grantedOn = input.grantedOn?.trim() || isoDateLocal(new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(grantedOn)) {
+    throw new Error("Enter a valid date.");
+  }
+
+  const level = await resolveEmsClearanceLevelSnapshot(supabase, clearanceLevelId);
+  const { error } = await supabase.from("personnel_ems_clearance_log").insert({
+    profile_id: input.profileId,
+    clearance_level_id: level.id,
+    clearance_level_name: level.name,
+    granted_on: grantedOn,
+    notes: input.notes?.trim() || null,
+    created_by: actor.id,
+  });
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function updatePersonnelEmsClearanceLogEntry(input: {
+  id: string;
+  profileId: string;
+  clearanceLevelId: string | null;
+  grantedOn: string;
+  notes?: string;
+}) {
+  await assertCapability("edit_ems_clearance_log");
+  const supabase = await createSupabaseServerClient();
+  const clearanceLevelId = input.clearanceLevelId?.trim() || null;
+  const grantedOn = input.grantedOn.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(grantedOn)) {
+    throw new Error("Enter a valid date.");
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("personnel_ems_clearance_log")
+    .select("id, clearance_level_id")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(existingError);
+  if (!existing) throw new Error("Clearance log entry not found.");
+
+  const level = await resolveEmsClearanceLevelSnapshot(
+    supabase,
+    clearanceLevelId,
+    existing.clearance_level_id
+  );
+  const { error } = await supabase
+    .from("personnel_ems_clearance_log")
+    .update({
+      clearance_level_id: level.id,
+      clearance_level_name: level.name,
+      granted_on: grantedOn,
+      notes: input.notes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function deletePersonnelEmsClearanceLogEntry(input: { id: string; profileId: string }) {
+  await assertCapability("edit_ems_clearance_log");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_ems_clearance_log")
+    .delete()
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
   throwIfDbError(error);
   revalidatePersonnel(input.profileId);
 }

@@ -5,7 +5,9 @@ import { updatePersonnelProfile, setPersonnelActive, deletePersonnelMember } fro
 import type { Location } from "@/lib/locations-types";
 import type {
   PersonnelCertification,
+  PersonnelCertificationSection,
   PersonnelDocument,
+  PersonnelEmsClearanceLogEntry,
   PersonnelEmsLicense,
   PersonnelNote,
   PersonnelProfile,
@@ -69,7 +71,9 @@ export function PersonnelEditForm({
   locations,
   supervisors,
   certifications,
+  certificationSections = [],
   emsLicenses = [],
+  emsClearanceLog = [],
   emsLevelCatalog = [],
   emsClearanceCatalog = [],
   qualifications = [],
@@ -90,7 +94,9 @@ export function PersonnelEditForm({
   locations: Location[];
   supervisors: Profile[];
   certifications: PersonnelCertification[];
+  certificationSections?: PersonnelCertificationSection[];
   emsLicenses?: PersonnelEmsLicense[];
+  emsClearanceLog?: PersonnelEmsClearanceLogEntry[];
   emsLevelCatalog?: EmsLevel[];
   emsClearanceCatalog?: EmsClearanceLevel[];
   qualifications?: PersonnelQualification[];
@@ -649,7 +655,9 @@ export function PersonnelEditForm({
               clearanceCatalog={emsClearanceCatalog}
               clearedLevelId={person.ems_cleared_level_id}
               clearedLevel={person.ems_cleared_level}
+              clearanceLog={emsClearanceLog}
               canManage
+              canEditLog
             />
           </CardContent>
         </Card>
@@ -664,7 +672,9 @@ export function PersonnelEditForm({
             <PersonnelCertificationsPanel
               profileId={person.id}
               certifications={certifications}
+              sections={certificationSections}
               canManage
+              canOrganize
             />
           </CardContent>
         </Card>

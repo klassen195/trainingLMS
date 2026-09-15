@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ClipboardList } from "lucide-react";
 import { requireUserProfile } from "@/lib/auth";
+import { currentUserHasCapability } from "@/lib/capability-access";
+import { listTrainingAttendanceRequestsWaitingOnMe } from "@/app/document-training/requests/actions";
 import { fetchSupervisorCrew } from "@/lib/personnel";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -11,6 +13,7 @@ import {
 import { PersonnelDatabaseSetup } from "@/components/PersonnelDatabaseSetup";
 import { SupervisorDashboard } from "@/components/SupervisorDashboard";
 import { Button } from "@/components/ui/Button";
+import type { TrainingAttendanceRequestListItem } from "@/lib/upcoming-training-types";
 
 export default async function SupervisorDashboardPage() {
   const viewer = await requireUserProfile();
@@ -27,6 +30,15 @@ export default async function SupervisorDashboardPage() {
 
   if (rows.length === 0) {
     redirect("/personnel");
+  }
+
+  let pendingTrainingRequests: TrainingAttendanceRequestListItem[] = [];
+  if (await currentUserHasCapability("document_training")) {
+    try {
+      pendingTrainingRequests = await listTrainingAttendanceRequestsWaitingOnMe();
+    } catch {
+      pendingTrainingRequests = [];
+    }
   }
 
   return (
@@ -55,6 +67,7 @@ export default async function SupervisorDashboardPage() {
         rows={rows}
         taskbooksByProfile={taskbooksByProfile}
         qualificationsByProfile={qualificationsByProfile}
+        pendingTrainingRequests={pendingTrainingRequests}
       />
     </div>
   );

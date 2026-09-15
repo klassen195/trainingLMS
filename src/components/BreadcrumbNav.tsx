@@ -9,12 +9,15 @@ import {
   Shield,
   ClipboardList,
   ArrowLeftRight,
+  CalendarDays,
   Package,
   ClipboardPen,
   Users,
   Siren,
   Wrench,
   ListChecks,
+  Handshake,
+  FileBarChart,
 } from "lucide-react";
 import {
   Breadcrumb,
@@ -47,6 +50,24 @@ export function BreadcrumbNav() {
     });
     if (paths[1] === "station" && paths[2]) {
       breadcrumbs.push({ label: `Station ${paths[2]}` });
+    }
+  } else if (paths[0] === "shift-plan") {
+    breadcrumbs.push({
+      label: "Shift Plan",
+      href: paths.length === 1 ? undefined : "/shift-plan",
+      icon: <CalendarDays className="h-4 w-4" />,
+    });
+    if (paths[1]) {
+      breadcrumbs.push({ label: "Shift" });
+    }
+  } else if (paths[0] === "professional-services") {
+    breadcrumbs.push({
+      label: "Professional Services",
+      href: paths.length === 1 ? undefined : "/professional-services",
+      icon: <Handshake className="h-4 w-4" />,
+    });
+    if (paths[1]) {
+      breadcrumbs.push({ label: "Provider" });
     }
   } else if (paths[0] === "assets") {
     breadcrumbs.push({
@@ -101,6 +122,30 @@ export function BreadcrumbNav() {
       href: paths.length === 1 ? undefined : "/fleet",
       icon: <Wrench className="h-4 w-4" />,
     });
+  } else if (paths[0] === "reports") {
+    breadcrumbs.push({
+      label: "Reports",
+      href: paths.length === 1 ? undefined : "/reports",
+      icon: <FileBarChart className="h-4 w-4" />,
+    });
+    if (paths[1] === "expiring-credentials") {
+      breadcrumbs.push({ label: "Expiring credentials" });
+    } else if (paths[1] === "fleet-status") {
+      breadcrumbs.push({ label: "Fleet status" });
+    } else if (paths[1] === "training-hours") {
+      breadcrumbs.push({ label: "Training hours" });
+    } else if (paths[1] === "lms-progress") {
+      breadcrumbs.push({ label: "LMS progress" });
+    } else if (paths[1] === "ppe-due") {
+      breadcrumbs.push({ label: "PPE due" });
+    } else if (paths[1]) {
+      breadcrumbs.push({
+        label: paths[1]
+          .split("-")
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" "),
+      });
+    }
   } else if (paths[0] === "incidents") {
     breadcrumbs.push({
       label: "Incidents",
@@ -157,6 +202,11 @@ export function BreadcrumbNav() {
           label: "Clients",
           href: isLast ? undefined : currentPath,
         });
+      } else if (path === "branding") {
+        breadcrumbs.push({
+          label: "Branding",
+          href: isLast ? undefined : currentPath,
+        });
       } else if (path === "platform-operators") {
         breadcrumbs.push({
           label: "Platform operators",
@@ -170,19 +220,38 @@ export function BreadcrumbNav() {
         });
       } else if (path === "document-training") {
         breadcrumbs.push({
-          label: "Document Training",
+          label: "Training",
           href: isLast ? undefined : "/document-training",
           icon: <ClipboardPen className="h-4 w-4" />,
         });
-      } else if (path === "approval-tracker") {
+      } else if (path === "upcoming" && paths[index - 1] === "document-training") {
         breadcrumbs.push({
-          label: "Policy Tracker",
-          href: isLast ? undefined : "/admin/approval-tracker",
-          icon: <ListChecks className="h-4 w-4" />,
+          label: "Upcoming",
+          href: isLast ? undefined : "/document-training/upcoming",
+        });
+      } else if (path === "requests" && paths[index - 1] === "document-training") {
+        breadcrumbs.push({
+          label: "Requests",
+          href: isLast ? undefined : "/document-training/requests",
+        });
+      } else if (path === "upcoming-training-ops") {
+        breadcrumbs.push({
+          label: "Upcoming training Ops",
+          href: isLast ? undefined : currentPath,
         });
       } else if (path === "new" && paths[index - 1] === "document-training") {
         breadcrumbs.push({
           label: "Log training",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (path === "new" && paths[index - 1] === "upcoming") {
+        breadcrumbs.push({
+          label: "Advertise",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (path === "new" && paths[index - 1] === "requests") {
+        breadcrumbs.push({
+          label: "Unlisted request",
           href: isLast ? undefined : currentPath,
         });
       } else if (
@@ -193,7 +262,28 @@ export function BreadcrumbNav() {
           label: "Session",
           href: isLast ? undefined : currentPath,
         });
+      } else if (
+        paths[index - 1] === "upcoming" &&
+        /^[0-9a-f-]{36}$/i.test(path)
+      ) {
+        breadcrumbs.push({
+          label: "Opportunity",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (
+        paths[index - 1] === "requests" &&
+        /^[0-9a-f-]{36}$/i.test(path)
+      ) {
+        breadcrumbs.push({
+          label: "Request",
+          href: isLast ? undefined : currentPath,
+        });
       } else if (path === "edit" && paths[index - 2] === "document-training") {
+        breadcrumbs.push({
+          label: "Edit",
+          href: isLast ? undefined : currentPath,
+        });
+      } else if (path === "edit" && paths[index - 2] === "upcoming") {
         breadcrumbs.push({
           label: "Edit",
           href: isLast ? undefined : currentPath,

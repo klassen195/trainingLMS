@@ -12,6 +12,7 @@ import {
   BookOpen,
   UserRound,
   ArrowLeftRight,
+  CalendarDays,
   Package,
   ClipboardPen,
   Users,
@@ -19,11 +20,18 @@ import {
   Lightbulb,
   Wrench,
   ListChecks,
+  Handshake,
+  FileBarChart,
+  type LucideIcon,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { cn } from "@/lib/cn";
 import type { Profile } from "@/lib/training-lms-types";
 import type { Client } from "@/lib/clients";
+import {
+  CLIENT_MODULES,
+  type ClientModuleKey,
+} from "@/lib/client-modules";
 import { Button } from "@/components/ui/Button";
 import { DepartmentSwitcher } from "@/components/DepartmentSwitcher";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
@@ -44,63 +52,58 @@ import {
   SheetTrigger,
 } from "@/components/ui/Sheet";
 
+const MODULE_NAV: Record<
+  ClientModuleKey,
+  { href: string; label: string; icon: LucideIcon }
+> = {
+  access_shift_exchange: { href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight },
+  access_shift_plan: { href: "/shift-plan", label: "Shift Plan", icon: CalendarDays },
+  access_professional_services: {
+    href: "/professional-services",
+    label: "Services",
+    icon: Handshake,
+  },
+  access_programs: { href: "/programs", label: "Programs", icon: GraduationCap },
+  access_assets: { href: "/assets", label: "Assets", icon: Package },
+  view_fleet: { href: "/fleet", label: "Fleet", icon: Wrench },
+  manage_incidents: { href: "/incidents", label: "Incidents", icon: Siren },
+  access_personnel: { href: "/personnel", label: "Personnel", icon: Users },
+  document_training: { href: "/document-training", label: "Training", icon: ClipboardPen },
+  approval_tracker: { href: "/approval-tracker", label: "Policy Tracker", icon: ListChecks },
+  author_training: { href: "/instructor", label: "Instructor", icon: BookOpen },
+  access_reports: { href: "/reports", label: "Reports", icon: FileBarChart },
+};
+
 function authNavItemsFor(options: {
-  showShiftExchange: boolean;
-  showPrograms: boolean;
-  showAssets: boolean;
-  showFleet: boolean;
-  showIncidents: boolean;
-  showPersonnel: boolean;
-  showDocumentTraining: boolean;
-  showApprovals: boolean;
+  moduleOrder: ClientModuleKey[];
+  enabledModules: Partial<Record<ClientModuleKey, boolean>>;
 }) {
-  return [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    ...(options.showShiftExchange
-      ? [{ href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight }]
-      : []),
-    ...(options.showPrograms ? [{ href: "/programs", label: "Programs", icon: GraduationCap }] : []),
-    ...(options.showAssets ? [{ href: "/assets", label: "Assets", icon: Package }] : []),
-    ...(options.showFleet ? [{ href: "/fleet", label: "Fleet", icon: Wrench }] : []),
-    ...(options.showIncidents ? [{ href: "/incidents", label: "Incidents", icon: Siren }] : []),
-    ...(options.showPersonnel ? [{ href: "/personnel", label: "Personnel", icon: Users }] : []),
-    ...(options.showDocumentTraining
-      ? [{ href: "/document-training", label: "Training", icon: ClipboardPen }]
-      : []),
-    ...(options.showApprovals
-      ? [{ href: "/approval-tracker", label: "Policy Tracker", icon: ListChecks }]
-      : []),
-  ];
+  const order =
+    options.moduleOrder.length > 0
+      ? options.moduleOrder
+      : ([...CLIENT_MODULES] as ClientModuleKey[]);
+
+  return order.flatMap((key) => {
+    if (!options.enabledModules[key]) return [];
+    const def = MODULE_NAV[key];
+    return [{ href: def.href, label: def.label, icon: def.icon }];
+  });
 }
 
 export function MainNav({
   profile,
   mustChangePassword = false,
-  showInstructor = false,
   showAdmin = false,
-  showShiftExchange = false,
-  showPrograms = false,
-  showAssets = false,
-  showIncidents = false,
-  showFleet = false,
-  showPersonnel = false,
-  showDocumentTraining = false,
-  showApprovals = false,
+  moduleOrder = [],
+  enabledModules = {},
   actingClientId = null,
   actingClients = [],
 }: {
   profile: Profile | null;
   mustChangePassword?: boolean;
-  showInstructor?: boolean;
   showAdmin?: boolean;
-  showShiftExchange?: boolean;
-  showPrograms?: boolean;
-  showAssets?: boolean;
-  showIncidents?: boolean;
-  showFleet?: boolean;
-  showPersonnel?: boolean;
-  showDocumentTraining?: boolean;
-  showApprovals?: boolean;
+  moduleOrder?: ClientModuleKey[];
+  enabledModules?: Partial<Record<ClientModuleKey, boolean>>;
   actingClientId?: string | null;
   actingClients?: Pick<Client, "id" | "code" | "name" | "is_active">[];
 }) {
@@ -131,18 +134,11 @@ export function MainNav({
     ? []
     : [
         ...(profile
-          ? authNavItemsFor({
-              showShiftExchange,
-              showPrograms,
-              showAssets,
-              showFleet,
-              showIncidents,
-              showPersonnel,
-              showDocumentTraining,
-              showApprovals,
-            })
+          ? [
+              { href: "/", label: "Dashboard", icon: LayoutDashboard },
+              ...authNavItemsFor({ moduleOrder, enabledModules }),
+            ]
           : []),
-        ...(showInstructor ? [{ href: "/instructor", label: "Instructor", icon: BookOpen }] : []),
         ...(showAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
       ];
 

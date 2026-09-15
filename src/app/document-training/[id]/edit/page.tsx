@@ -13,6 +13,7 @@ import {
   DocumentTrainingForm,
   type DocumentTrainingFormInitial,
 } from "@/components/DocumentTrainingForm";
+import { TrainingSectionNav } from "@/components/TrainingSectionNav";
 import { Button } from "@/components/ui/Button";
 
 export default async function EditDocumentTrainingPage({
@@ -95,6 +96,7 @@ export default async function EditDocumentTrainingPage({
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
+      <TrainingSectionNav pathname="/document-training" />
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-3">
           <ClipboardPen className="h-7 w-7 text-primary" />

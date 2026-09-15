@@ -1,5 +1,7 @@
 import { getAuthContext } from "@/lib/auth";
 import { getProfileCapabilities } from "@/lib/capability-access";
+import { loadClientModules } from "@/lib/client-modules-server";
+import { CLIENT_MODULES, type ClientModuleKey } from "@/lib/client-modules";
 import { listClients } from "@/app/admin/clients/actions";
 import { MainNav } from "@/components/MainNav";
 import { BreadcrumbNav } from "@/components/BreadcrumbNav";
@@ -26,6 +28,18 @@ export async function AppHeader() {
   const capabilities =
     profile && !mustChangePassword ? await getProfileCapabilities(profile) : null;
   const actingClients = isPlatformAdmin && !mustChangePassword ? await listClients() : [];
+  const clientModules =
+    ctx.kind === "authenticated" && !mustChangePassword
+      ? await loadClientModules(ctx.clientId)
+      : [];
+
+  const moduleOrder = (
+    clientModules.length > 0 ? clientModules.map((row) => row.module_key) : [...CLIENT_MODULES]
+  ) as ClientModuleKey[];
+
+  const enabledModules = Object.fromEntries(
+    CLIENT_MODULES.map((key) => [key, Boolean(capabilities?.[key])])
+  ) as Partial<Record<ClientModuleKey, boolean>>;
 
   return (
     <header className="sticky top-0 z-[100] w-full overflow-visible bg-background shadow-sm">
@@ -34,15 +48,8 @@ export async function AppHeader() {
         mustChangePassword={mustChangePassword}
         actingClientId={ctx.kind === "authenticated" ? ctx.clientId : null}
         actingClients={actingClients}
-        showInstructor={Boolean(capabilities?.author_training)}
-        showShiftExchange={Boolean(capabilities?.access_shift_exchange)}
-        showPrograms={Boolean(capabilities?.access_programs)}
-        showAssets={Boolean(capabilities?.access_assets)}
-        showIncidents={Boolean(capabilities?.manage_incidents)}
-        showFleet={Boolean(capabilities?.view_fleet)}
-        showPersonnel={Boolean(capabilities?.access_personnel)}
-        showDocumentTraining={Boolean(capabilities?.document_training)}
-        showApprovals={Boolean(capabilities?.approval_tracker)}
+        moduleOrder={moduleOrder}
+        enabledModules={enabledModules}
         showAdmin={Boolean(
           profile?.is_admin ||
             capabilities?.manage_users ||

@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Cross,
   type LucideIcon,
+  LayoutGrid,
   MapPin,
   Shield,
   ShieldCheck,
@@ -13,6 +14,7 @@ import {
   Layers,
   ListTree,
   ListChecks,
+  Image,
 } from "lucide-react";
 import Link from "next/link";
 import { getAuthContext, requireAdmin } from "@/lib/auth";
@@ -48,6 +50,18 @@ const ADMIN_GROUPS: AdminGroup[] = [
         icon: Shield,
       },
       {
+        href: "/admin/modules",
+        label: "Module order",
+        description: "Drag to set main navigation order",
+        icon: LayoutGrid,
+      },
+      {
+        href: "/admin/branding",
+        label: "Branding",
+        description: "Department logo for reports and letterhead",
+        icon: Image,
+      },
+      {
         href: "/admin/ems-levels",
         label: "EMS levels",
         description: "License levels held on personnel files",
@@ -75,6 +89,12 @@ const ADMIN_GROUPS: AdminGroup[] = [
         label: "Qualifications",
         description: "Qualifications granted by training",
         icon: BadgeCheck,
+      },
+      {
+        href: "/admin/upcoming-training-ops",
+        label: "Upcoming training Ops",
+        description: "Ops Team for attendance request approvals",
+        icon: ClipboardCheck,
       },
       {
         href: "/admin/approval-tracker",

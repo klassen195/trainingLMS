@@ -28,6 +28,8 @@ import { cn } from "@/lib/cn";
 import { Avatar, AvatarFallback } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import type { TrainingAttendanceRequestListItem } from "@/lib/upcoming-training-types";
+import { trainingAttendanceStageLabel } from "@/lib/upcoming-training-types";
 
 function personInitials(person: PersonnelProfile) {
   const first = person.first_name?.trim()?.[0];
@@ -46,10 +48,12 @@ export function SupervisorDashboard({
   rows,
   taskbooksByProfile,
   qualificationsByProfile,
+  pendingTrainingRequests = [],
 }: {
   rows: PersonnelProfile[];
   taskbooksByProfile: Record<string, PersonnelTaskbook[]>;
   qualificationsByProfile: Record<string, PersonnelQualification[]>;
+  pendingTrainingRequests?: TrainingAttendanceRequestListItem[];
 }) {
   if (rows.length === 0) {
     return (
@@ -59,8 +63,33 @@ export function SupervisorDashboard({
     );
   }
 
+  const requestsByApplicant = new Map<string, TrainingAttendanceRequestListItem[]>();
+  for (const request of pendingTrainingRequests) {
+    const list = requestsByApplicant.get(request.applicant_id) ?? [];
+    list.push(request);
+    requestsByApplicant.set(request.applicant_id, list);
+  }
+
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-4">
+    <div className="space-y-4">
+      {pendingTrainingRequests.length > 0 ? (
+        <div className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p>
+              {pendingTrainingRequests.length} training attendance request
+              {pendingTrainingRequests.length === 1 ? "" : "s"} waiting on you.
+            </p>
+            <Link
+              href="/document-training/requests"
+              className="font-medium text-primary hover:underline"
+            >
+              Review requests
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-4">
       {rows.map((person) => {
         const onProbation = isRankOnProbation(
           person.rank,
@@ -71,6 +100,7 @@ export function SupervisorDashboard({
         const openBooks = taskbooksByProfile[person.id] ?? [];
         const qualifications = qualificationsByProfile[person.id] ?? [];
         const upcomingDates = upcomingFamilyDates(person);
+        const trainingRequests = requestsByApplicant.get(person.id) ?? [];
         return (
           <Card key={person.id} className="flex flex-col">
             <CardHeader className="flex-row items-start gap-3 space-y-0 p-4">
@@ -215,6 +245,29 @@ export function SupervisorDashboard({
                 )}
               </div>
 
+              {trainingRequests.length > 0 ? (
+                <div className="border-t pt-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Training requests
+                  </p>
+                  <ul className="space-y-1.5 text-sm">
+                    {trainingRequests.map((request) => (
+                      <li key={request.id}>
+                        <Link
+                          href={`/document-training/requests/${request.id}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {request.title}
+                        </Link>
+                        <div className="text-xs text-muted-foreground">
+                          {trainingAttendanceStageLabel(request.current_stage)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="mt-auto border-t pt-3">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Open taskbooks
@@ -233,6 +286,7 @@ export function SupervisorDashboard({
           </Card>
         );
       })}
+      </div>
     </div>
   );
 }

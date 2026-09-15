@@ -1,8 +1,11 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import {
   PERSONNEL_CERTIFICATION_SELECT,
+  PERSONNEL_CERTIFICATION_SECTION_SELECT,
+  PERSONNEL_DOCUMENTS_BUCKET,
   PERSONNEL_DOCUMENT_SELECT,
   PERSONNEL_EMS_LICENSE_SELECT,
+  PERSONNEL_EMS_CLEARANCE_LOG_SELECT,
   PERSONNEL_NOTE_SELECT,
   PERSONNEL_PROFILE_SELECT,
   PERSONNEL_QUALIFICATION_SELECT,
@@ -15,8 +18,10 @@ import {
   isBattalionChiefRank,
   normalizeSwingUpRanks,
   type PersonnelCertification,
+  type PersonnelCertificationSection,
   type PersonnelDocument,
   type PersonnelEmsLicense,
+  type PersonnelEmsClearanceLogEntry,
   type PersonnelNote,
   type PersonnelProfile,
   type PersonnelQualification,
@@ -399,15 +404,74 @@ export async function fetchPersonnelProfile(supabase: SupabaseClient, userId: st
   };
 }
 
-export async function fetchPersonnelCertifications(supabase: SupabaseClient, profileId: string) {
+export async function attachPersonnelCertificationPreviewUrls(
+  supabase: SupabaseClient,
+  certifications: PersonnelCertification[]
+) {
+  const paths = [
+    ...new Set(
+      certifications
+        .map((cert) => cert.storage_path)
+        .filter((path): path is string => Boolean(path))
+    ),
+  ];
+  if (paths.length === 0) {
+    return certifications.map((cert) => ({ ...cert, preview_url: null }));
+  }
+
+  const { data } = await supabase.storage
+    .from(PERSONNEL_DOCUMENTS_BUCKET)
+    .createSignedUrls(paths, 60 * 60);
+  const urls = new Map<string, string>();
+  for (const item of data ?? []) {
+    if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
+  }
+
+  return certifications.map((cert) => ({
+    ...cert,
+    preview_url: cert.storage_path ? urls.get(cert.storage_path) ?? null : null,
+  }));
+}
+
+export async function fetchPersonnelCertifications(
+  supabase: SupabaseClient,
+  profileId: string,
+  options?: { withPreviewUrls?: boolean }
+) {
   const { data, error } = await supabase
     .from("personnel_certifications")
     .select(PERSONNEL_CERTIFICATION_SELECT)
     .eq("profile_id", profileId)
-    .order("expires_on", { ascending: true, nullsFirst: false });
+    .order("sort_order")
+    .order("name");
+
+  let rows = ((data ?? []) as PersonnelCertification[]).map((row) => ({
+    ...row,
+    sort_order: row.sort_order ?? 0,
+  }));
+  if (!error && options?.withPreviewUrls) {
+    rows = await attachPersonnelCertificationPreviewUrls(supabase, rows);
+  }
 
   return {
-    rows: (data ?? []) as PersonnelCertification[],
+    rows,
+    error: error as PostgrestError | null,
+  };
+}
+
+export async function fetchPersonnelCertificationSections(
+  supabase: SupabaseClient,
+  profileId: string
+) {
+  const { data, error } = await supabase
+    .from("personnel_certification_sections")
+    .select(PERSONNEL_CERTIFICATION_SECTION_SELECT)
+    .eq("profile_id", profileId)
+    .order("sort_order")
+    .order("name");
+
+  return {
+    rows: (data ?? []) as PersonnelCertificationSection[],
     error: error as PostgrestError | null,
   };
 }
@@ -435,6 +499,32 @@ export async function fetchPersonnelEmsLicenses(supabase: SupabaseClient, profil
   return {
     rows: (data ?? []) as unknown as PersonnelEmsLicense[],
     error: error as PostgrestError | null,
+  };
+}
+
+export async function fetchPersonnelEmsClearanceLog(supabase: SupabaseClient, profileId: string) {
+  const { data, error } = await supabase
+    .from("personnel_ems_clearance_log")
+    .select(PERSONNEL_EMS_CLEARANCE_LOG_SELECT)
+    .eq("profile_id", profileId)
+    .order("granted_on", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { rows: [] as PersonnelEmsClearanceLogEntry[], error: error as PostgrestError };
+  }
+
+  return {
+    rows: (data ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        ...(r as unknown as PersonnelEmsClearanceLogEntry),
+        created_by_profile: asSingleRelation(
+          r.created_by_profile as PersonnelEmsClearanceLogEntry["created_by_profile"]
+        ),
+      };
+    }),
+    error: null as PostgrestError | null,
   };
 }
 

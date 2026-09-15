@@ -8,7 +8,7 @@ import { isMissingLocationsTable } from "@/lib/supabase/errors";
 
 export async function listLocations(
   supabase: SupabaseClient,
-  options?: { activeOnly?: boolean }
+  options?: { activeOnly?: boolean; shiftPlanOnly?: boolean }
 ): Promise<{ rows: Location[]; error: { code?: string; message: string } | null }> {
   let query = supabase
     .from("locations")
@@ -18,6 +18,9 @@ export async function listLocations(
 
   if (options?.activeOnly) {
     query = query.eq("is_active", true);
+  }
+  if (options?.shiftPlanOnly) {
+    query = query.eq("include_in_shift_plan", true);
   }
 
   const { data, error } = await query;
@@ -30,6 +33,7 @@ export async function listLocations(
         name,
         sort_order: index + 1,
         is_active: true,
+        include_in_shift_plan: true,
         notes: "",
       })),
       error: null,

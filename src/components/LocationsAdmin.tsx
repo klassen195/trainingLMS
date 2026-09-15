@@ -31,12 +31,13 @@ import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
-import { Input, Textarea } from "@/components/ui/Input";
+import { Input, Select, Textarea } from "@/components/ui/Input";
 
 export function CreateLocationForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
+  const [includeInShiftPlan, setIncludeInShiftPlan] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -48,9 +49,10 @@ export function CreateLocationForm() {
         setError(null);
         startTransition(async () => {
           try {
-            await createLocation({ name, notes });
+            await createLocation({ name, notes, include_in_shift_plan: includeInShiftPlan });
             setName("");
             setNotes("");
+            setIncludeInShiftPlan(true);
             router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create location");
@@ -69,6 +71,18 @@ export function CreateLocationForm() {
           placeholder="e.g. Station 6"
           onChange={(e) => setName(e.target.value)}
         />
+      </div>
+      <div className="space-y-2">
+        <FieldLabel htmlFor="new-location-shift-plan">Shift Plan</FieldLabel>
+        <Select
+          id="new-location-shift-plan"
+          value={includeInShiftPlan ? "yes" : "no"}
+          disabled={pending}
+          onChange={(e) => setIncludeInShiftPlan(e.target.value === "yes")}
+        >
+          <option value="yes">Include</option>
+          <option value="no">Do not include</option>
+        </Select>
       </div>
       <div className="space-y-2">
         <FieldLabel htmlFor="new-location-notes">Notes</FieldLabel>
@@ -96,6 +110,7 @@ function SortableLocationRow({ location }: { location: Location }) {
   const [name, setName] = useState(location.name);
   const [notes, setNotes] = useState(location.notes);
   const [isActive, setIsActive] = useState(location.is_active);
+  const [includeInShiftPlan, setIncludeInShiftPlan] = useState(location.include_in_shift_plan);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -112,6 +127,7 @@ function SortableLocationRow({ location }: { location: Location }) {
     setName(location.name);
     setNotes(location.notes);
     setIsActive(location.is_active);
+    setIncludeInShiftPlan(location.include_in_shift_plan);
     setError(null);
     setEditing(false);
   }
@@ -144,6 +160,11 @@ function SortableLocationRow({ location }: { location: Location }) {
                   Inactive
                 </Badge>
               ) : null}
+              {location.include_in_shift_plan ? (
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  Shift Plan
+                </Badge>
+              ) : null}
             </div>
           </div>
           <Button
@@ -154,6 +175,7 @@ function SortableLocationRow({ location }: { location: Location }) {
               setName(location.name);
               setNotes(location.notes);
               setIsActive(location.is_active);
+              setIncludeInShiftPlan(location.include_in_shift_plan);
               setError(null);
               setEditing(true);
             }}
@@ -173,6 +195,7 @@ function SortableLocationRow({ location }: { location: Location }) {
                   name,
                   sort_order: location.sort_order,
                   is_active: isActive,
+                  include_in_shift_plan: includeInShiftPlan,
                   notes,
                 });
                 setEditing(false);
@@ -204,6 +227,18 @@ function SortableLocationRow({ location }: { location: Location }) {
               />
               Active
             </label>
+          </div>
+          <div className="space-y-1">
+            <FieldLabel htmlFor={`location-shift-plan-${location.id}`}>Shift Plan</FieldLabel>
+            <Select
+              id={`location-shift-plan-${location.id}`}
+              value={includeInShiftPlan ? "yes" : "no"}
+              disabled={pending}
+              onChange={(e) => setIncludeInShiftPlan(e.target.value === "yes")}
+            >
+              <option value="yes">Include</option>
+              <option value="no">Do not include</option>
+            </Select>
           </div>
           <div className="space-y-1">
             <FieldLabel htmlFor={`location-notes-${location.id}`}>Notes</FieldLabel>

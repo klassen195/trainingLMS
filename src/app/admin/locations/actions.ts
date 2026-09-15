@@ -23,6 +23,7 @@ export type LocationFormInput = {
   name: string;
   sort_order?: number;
   is_active?: boolean;
+  include_in_shift_plan?: boolean;
   notes?: string;
 };
 
@@ -50,6 +51,7 @@ export async function createLocation(input: LocationFormInput) {
       name,
       sort_order: sortOrder,
       is_active: input.is_active ?? true,
+      include_in_shift_plan: input.include_in_shift_plan ?? true,
       notes: input.notes?.trim() ?? "",
     })
     .select(LOCATION_SELECT)
@@ -63,6 +65,7 @@ export async function createLocation(input: LocationFormInput) {
   revalidatePath("/assets");
   revalidatePath("/assets/apparatus");
   revalidatePath("/assets/new");
+  revalidatePath("/shift-plan", "layout");
   return data as Location;
 }
 
@@ -92,6 +95,7 @@ export async function updateLocation(id: string, input: LocationFormInput) {
       name: nextName,
       sort_order: input.sort_order ?? previous.sort_order,
       is_active: input.is_active ?? previous.is_active,
+      include_in_shift_plan: input.include_in_shift_plan ?? previous.include_in_shift_plan,
       notes: input.notes?.trim() ?? previous.notes,
     })
     .eq("id", id)
@@ -116,6 +120,7 @@ export async function updateLocation(id: string, input: LocationFormInput) {
   revalidatePath("/assets");
   revalidatePath("/assets/apparatus");
   revalidatePath("/assets/new");
+  revalidatePath("/shift-plan", "layout");
   return data as Location;
 }
 
@@ -156,6 +161,7 @@ export async function deleteLocation(id: string) {
   revalidatePath("/assets");
   revalidatePath("/assets/apparatus");
   revalidatePath("/assets/new");
+  revalidatePath("/shift-plan", "layout");
 }
 
 export async function reorderLocations(input: { locationIds: string[] }) {
@@ -178,4 +184,5 @@ export async function reorderLocations(input: { locationIds: string[] }) {
   revalidatePath("/assets");
   revalidatePath("/assets/apparatus");
   revalidatePath("/assets/new");
+  revalidatePath("/shift-plan", "layout");
 }

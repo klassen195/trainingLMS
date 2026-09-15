@@ -119,7 +119,7 @@ export function FireDangerMeter({
         role="img"
         aria-label={`Fire danger ${flagLevelLabel(level)}`}
       >
-        <title>Fire danger {flagLevelLabel(level)}</title>
+        <title>{`Fire danger ${flagLevelLabel(level)}`}</title>
         {METER_LEVELS.map((segment, index) => {
           const start = 180 - index * SEGMENT;
           const end = start - SEGMENT;

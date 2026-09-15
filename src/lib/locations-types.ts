@@ -5,11 +5,12 @@ export type Location = {
   name: string;
   sort_order: number;
   is_active: boolean;
+  include_in_shift_plan: boolean;
   notes: string;
 };
 
 export const LOCATION_SELECT =
-  "id, created_at, updated_at, name, sort_order, is_active, notes";
+  "id, created_at, updated_at, name, sort_order, is_active, include_in_shift_plan, notes";
 
 /** Seeded defaults; used only when the locations table is not yet migrated. */
 export const DEFAULT_LOCATION_NAMES = [
