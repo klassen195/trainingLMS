@@ -97,6 +97,11 @@ export default async function UpcomingTrainingDetailPage({
           </Button>
           {canManage ? (
             <>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/document-training/new?from=${listing.id}`}>
+                  Create training report
+                </Link>
+              </Button>
               <DuplicateUpcomingTrainingButton upcomingTrainingId={listing.id} />
               <Button size="sm" asChild>
                 <Link href={`/document-training/upcoming/${listing.id}/edit`}>Edit</Link>

@@ -68,7 +68,8 @@ function newDayDraft(partial?: Partial<Omit<SessionDayDraft, "key">>): SessionDa
 }
 
 export type DocumentTrainingFormInitial = {
-  sessionId: string;
+  /** Present when editing an existing report; omit when creating with defaults. */
+  sessionId?: string;
   sessionType: TrainingSessionType;
   categoryId: string;
   title: string;
@@ -96,17 +97,19 @@ export function DocumentTrainingForm({
   categories,
   qualifications,
   initial,
+  cancelHref: cancelHrefProp,
 }: {
   profiles: TrainingSessionProfileOption[];
   categories: TrainingCategory[];
   qualifications: Qualification[];
   initial?: DocumentTrainingFormInitial;
+  cancelHref?: string;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const isEdit = Boolean(initial);
+  const isEdit = Boolean(initial?.sessionId);
 
   const [sessionType, setSessionType] = useState<TrainingSessionType | null>(
     initial?.sessionType ?? null
@@ -219,6 +222,7 @@ export function DocumentTrainingForm({
 
   function selectSessionType(next: TrainingSessionType) {
     if (isEdit) return;
+    if (sessionType === next) return;
     setSessionType(next);
     setOccurredOn("");
     setStartTime("");
@@ -252,9 +256,9 @@ export function DocumentTrainingForm({
     );
   }
 
-  const cancelHref = initial
-    ? `/document-training/${initial.sessionId}`
-    : "/document-training";
+  const cancelHref =
+    cancelHrefProp ??
+    (initial?.sessionId ? `/document-training/${initial.sessionId}` : "/document-training");
 
   return (
     <form
@@ -311,7 +315,7 @@ export function DocumentTrainingForm({
               attendeeIds,
             };
 
-            const { sessionId } = initial
+            const { sessionId } = initial?.sessionId
               ? await updateTrainingSession({ sessionId: initial.sessionId, ...payload })
               : await createTrainingSession(payload);
             createdId = sessionId;

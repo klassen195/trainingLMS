@@ -176,6 +176,27 @@ export async function getUpcomingTraining(id: string): Promise<UpcomingTrainingL
   return data as unknown as UpcomingTrainingListItem;
 }
 
+/** Approved applicants for an opportunity — used when converting to a training report. */
+export async function listApprovedApplicantIdsForUpcomingTraining(
+  upcomingTrainingId: string
+): Promise<string[]> {
+  await requireCapability("document_training");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("training_attendance_requests")
+    .select("applicant_id")
+    .eq("upcoming_training_id", upcomingTrainingId)
+    .eq("current_stage", "approved");
+  throwIfDbError(error);
+  return [
+    ...new Set(
+      (data ?? [])
+        .map((row) => row.applicant_id as string)
+        .filter((id) => Boolean(id?.trim()))
+    ),
+  ];
+}
+
 export async function createUpcomingTraining(input: UpcomingTrainingInput) {
   const profile = await assertCapability("manage_upcoming_training");
   const supabase = await createSupabaseServerClient();
