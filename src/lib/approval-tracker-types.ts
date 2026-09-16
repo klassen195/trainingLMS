@@ -487,7 +487,8 @@ export function isWaitingOnApprovalUser(input: {
 }) {
   if (input.stage === "approved") return false;
   if (input.stage === "creator") {
-    return input.createdBy === input.userId || input.assignedTo === input.userId;
+    if (input.assignedTo) return input.assignedTo === input.userId;
+    return input.createdBy === input.userId;
   }
   if (input.stage === "committee") {
     const body = membersForCommitteeBody(

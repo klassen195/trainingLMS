@@ -44,8 +44,8 @@ export const HOME_WIDGET_CATALOG: Record<HomeWidgetType, Omit<HomeWidgetCatalogI
     description: "Apparatus currently marked out of service.",
   },
   approvals_queue: {
-    title: "Document Status",
-    description: "Approval-tracker documents at your stage.",
+    title: "Policy Status",
+    description: "Policies waiting on you in the approval tracker.",
   },
   open_taskbooks: {
     title: "Open taskbooks",
@@ -53,7 +53,7 @@ export const HOME_WIDGET_CATALOG: Record<HomeWidgetType, Omit<HomeWidgetCatalogI
   },
   expiring_credentials: {
     title: "Expiring certifications",
-    description: "Your certifications and EMS licenses due within six months.",
+    description: "Your certifications, EMS licenses, and qualifications due within six months.",
   },
 };
 
@@ -167,13 +167,13 @@ export type OpenTaskbookItem = {
 
 export type ExpiringCredentialItem = {
   id: string;
-  kind: "certification" | "ems_license";
+  kind: "certification" | "ems_license" | "qualification";
   kindLabel: string;
   label: string;
   expiresOn: string;
   daysUntil: number;
   whenLabel: string;
-  sectionId: "certifications" | "ems";
+  sectionId: "certifications" | "ems" | "qualifications";
 };
 
 export type FlagMastPosition = "full" | "half";

@@ -352,7 +352,7 @@ function WidgetBody({
     const rows = payload.data.approvals;
     if (!rows) return <WidgetEmpty message="Approvals are not loaded." />;
     if ("error" in rows) return <WidgetError message={rows.error} />;
-    if (rows.length === 0) return <WidgetEmpty message="No documents are waiting on your stage." />;
+    if (rows.length === 0) return <WidgetEmpty message="No policies are waiting on you." />;
     return (
       <ul className="space-y-2">
         {rows.map((row) => (
@@ -407,7 +407,9 @@ function WidgetBody({
     if (!rows) return <WidgetEmpty message="Expiring certifications are not loaded." />;
     if ("error" in rows) return <WidgetError message={rows.error} />;
     if (rows.length === 0) {
-      return <WidgetEmpty message="No certifications or EMS licenses expire in the next six months." />;
+      return (
+        <WidgetEmpty message="No certifications, EMS licenses, or qualifications expire in the next six months." />
+      );
     }
     return (
       <ul className="space-y-2">

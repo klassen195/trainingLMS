@@ -37,6 +37,7 @@ import { loadFlagMastStatus } from "@/lib/flag-mast";
 import {
   fetchPersonnelCertifications,
   fetchPersonnelEmsLicenses,
+  fetchPersonnelQualifications,
   fetchPersonnelTaskbooks,
 } from "@/lib/personnel";
 import {
@@ -340,9 +341,10 @@ async function loadExpiringCredentials(
   supabase: SupabaseClient,
   profileId: string
 ): Promise<ExpiringCredentialItem[] | { error: string }> {
-  const [certs, licenses] = await Promise.all([
+  const [certs, licenses, qualifications] = await Promise.all([
     fetchPersonnelCertifications(supabase, profileId),
     fetchPersonnelEmsLicenses(supabase, profileId),
+    fetchPersonnelQualifications(supabase, profileId),
   ]);
 
   if (certs.error) {
@@ -357,25 +359,27 @@ async function loadExpiringCredentials(
     }
     return { error: licenses.error.message };
   }
+  if (qualifications.error) {
+    if (isMissingPersonnelTables(qualifications.error)) {
+      return { error: "Qualifications are not set up yet." };
+    }
+    return { error: qualifications.error.message };
+  }
 
   return collectExpiringPersonnelItems({
     certifications: certs.rows,
     emsLicenses: licenses.rows,
-  })
-    .filter(
-      (item): item is typeof item & { kind: "certification" | "ems_license"; sectionId: "certifications" | "ems" } =>
-        item.kind === "certification" || item.kind === "ems_license"
-    )
-    .map((item) => ({
-      id: item.id,
-      kind: item.kind,
-      kindLabel: expiringItemKindLabel(item.kind),
-      label: item.label,
-      expiresOn: item.expiresOn,
-      daysUntil: item.daysUntil,
-      whenLabel: expiringWhenLabel(item.daysUntil),
-      sectionId: item.sectionId,
-    }));
+    qualifications: qualifications.rows,
+  }).map((item) => ({
+    id: item.id,
+    kind: item.kind,
+    kindLabel: expiringItemKindLabel(item.kind),
+    label: item.label,
+    expiresOn: item.expiresOn,
+    daysUntil: item.daysUntil,
+    whenLabel: expiringWhenLabel(item.daysUntil),
+    sectionId: item.sectionId,
+  }));
 }
 
 export async function loadHomeDashboard(input: {
