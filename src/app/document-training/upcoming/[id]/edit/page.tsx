@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireCapability } from "@/lib/capability-access";
 import { getUpcomingTraining } from "@/app/document-training/upcoming/actions";
+import { DuplicateUpcomingTrainingButton } from "@/components/DuplicateUpcomingTrainingButton";
 import { TrainingSectionNav } from "@/components/TrainingSectionNav";
 import { UpcomingTrainingForm } from "@/components/UpcomingTrainingForm";
 import { Button } from "@/components/ui/Button";
@@ -30,9 +31,12 @@ export default async function EditUpcomingTrainingPage({
           <h1 className="text-2xl font-bold">Edit opportunity</h1>
           <p className="text-sm text-muted-foreground">{listing.title}</p>
         </div>
-        <Button variant="outline" size="sm" asChild>
-          <Link href={`/document-training/upcoming/${listing.id}`}>Back</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <DuplicateUpcomingTrainingButton upcomingTrainingId={listing.id} />
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/document-training/upcoming/${listing.id}`}>Back</Link>
+          </Button>
+        </div>
       </div>
       <UpcomingTrainingForm initial={listing} />
     </div>

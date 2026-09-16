@@ -3,16 +3,22 @@ import { notFound } from "next/navigation";
 import { getProfileCapabilities, requireCapability } from "@/lib/capability-access";
 import {
   getUpcomingTraining,
+  getUpcomingTrainingFlyerDownloadUrl,
 } from "@/app/document-training/upcoming/actions";
 import { listMyTrainingAttendanceRequests } from "@/app/document-training/requests/actions";
 import { ApplyToUpcomingTrainingForm } from "@/components/ApplyToUpcomingTrainingForm";
+import { DuplicateUpcomingTrainingButton } from "@/components/DuplicateUpcomingTrainingButton";
+import { TrainingAuthorizationDetails } from "@/components/TrainingAuthorizationDetails";
 import { TrainingSectionNav } from "@/components/TrainingSectionNav";
+import { UpcomingTrainingFlyerViewer } from "@/components/UpcomingTrainingFlyerViewer";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatDate } from "@/lib/dates";
 import {
   formatEstimatedCost,
+  getTrainingAuthorizationBadge,
   upcomingTrainingStatusLabel,
+  upcomingTrainingTimeRange,
 } from "@/lib/upcoming-training-types";
 import { isMissingUpcomingTrainingTables } from "@/lib/supabase/errors";
 
@@ -28,6 +34,7 @@ export default async function UpcomingTrainingDetailPage({
   let listing: Awaited<ReturnType<typeof getUpcomingTraining>> | null = null;
   let loadError: string | null = null;
   let alreadyApplied = false;
+  let flyerUrl: string | null = null;
 
   try {
     listing = await getUpcomingTraining(id);
@@ -37,6 +44,13 @@ export default async function UpcomingTrainingDetailPage({
         row.upcoming_training_id === id &&
         ["pending_captain", "pending_bc", "pending_ops", "approved"].includes(row.current_stage)
     );
+    if (listing.flyer_storage_path) {
+      const signed = await getUpcomingTrainingFlyerDownloadUrl({
+        upcomingTrainingId: listing.id,
+        expiresIn: 3600,
+      });
+      flyerUrl = signed.url;
+    }
   } catch (err) {
     if (err instanceof Error && err.message.includes("not found")) notFound();
     loadError = err instanceof Error ? err.message : "Failed to load.";
@@ -59,6 +73,8 @@ export default async function UpcomingTrainingDetailPage({
 
   const canManage = caps.manage_upcoming_training;
   const canApply = listing.status === "open";
+  const authorizationBadge = getTrainingAuthorizationBadge(listing.authorization_level);
+  const timeRange = upcomingTrainingTimeRange(listing);
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-5">
@@ -80,14 +96,25 @@ export default async function UpcomingTrainingDetailPage({
             <Link href="/document-training/upcoming">Back</Link>
           </Button>
           {canManage ? (
-            <Button size="sm" asChild>
-              <Link href={`/document-training/upcoming/${listing.id}/edit`}>Edit</Link>
-            </Button>
+            <>
+              <DuplicateUpcomingTrainingButton upcomingTrainingId={listing.id} />
+              <Button size="sm" asChild>
+                <Link href={`/document-training/upcoming/${listing.id}/edit`}>Edit</Link>
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
 
+      {listing.description ? (
+        <div className="mb-6 whitespace-pre-wrap text-sm">{listing.description}</div>
+      ) : null}
+
       <dl className="mb-6 grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">City</dt>
+          <dd>{listing.city || "—"}</dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">Location</dt>
           <dd>{listing.location || "—"}</dd>
@@ -101,6 +128,12 @@ export default async function UpcomingTrainingDetailPage({
               : ""}
           </dd>
         </div>
+        {timeRange ? (
+          <div>
+            <dt className="text-muted-foreground">Time</dt>
+            <dd>{timeRange}</dd>
+          </div>
+        ) : null}
         <div>
           <dt className="text-muted-foreground">Apply by</dt>
           <dd>
@@ -128,8 +161,33 @@ export default async function UpcomingTrainingDetailPage({
         ) : null}
       </dl>
 
-      {listing.description ? (
-        <div className="mb-6 whitespace-pre-wrap text-sm">{listing.description}</div>
+      {flyerUrl && listing.flyer_file_name ? (
+        <div className="mb-6">
+          <UpcomingTrainingFlyerViewer
+            upcomingTrainingId={listing.id}
+            fileName={listing.flyer_file_name}
+            mimeType={listing.flyer_mime_type}
+            url={flyerUrl}
+          />
+        </div>
+      ) : null}
+
+      {authorizationBadge ? (
+        <div className="mb-6 flex flex-wrap items-start gap-4 rounded-md border p-4">
+          {/* Static badge art under /public/training-levels */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={authorizationBadge.badgeSrc}
+            alt={authorizationBadge.label}
+            width={128}
+            height={128}
+            className="h-28 w-28 shrink-0 object-contain sm:h-32 sm:w-32"
+          />
+          <TrainingAuthorizationDetails
+            badge={authorizationBadge}
+            className="min-w-[14rem] flex-1"
+          />
+        </div>
       ) : null}
 
       {canManage && listing.notes ? (

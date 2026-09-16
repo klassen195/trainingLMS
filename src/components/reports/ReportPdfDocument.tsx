@@ -10,6 +10,7 @@ import {
   pdf,
 } from "@react-pdf/renderer";
 import type { ReportBranding, ReportColumn, ReportExportMeta } from "@/lib/reports/types";
+import { formatDateTime } from "@/lib/dates";
 
 const styles = StyleSheet.create({
   page: {
@@ -126,7 +127,7 @@ export function ReportPdfDocument({
 
         <View style={styles.meta}>
           <Text>
-            Generated {generatedAt.toLocaleString()} · {rows.length} row
+            Generated {formatDateTime(generatedAt.toISOString())} · {rows.length} row
             {rows.length === 1 ? "" : "s"}
           </Text>
           {meta.filterSummary ? <Text>{meta.filterSummary}</Text> : null}

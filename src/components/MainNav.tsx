@@ -98,6 +98,7 @@ export function MainNav({
   enabledModules = {},
   actingClientId = null,
   actingClients = [],
+  departmentLogoUrl = null,
 }: {
   profile: Profile | null;
   mustChangePassword?: boolean;
@@ -106,6 +107,7 @@ export function MainNav({
   enabledModules?: Partial<Record<ClientModuleKey, boolean>>;
   actingClientId?: string | null;
   actingClients?: Pick<Client, "id" | "code" | "name" | "is_active">[];
+  departmentLogoUrl?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -154,9 +156,18 @@ export function MainNav({
           href={mustChangePassword ? "/account/change-password" : "/"}
           className="flex shrink-0 items-center gap-3 hover:opacity-80 transition-opacity"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            FD
-          </div>
+          {departmentLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- signed Supabase storage URL
+            <img
+              src={departmentLogoUrl}
+              alt="Department logo"
+              className="h-10 w-10 rounded-md object-contain"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
+              FD
+            </div>
+          )}
           <span className="hidden xl:inline text-xl font-bold">Anchor Point</span>
         </Link>
 

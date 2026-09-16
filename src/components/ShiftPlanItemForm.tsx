@@ -12,6 +12,7 @@ import type { ShiftPlanItem, ShiftPlanScope } from "@/lib/shift-plan-types";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { TimeInput } from "@/components/ui/TimeInput";
 
 export function ShiftPlanItemForm({
   shiftDate,
@@ -122,16 +123,15 @@ export function ShiftPlanItemForm({
       <div className="grid grid-cols-2 gap-3">
         <div className="grid gap-1.5">
           <FieldLabel htmlFor="sp-start">Start</FieldLabel>
-          <Input
+          <TimeInput
             id="sp-start"
-            type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
           />
         </div>
         <div className="grid gap-1.5">
           <FieldLabel htmlFor="sp-end">End</FieldLabel>
-          <Input id="sp-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          <TimeInput id="sp-end" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
         </div>
       </div>
 

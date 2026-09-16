@@ -8,7 +8,14 @@ import {
   isClientLogoMimeType,
   type Client,
 } from "@/lib/clients";
+import { getClientLogoSignedUrl } from "@/lib/client-logo";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+function revalidateClientBranding() {
+  revalidatePath("/admin/branding");
+  revalidatePath("/reports");
+  revalidatePath("/", "layout");
+}
 
 const CLIENT_BRANDING_SELECT =
   "id, code, name, is_active, created_at, updated_at, logo_storage_path, logo_file_name, logo_mime_type, logo_updated_at";
@@ -66,8 +73,7 @@ export async function prepareClientLogoUpload(input: {
     .eq("id", ctx.clientId);
   if (error) throw error;
 
-  revalidatePath("/admin/branding");
-  revalidatePath("/reports");
+  revalidateClientBranding();
   return { storagePath };
 }
 
@@ -100,27 +106,12 @@ export async function removeClientLogo() {
     .eq("id", ctx.clientId);
   if (updateError) throw updateError;
 
-  revalidatePath("/admin/branding");
-  revalidatePath("/reports");
+  revalidateClientBranding();
 }
 
 export async function getClientLogoPreviewUrl(): Promise<string | null> {
   await requireAdmin();
   const ctx = await getAuthContext();
   if (ctx.kind !== "authenticated") return null;
-
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("clients")
-    .select("logo_storage_path")
-    .eq("id", ctx.clientId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data?.logo_storage_path) return null;
-
-  const { data: signed, error: signedError } = await supabase.storage
-    .from(CLIENT_LOGOS_BUCKET)
-    .createSignedUrl(data.logo_storage_path as string, 3600);
-  if (signedError) throw signedError;
-  return signed?.signedUrl ?? null;
+  return getClientLogoSignedUrl(ctx.clientId);
 }

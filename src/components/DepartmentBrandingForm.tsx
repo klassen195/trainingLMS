@@ -100,7 +100,7 @@ export function DepartmentBrandingForm({
           <div>
             <FieldLabel htmlFor="department-logo">Department logo</FieldLabel>
             <p className="mb-2 text-sm text-muted-foreground">
-              Used in the header of exported PDF reports. JPEG, PNG, or WebP up to 5 MB.
+              Shown in the site header and on exported PDF reports. JPEG, PNG, or WebP up to 5 MB.
             </p>
             <input
               ref={inputRef}

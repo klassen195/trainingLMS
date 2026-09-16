@@ -1,0 +1,33 @@
+---
+description: All displayed times must use 24-hour format
+alwaysApply: true
+---
+
+# 24-hour time
+
+All times shown in the UI, PDFs, emails, and exports use **24-hour** clock (`HH:mm`). Never use 12-hour time or AM/PM.
+
+## Do
+
+- Format times with helpers from `@/lib/dates`: `formatTime`, `formatDateTime`, `formatTimestamp`
+- Collect times with `TimeInput` from `@/components/ui/TimeInput` (text `HH:mm`)
+- Prefer `hourCycle: "h23"` / `hour12: false` if calling `Intl.DateTimeFormat` directly
+
+## Don't
+
+```ts
+// ❌ BAD — native time inputs follow the OS locale and often show AM/PM
+<input type="time" />
+date.toLocaleTimeString()
+date.toLocaleString()
+new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "numeric" })
+
+// ✅ GOOD
+import { TimeInput } from "@/components/ui/TimeInput";
+<TimeInput name="startTime" defaultValue="13:30" />
+formatTime("14:30")
+formatDateTime(iso)
+new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+```
+
+Examples: `08:00`, `13:30`, `23:59` — not `8:00 AM` / `1:30 PM`.

@@ -2,6 +2,7 @@ import { getAuthContext } from "@/lib/auth";
 import { getProfileCapabilities } from "@/lib/capability-access";
 import { loadClientModules } from "@/lib/client-modules-server";
 import { CLIENT_MODULES, type ClientModuleKey } from "@/lib/client-modules";
+import { getClientLogoSignedUrl } from "@/lib/client-logo";
 import { listClients } from "@/app/admin/clients/actions";
 import { MainNav } from "@/components/MainNav";
 import { BreadcrumbNav } from "@/components/BreadcrumbNav";
@@ -32,6 +33,8 @@ export async function AppHeader() {
     ctx.kind === "authenticated" && !mustChangePassword
       ? await loadClientModules(ctx.clientId)
       : [];
+  const departmentLogoUrl =
+    ctx.kind === "authenticated" ? await getClientLogoSignedUrl(ctx.clientId) : null;
 
   const moduleOrder = (
     clientModules.length > 0 ? clientModules.map((row) => row.module_key) : [...CLIENT_MODULES]
@@ -48,6 +51,7 @@ export async function AppHeader() {
         mustChangePassword={mustChangePassword}
         actingClientId={ctx.kind === "authenticated" ? ctx.clientId : null}
         actingClients={actingClients}
+        departmentLogoUrl={departmentLogoUrl}
         moduleOrder={moduleOrder}
         enabledModules={enabledModules}
         showAdmin={Boolean(

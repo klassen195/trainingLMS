@@ -11,11 +11,17 @@ import {
   supabaseErrorMessage,
 } from "@/lib/supabase/errors";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeTimeInput } from "@/lib/dates";
 import {
+  TRAINING_AUTHORIZATION_LEVELS,
+  UPCOMING_TRAINING_FLYERS_BUCKET,
   UPCOMING_TRAINING_LIST_SELECT,
   UPCOMING_TRAINING_OPS_MEMBER_SELECT,
   UPCOMING_TRAINING_SELECT,
   UPCOMING_TRAINING_STATUSES,
+  buildUpcomingTrainingFlyerStoragePath,
+  sanitizeUpcomingTrainingFlyerFileName,
+  type TrainingAuthorizationLevel,
   type UpcomingTraining,
   type UpcomingTrainingListItem,
   type UpcomingTrainingOpsMember,
@@ -73,6 +79,17 @@ function parseStatus(raw: string | null | undefined): UpcomingTrainingStatus {
   throw new Error("Choose a status.");
 }
 
+function parseAuthorizationLevel(
+  raw: string | null | undefined
+): TrainingAuthorizationLevel | null {
+  const value = raw?.trim() ?? "";
+  if (!value) return null;
+  if ((TRAINING_AUTHORIZATION_LEVELS as readonly string[]).includes(value)) {
+    return value as TrainingAuthorizationLevel;
+  }
+  throw new Error("Choose a valid authorization level.");
+}
+
 function normalizeText(raw: string | null | undefined) {
   return raw?.trim() ?? "";
 }
@@ -82,13 +99,17 @@ export type UpcomingTrainingInput = {
   description?: string;
   provider?: string;
   location?: string;
+  city?: string;
   startsOn?: string | null;
   endsOn?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   applicationDeadline?: string | null;
   estimatedCost?: string | number | null;
   externalUrl?: string;
   notes?: string;
   status: string;
+  authorizationLevel?: string | null;
 };
 
 function listingPayload(input: UpcomingTrainingInput, createdBy?: string) {
@@ -97,18 +118,27 @@ function listingPayload(input: UpcomingTrainingInput, createdBy?: string) {
   if (startsOn && endsOn && endsOn < startsOn) {
     throw new Error("End date must be on or after the start date.");
   }
+  const startTime = normalizeTimeInput(input.startTime);
+  const endTime = normalizeTimeInput(input.endTime);
+  if (startTime && endTime && endTime < startTime) {
+    throw new Error("End time must be on or after the start time.");
+  }
   return {
     title: parseTitle(input.title),
     description: normalizeText(input.description),
     provider: normalizeText(input.provider),
     location: normalizeText(input.location),
+    city: normalizeText(input.city),
     starts_on: startsOn,
     ends_on: endsOn,
+    start_time: startTime,
+    end_time: endTime,
     application_deadline: parseOptionalDate(input.applicationDeadline),
     estimated_cost: parseOptionalCost(input.estimatedCost),
     external_url: normalizeText(input.externalUrl),
     notes: normalizeText(input.notes),
     status: parseStatus(input.status),
+    authorization_level: parseAuthorizationLevel(input.authorizationLevel),
     ...(createdBy ? { created_by: createdBy } : {}),
   };
 }
@@ -177,6 +207,79 @@ export async function updateUpcomingTraining(id: string, input: UpcomingTraining
   return data as UpcomingTraining;
 }
 
+export async function duplicateUpcomingTraining(id: string) {
+  const profile = await assertCapability("manage_upcoming_training");
+  const supabase = await createSupabaseServerClient();
+  const { data: source, error: sourceError } = await supabase
+    .from("upcoming_trainings")
+    .select(UPCOMING_TRAINING_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  throwIfDbError(sourceError);
+  if (!source) throw new Error("Upcoming training not found.");
+
+  const sourceRow = source as UpcomingTraining;
+  const titleBase = sourceRow.title.trim() || "Untitled";
+  const copyTitle = titleBase.endsWith("(copy)") ? titleBase : `${titleBase} (copy)`;
+
+  const { data: created, error: createError } = await supabase
+    .from("upcoming_trainings")
+    .insert({
+      title: copyTitle,
+      description: sourceRow.description,
+      provider: sourceRow.provider,
+      location: sourceRow.location,
+      city: sourceRow.city,
+      starts_on: sourceRow.starts_on,
+      ends_on: sourceRow.ends_on,
+      start_time: sourceRow.start_time,
+      end_time: sourceRow.end_time,
+      application_deadline: sourceRow.application_deadline,
+      estimated_cost: sourceRow.estimated_cost,
+      external_url: sourceRow.external_url,
+      notes: sourceRow.notes,
+      status: "draft",
+      authorization_level: sourceRow.authorization_level,
+      created_by: profile.id,
+    })
+    .select(UPCOMING_TRAINING_SELECT)
+    .single();
+  throwIfDbError(createError);
+  const row = created as UpcomingTraining;
+
+  if (sourceRow.flyer_storage_path && sourceRow.flyer_file_name) {
+    const fileId = crypto.randomUUID();
+    const nextPath = buildUpcomingTrainingFlyerStoragePath(
+      row.id,
+      fileId,
+      sourceRow.flyer_file_name
+    );
+    const { error: copyError } = await supabase.storage
+      .from(UPCOMING_TRAINING_FLYERS_BUCKET)
+      .copy(sourceRow.flyer_storage_path, nextPath);
+    if (copyError) {
+      // Listing still exists without flyer if copy fails.
+      console.error("Failed to copy upcoming training flyer:", copyError.message);
+    } else {
+      const { error: attachError } = await supabase
+        .from("upcoming_trainings")
+        .update({
+          flyer_file_name: sourceRow.flyer_file_name,
+          flyer_storage_path: nextPath,
+          flyer_mime_type: sourceRow.flyer_mime_type,
+        })
+        .eq("id", row.id);
+      throwIfDbError(attachError);
+      row.flyer_file_name = sourceRow.flyer_file_name;
+      row.flyer_storage_path = nextPath;
+      row.flyer_mime_type = sourceRow.flyer_mime_type;
+    }
+  }
+
+  revalidateUpcoming(row.id);
+  return row;
+}
+
 export async function setUpcomingTrainingStatus(id: string, status: string) {
   await assertCapability("manage_upcoming_training");
   const parsed = parseStatus(status);
@@ -196,9 +299,139 @@ export async function setUpcomingTrainingStatus(id: string, status: string) {
 export async function deleteUpcomingTraining(id: string) {
   await assertCapability("manage_upcoming_training");
   const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("upcoming_trainings")
+    .select("flyer_storage_path")
+    .eq("id", id)
+    .maybeSingle();
+  throwIfDbError(existingError);
+
   const { error } = await supabase.from("upcoming_trainings").delete().eq("id", id);
   throwIfDbError(error);
+
+  if (existing?.flyer_storage_path) {
+    await supabase.storage
+      .from(UPCOMING_TRAINING_FLYERS_BUCKET)
+      .remove([existing.flyer_storage_path]);
+  }
   revalidateUpcoming(id);
+}
+
+export async function prepareUpcomingTrainingFlyerUpload(input: {
+  upcomingTrainingId: string;
+  fileName: string;
+  mimeType?: string | null;
+}) {
+  await assertCapability("manage_upcoming_training");
+  const fileName = sanitizeUpcomingTrainingFlyerFileName(input.fileName);
+  if (!fileName) throw new Error("File name is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("upcoming_trainings")
+    .select("id")
+    .eq("id", input.upcomingTrainingId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data) throw new Error("Upcoming training not found.");
+
+  const fileId = crypto.randomUUID();
+  return {
+    storagePath: buildUpcomingTrainingFlyerStoragePath(
+      input.upcomingTrainingId,
+      fileId,
+      fileName
+    ),
+  };
+}
+
+export async function attachUpcomingTrainingFlyer(input: {
+  upcomingTrainingId: string;
+  storagePath: string;
+  fileName: string;
+  mimeType?: string | null;
+}) {
+  await assertCapability("manage_upcoming_training");
+  const fileName = sanitizeUpcomingTrainingFlyerFileName(input.fileName);
+  const storagePath = input.storagePath.trim();
+  if (!fileName || !storagePath) throw new Error("Flyer is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("upcoming_trainings")
+    .select("id, flyer_storage_path")
+    .eq("id", input.upcomingTrainingId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data) throw new Error("Upcoming training not found.");
+
+  const previousPath = data.flyer_storage_path;
+  const { error: updateError } = await supabase
+    .from("upcoming_trainings")
+    .update({
+      flyer_file_name: fileName,
+      flyer_storage_path: storagePath,
+      flyer_mime_type: input.mimeType?.trim() || null,
+    })
+    .eq("id", input.upcomingTrainingId);
+  throwIfDbError(updateError);
+
+  if (previousPath && previousPath !== storagePath) {
+    await supabase.storage.from(UPCOMING_TRAINING_FLYERS_BUCKET).remove([previousPath]);
+  }
+
+  revalidateUpcoming(input.upcomingTrainingId);
+}
+
+export async function removeUpcomingTrainingFlyer(input: { upcomingTrainingId: string }) {
+  await assertCapability("manage_upcoming_training");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("upcoming_trainings")
+    .select("id, flyer_storage_path")
+    .eq("id", input.upcomingTrainingId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data) throw new Error("Upcoming training not found.");
+
+  const previousPath = data.flyer_storage_path;
+  const { error: updateError } = await supabase
+    .from("upcoming_trainings")
+    .update({
+      flyer_file_name: null,
+      flyer_storage_path: null,
+      flyer_mime_type: null,
+    })
+    .eq("id", input.upcomingTrainingId);
+  throwIfDbError(updateError);
+
+  if (previousPath) {
+    await supabase.storage.from(UPCOMING_TRAINING_FLYERS_BUCKET).remove([previousPath]);
+  }
+
+  revalidateUpcoming(input.upcomingTrainingId);
+}
+
+export async function getUpcomingTrainingFlyerDownloadUrl(input: {
+  upcomingTrainingId: string;
+  expiresIn?: number;
+}) {
+  await requireCapability("document_training");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("upcoming_trainings")
+    .select("flyer_storage_path")
+    .eq("id", input.upcomingTrainingId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data?.flyer_storage_path) throw new Error("No flyer is attached to this opportunity.");
+
+  const { data: signed, error: signedError } = await supabase.storage
+    .from(UPCOMING_TRAINING_FLYERS_BUCKET)
+    .createSignedUrl(data.flyer_storage_path, input.expiresIn ?? 60);
+  if (signedError) throw new Error(signedError.message);
+  if (!signed?.signedUrl) throw new Error("Could not create download link.");
+  return { url: signed.signedUrl };
 }
 
 export async function listUpcomingTrainingOpsMembers(): Promise<UpcomingTrainingOpsMember[]> {

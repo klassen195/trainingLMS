@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
+import { TimeInput } from "@/components/ui/TimeInput";
 
 const SESSION_TYPES: {
   value: TrainingSessionType;
@@ -450,9 +451,8 @@ export function DocumentTrainingForm({
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <FieldLabel htmlFor="start-time">Start time</FieldLabel>
-                      <Input
+                      <TimeInput
                         id="start-time"
-                        type="time"
                         value={startTime}
                         onChange={(e) => setStartTime(e.target.value)}
                         required
@@ -460,9 +460,8 @@ export function DocumentTrainingForm({
                     </div>
                     <div>
                       <FieldLabel htmlFor="end-time">End time</FieldLabel>
-                      <Input
+                      <TimeInput
                         id="end-time"
-                        type="time"
                         value={endTime}
                         onChange={(e) => setEndTime(e.target.value)}
                         required
@@ -522,9 +521,8 @@ export function DocumentTrainingForm({
                         </div>
                         <div>
                           <FieldLabel htmlFor={`day-start-${day.key}`}>Start</FieldLabel>
-                          <Input
+                          <TimeInput
                             id={`day-start-${day.key}`}
-                            type="time"
                             value={day.startTime}
                             onChange={(e) =>
                               updateDay(day.key, { startTime: e.target.value })
@@ -534,9 +532,8 @@ export function DocumentTrainingForm({
                         </div>
                         <div>
                           <FieldLabel htmlFor={`day-end-${day.key}`}>End</FieldLabel>
-                          <Input
+                          <TimeInput
                             id={`day-end-${day.key}`}
-                            type="time"
                             value={day.endTime}
                             onChange={(e) =>
                               updateDay(day.key, { endTime: e.target.value })
