@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   createPersonnelQualification,
   deletePersonnelQualification,
+  renewPersonnelQualification,
   updatePersonnelQualification,
 } from "@/app/personnel/actions";
 import type { PersonnelQualification } from "@/lib/personnel-types";
-import { isCertExpired } from "@/lib/personnel-types";
+import { isCertExpired, nextQualificationRenewalExpiry } from "@/lib/personnel-types";
 import type { Qualification } from "@/lib/qualifications-types";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
@@ -90,7 +92,8 @@ export function PersonnelQualificationsPanel({
                     {row.notes ? <p className="mt-2 text-sm">{row.notes}</p> : null}
                   </div>
                   {canManage ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <RenewQualificationButton row={row} profileId={profileId} />
                       <Button
                         type="button"
                         size="sm"
@@ -126,6 +129,37 @@ export function PersonnelQualificationsPanel({
         )
       ) : null}
     </div>
+  );
+}
+
+function RenewQualificationButton({
+  row,
+  profileId,
+}: {
+  row: PersonnelQualification;
+  profileId: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const nextExpires = nextQualificationRenewalExpiry(row.expires_on);
+  const name = row.qualification?.name ?? "this qualification";
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="secondary"
+      disabled={pending}
+      onClick={() => {
+        if (!confirm(`Renew ${name} through ${formatDate(nextExpires)}?`)) return;
+        startTransition(async () => {
+          await renewPersonnelQualification({ id: row.id, profileId });
+          router.refresh();
+        });
+      }}
+    >
+      {pending ? "Renewing…" : "Renew"}
+    </Button>
   );
 }
 

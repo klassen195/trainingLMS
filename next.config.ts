@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["sharp"],
   async redirects() {
     return [
       { source: "/courses", destination: "/programs", permanent: true },

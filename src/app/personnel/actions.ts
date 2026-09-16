@@ -20,6 +20,7 @@ import {
   sanitizePersonnelFileName,
   composePersonnelDisplayName,
   addYearsToDate,
+  nextQualificationRenewalExpiry,
   effectiveRankPromotedOn,
   normalizeSwingUpRanks,
   isPersonnelSupervisorOf,
@@ -470,7 +471,7 @@ export async function createPersonnelCertification(input: {
       : null;
 
   const supabase = await createSupabaseServerClient();
-  const sortOrder = await nextCertificationLayoutSortOrder(supabase, input.profileId);
+  const sortOrder = await prependCertificationLayoutSortOrder(supabase, input.profileId);
   const { error } = await supabase.from("personnel_certifications").insert({
     id: certificationId,
     profile_id: input.profileId,
@@ -596,25 +597,45 @@ async function assertCanOrganizePersonnelCertifications(profileId: string) {
   throw new Error("Not allowed to organize these certifications.");
 }
 
-async function nextCertificationLayoutSortOrder(supabase: SupabaseClient, profileId: string) {
+async function certificationLayoutSortEdge(
+  supabase: SupabaseClient,
+  profileId: string,
+  edge: "min" | "max"
+) {
+  const ascending = edge === "min";
   const [{ data: certs, error: certError }, { data: sections, error: sectionError }] =
     await Promise.all([
       supabase
         .from("personnel_certifications")
         .select("sort_order")
         .eq("profile_id", profileId)
-        .order("sort_order", { ascending: false })
+        .order("sort_order", { ascending })
         .limit(1),
       supabase
         .from("personnel_certification_sections")
         .select("sort_order")
         .eq("profile_id", profileId)
-        .order("sort_order", { ascending: false })
+        .order("sort_order", { ascending })
         .limit(1),
     ]);
   throwIfDbError(certError);
   throwIfDbError(sectionError);
-  return Math.max(certs?.[0]?.sort_order ?? -1, sections?.[0]?.sort_order ?? -1) + 1;
+  const certOrder = certs?.[0]?.sort_order;
+  const sectionOrder = sections?.[0]?.sort_order;
+  if (certOrder == null && sectionOrder == null) return null;
+  if (certOrder == null) return sectionOrder as number;
+  if (sectionOrder == null) return certOrder as number;
+  return edge === "min" ? Math.min(certOrder, sectionOrder) : Math.max(certOrder, sectionOrder);
+}
+
+async function nextCertificationLayoutSortOrder(supabase: SupabaseClient, profileId: string) {
+  const max = await certificationLayoutSortEdge(supabase, profileId, "max");
+  return (max ?? -1) + 1;
+}
+
+async function prependCertificationLayoutSortOrder(supabase: SupabaseClient, profileId: string) {
+  const min = await certificationLayoutSortEdge(supabase, profileId, "min");
+  return min == null ? 0 : min - 1;
 }
 
 export async function createPersonnelCertificationSection(input: {
@@ -858,6 +879,27 @@ export async function deletePersonnelQualification(input: { id: string; profileI
   const { error } = await supabase
     .from("personnel_qualifications")
     .delete()
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function renewPersonnelQualification(input: { id: string; profileId: string }) {
+  await requireAdmin();
+  const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("personnel_qualifications")
+    .select("id, expires_on")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(existingError);
+  if (!existing) throw new Error("Qualification assignment not found.");
+
+  const { error } = await supabase
+    .from("personnel_qualifications")
+    .update({ expires_on: nextQualificationRenewalExpiry(existing.expires_on) })
     .eq("id", input.id)
     .eq("profile_id", input.profileId);
   throwIfDbError(error);

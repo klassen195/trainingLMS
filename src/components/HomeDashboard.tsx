@@ -37,7 +37,7 @@ import {
   Wind,
   X,
 } from "lucide-react";
-import { saveHomeDashboardLayout, setDepartmentFlagLevel } from "@/app/home-actions";
+import { clearDepartmentFlagOverride, saveHomeDashboardLayout, setDepartmentFlagLevel } from "@/app/home-actions";
 import {
   FLAG_LEVELS,
   flagLevelLabel,
@@ -139,14 +139,24 @@ function FlagBody({
   canEdit,
   pending,
   onSetLevel,
+  onClearOverride,
 }: {
   flag: HomeDashboardPayload["data"]["flag"];
   canEdit: boolean;
   pending: boolean;
   onSetLevel: (level: FlagLevel) => void;
+  onClearOverride: () => void;
 }) {
   if (!flag) return <WidgetEmpty message="Fire danger is not loaded." />;
+  if (flag.error && flag.level === "unset") return <WidgetError message={flag.error} />;
   const warning = flag.alerts[0] ?? null;
+  const sourceLabel =
+    flag.source === "override"
+      ? "Admin override"
+      : flag.source === "cdc"
+        ? `CDC ${flag.zoneLabel ?? "South Valleys"}`
+        : null;
+
   return (
     <div className="space-y-2.5">
       <FireDangerMeter
@@ -156,14 +166,35 @@ function FlagBody({
       />
       <div className="text-center">
         <p className="text-base font-semibold leading-none">{flagLevelLabel(flag.level)}</p>
-        {flag.updatedAt ? (
+        {sourceLabel ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            Posted
-            {flag.updatedByName ? ` by ${flag.updatedByName}` : ""}
+            {sourceLabel}
+            {flag.source === "override" && flag.updatedByName ? ` by ${flag.updatedByName}` : ""}
+            {flag.source === "cdc" && flag.sourceUrl ? (
+              <>
+                {" · "}
+                <a
+                  href={flag.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  Dispatch
+                </a>
+              </>
+            ) : null}
           </p>
         ) : (
-          <p className="mt-1 text-xs text-muted-foreground">No fire-danger rating posted yet.</p>
+          <p className="mt-1 text-xs text-muted-foreground">No fire-danger rating available yet.</p>
         )}
+        {flag.source === "override" && flag.detectedLevel ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            CDC reads {flagLevelLabel(flag.detectedLevel)}
+          </p>
+        ) : null}
+        {flag.error && flag.source === "override" ? (
+          <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">{flag.error}</p>
+        ) : null}
       </div>
       {warning ? (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5">
@@ -172,20 +203,27 @@ function FlagBody({
         </div>
       ) : null}
       {canEdit ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={pending}>
-              {pending ? "Saving..." : "Set rating"}
+        <div className="flex flex-wrap gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={pending}>
+                {pending ? "Saving..." : flag.overrideActive ? "Change override" : "Override rating"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {FLAG_LEVELS.filter((level) => level !== "unset").map((level) => (
+                <DropdownMenuItem key={level} onSelect={() => onSetLevel(level)}>
+                  {flagLevelLabel(level)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {flag.overrideActive ? (
+            <Button variant="ghost" size="sm" disabled={pending} onClick={onClearOverride}>
+              Use CDC auto
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {FLAG_LEVELS.map((level) => (
-              <DropdownMenuItem key={level} onSelect={() => onSetLevel(level)}>
-                {flagLevelLabel(level)}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -261,16 +299,24 @@ function WidgetBody({
   payload,
   pending,
   onSetFlag,
+  onClearFlagOverride,
 }: {
   type: HomeWidgetType;
   payload: HomeDashboardPayload;
   pending: boolean;
   onSetFlag: (level: FlagLevel) => void;
+  onClearFlagOverride: () => void;
 }) {
   if (type === "weather") return <WeatherBody weather={payload.data.weather} />;
   if (type === "fire_danger") {
     return (
-      <FlagBody flag={payload.data.flag} canEdit={payload.canEditFlag} pending={pending} onSetLevel={onSetFlag} />
+      <FlagBody
+        flag={payload.data.flag}
+        canEdit={payload.canEditFlag}
+        pending={pending}
+        onSetLevel={onSetFlag}
+        onClearOverride={onClearFlagOverride}
+      />
     );
   }
   if (type === "flag_mast") {
@@ -514,6 +560,17 @@ export function HomeDashboard({ payload }: { payload: HomeDashboardPayload }) {
     });
   }
 
+  function handleClearFlagOverride() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await clearDepartmentFlagOverride();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not clear fire-danger override.");
+      }
+    });
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -584,7 +641,13 @@ export function HomeDashboard({ payload }: { payload: HomeDashboardPayload }) {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {widgets.filter((type) => HOME_WIDGET_CATALOG[type]).map((type) => (
                 <SortableWidgetCard key={type} type={type} disabled={pending} onRemove={() => removeWidget(type)}>
-                  <WidgetBody type={type} payload={payload} pending={pending} onSetFlag={handleSetFlag} />
+                  <WidgetBody
+                    type={type}
+                    payload={payload}
+                    pending={pending}
+                    onSetFlag={handleSetFlag}
+                    onClearFlagOverride={handleClearFlagOverride}
+                  />
                 </SortableWidgetCard>
               ))}
             </div>

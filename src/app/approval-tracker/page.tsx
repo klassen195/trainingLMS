@@ -53,7 +53,7 @@ export default async function ApprovalTrackerPage({
         <Button asChild size="sm">
           <Link href="/approval-tracker/new">
             <Plus className="mr-1.5 h-4 w-4" />
-            New document
+            New Policy
           </Link>
         </Button>
       </div>

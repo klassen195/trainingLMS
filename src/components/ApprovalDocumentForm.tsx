@@ -8,6 +8,7 @@ import {
   prepareApprovalDocumentFileUpload,
   updateApprovalDocument,
 } from "@/app/approval-tracker/actions";
+import { ApprovalPersonnelPicker } from "@/components/ApprovalPersonnelPicker";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
@@ -21,6 +22,7 @@ import {
   approvalSubmissionKindLabel,
   isApprovalDocumentFile,
   type ApprovalDocType,
+  type ApprovalProfileOption,
   type ApprovalSubmissionKind,
 } from "@/lib/approval-tracker-types";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -37,8 +39,12 @@ const SUBMISSION_OPTIONS: { value: ApprovalSubmissionKind; description: string }
 ];
 
 export function ApprovalDocumentForm({
+  profiles,
+  defaultAssignedTo,
   initial,
 }: {
+  profiles: ApprovalProfileOption[];
+  defaultAssignedTo?: string;
   initial?: {
     id: string;
     title: string;
@@ -46,6 +52,7 @@ export function ApprovalDocumentForm({
     submissionKind: ApprovalSubmissionKind;
     notes: string;
     fileName: string | null;
+    assignedTo: string;
   };
 }) {
   const router = useRouter();
@@ -56,6 +63,7 @@ export function ApprovalDocumentForm({
     initial?.submissionKind ?? ""
   );
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [assignedTo, setAssignedTo] = useState(initial?.assignedTo ?? defaultAssignedTo ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -69,8 +77,8 @@ export function ApprovalDocumentForm({
         startTransition(async () => {
           let storagePath: string | null = null;
           try {
-            if (!isEdit && !file) {
-              throw new Error("Upload the document so it can travel through the pipeline.");
+            if (!assignedTo) {
+              throw new Error("Choose the person assigned this policy.");
             }
             if (file && !isApprovalDocumentFile(file)) {
               throw new Error(
@@ -85,6 +93,7 @@ export function ApprovalDocumentForm({
                 title,
                 docType,
                 submissionKind,
+                assignedTo,
                 notes,
               });
             } else {
@@ -92,6 +101,7 @@ export function ApprovalDocumentForm({
                 title,
                 docType,
                 submissionKind,
+                assignedTo,
                 notes,
               });
               documentId = created.id;
@@ -201,11 +211,21 @@ export function ApprovalDocumentForm({
             </Select>
           </div>
           <div className="space-y-1.5">
+            <FieldLabel>Assigned to</FieldLabel>
+            <ApprovalPersonnelPicker
+              profiles={profiles}
+              selectedIds={assignedTo ? [assignedTo] : []}
+              onChange={(ids) => setAssignedTo(ids[0] ?? "")}
+              single
+              disabled={pending}
+              emptyHint="Choose the person responsible for this policy."
+            />
+          </div>
+          <div className="space-y-1.5">
             <FieldLabel htmlFor="approval-file">{isEdit ? "Replace file" : "Upload file"}</FieldLabel>
             <Input
               id="approval-file"
               type="file"
-              required={!isEdit}
               disabled={pending}
               accept={APPROVAL_FILE_ACCEPT}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -214,8 +234,8 @@ export function ApprovalDocumentForm({
               <FieldHint>Current file: {initial.fileName}. Leave empty to keep it.</FieldHint>
             ) : (
               <FieldHint>
-                PDF, Word, PowerPoint, image, or video (up to 500 MB). This file stays with the
-                document through every stage.
+                Optional. PDF, Word, PowerPoint, image, or video (up to 500 MB). You can attach a
+                file now or later.
               </FieldHint>
             )}
           </div>

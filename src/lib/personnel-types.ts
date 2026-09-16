@@ -939,6 +939,14 @@ export function addYearsToDate(isoDate: string, years: number) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/** Next expiration for a qualification renew: current expiry + 1 year, or today + 1 year if expired/missing. */
+export function nextQualificationRenewalExpiry(expiresOn: string | null | undefined, now = new Date()) {
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const current = expiresOn?.slice(0, 10) || null;
+  const base = current && current >= today ? current : today;
+  return addYearsToDate(base, 1);
+}
+
 export function formatTrainingHours(hours: number) {
   if (!Number.isFinite(hours) || hours === 0) return "0";
   const rounded = Math.round(hours * 100) / 100;

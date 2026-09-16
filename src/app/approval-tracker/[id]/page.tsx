@@ -6,6 +6,7 @@ import {
   getApprovalDocument,
   listApprovalCommitteeMembers,
   listApprovalCommitteeVotes,
+  listApprovalProfiles,
   listApprovalStageMembers,
 } from "@/app/approval-tracker/actions";
 import { ApprovalDocumentActions } from "@/components/ApprovalDocumentActions";
@@ -36,13 +37,27 @@ export default async function ApprovalDocumentDetailPage({
 }) {
   const profile = await requireCapability("approval_tracker");
   const { id } = await params;
-  const [document, members, committeeMembers, votes] = await Promise.all([
+  const [document, members, committeeMembers, votes, profiles] = await Promise.all([
     getApprovalDocument(id),
     listApprovalStageMembers(),
     listApprovalCommitteeMembers(),
     listApprovalCommitteeVotes([id]),
+    listApprovalProfiles(),
   ]);
   if (!document) notFound();
+
+  const formProfiles =
+    document.assignee && !profiles.some((person) => person.id === document.assigned_to)
+      ? [
+          ...profiles,
+          {
+            ...document.assignee,
+            shift: null,
+            primary_location_id: null,
+            primary_location: null,
+          },
+        ]
+      : profiles;
 
   const adminUser = isAdmin(profile);
   const canAct = isApprovalStageActor({
@@ -50,6 +65,7 @@ export default async function ApprovalDocumentDetailPage({
     isAdmin: adminUser,
     stage: document.current_stage,
     createdBy: document.created_by,
+    assignedTo: document.assigned_to,
     stageMemberIds: groupStageMemberIds(members),
     committee: document.committee,
     subcommittee: document.subcommittee,
@@ -94,6 +110,9 @@ export default async function ApprovalDocumentDetailPage({
         </div>
         <h1 className="text-3xl font-bold">{document.title}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
+          Assigned to{" "}
+          {personnelDisplayName(document.assignee ?? { display_name: null, email: null })}
+          {" · "}
           Started by {personnelDisplayName(document.creator ?? { display_name: null, email: null })}
         </p>
       </div>
@@ -232,6 +251,7 @@ export default async function ApprovalDocumentDetailPage({
           <div>
             <h2 className="mb-4 text-xl font-semibold">Edit details</h2>
             <ApprovalDocumentForm
+              profiles={formProfiles}
               initial={{
                 id: document.id,
                 title: document.title,
@@ -239,6 +259,7 @@ export default async function ApprovalDocumentDetailPage({
                 submissionKind: document.submission_kind,
                 notes: document.notes ?? "",
                 fileName: document.file_name,
+                assignedTo: document.assigned_to,
               }}
             />
           </div>

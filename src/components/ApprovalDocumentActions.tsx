@@ -25,6 +25,9 @@ import {
   type ApprovalSubcommittee,
 } from "@/lib/approval-tracker-types";
 
+const RETURN_ARCHIVE = "archive";
+type ReturnTarget = ApprovalStage | typeof RETURN_ARCHIVE;
+
 export function ApprovalDocumentActions({
   documentId,
   currentStage,
@@ -49,7 +52,7 @@ export function ApprovalDocumentActions({
   const router = useRouter();
   const next = nextApprovalStage(currentStage);
   const earlier = earlierApprovalStages(currentStage);
-  const [kickStage, setKickStage] = useState<ApprovalStage | "">(earlier[0] ?? "");
+  const [kickStage, setKickStage] = useState<ReturnTarget | "">(earlier[0] ?? RETURN_ARCHIVE);
   const [comment, setComment] = useState("");
   const [selectedCommittee, setSelectedCommittee] = useState<ApprovalCommittee | "">(
     committee ?? ""
@@ -80,7 +83,7 @@ export function ApprovalDocumentActions({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            This approved document is archived and hidden from the active board.
+            This document is archived and hidden from the active board.
           </p>
           <Button
             type="button"
@@ -259,24 +262,29 @@ export function ApprovalDocumentActions({
           </div>
         ) : null}
 
-        {earlier.length > 0 ? (
-          <div className="space-y-3 border-t pt-4">
-            <p className="text-sm font-medium">Kick back for revision</p>
-            <div className="space-y-1.5">
-              <FieldLabel htmlFor="kick-stage">Return to</FieldLabel>
-              <Select
-                id="kick-stage"
-                value={kickStage}
-                disabled={pending}
-                onChange={(e) => setKickStage(e.target.value as ApprovalStage)}
-              >
-                {earlier.map((stage) => (
-                  <option key={stage} value={stage}>
-                    {approvalStageLabel(stage)}
-                  </option>
-                ))}
-              </Select>
-            </div>
+        <div className="space-y-3 border-t pt-4">
+          <p className="text-sm font-medium">Kick back for revision</p>
+          <div className="space-y-1.5">
+            <FieldLabel htmlFor="kick-stage">Return to</FieldLabel>
+            <Select
+              id="kick-stage"
+              value={kickStage}
+              disabled={pending}
+              onChange={(e) => setKickStage(e.target.value as ReturnTarget)}
+            >
+              {earlier.map((stage) => (
+                <option key={stage} value={stage}>
+                  {approvalStageLabel(stage)}
+                </option>
+              ))}
+              <option value={RETURN_ARCHIVE}>Archive</option>
+            </Select>
+          </div>
+          {kickStage === RETURN_ARCHIVE ? (
+            <p className="text-sm text-muted-foreground">
+              Archive this document to hide it from the active board.
+            </p>
+          ) : (
             <div className="space-y-1.5">
               <FieldLabel htmlFor="kick-comment">Comment</FieldLabel>
               <Textarea
@@ -289,24 +297,28 @@ export function ApprovalDocumentActions({
                 onChange={(e) => setComment(e.target.value)}
               />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending || !kickStage || !comment.trim()}
-              onClick={() =>
-                run(() =>
-                  kickBackApprovalDocument({
-                    id: documentId,
-                    toStage: kickStage,
-                    comment,
-                  })
-                )
-              }
-            >
-              Kick back
-            </Button>
-          </div>
-        ) : null}
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={
+              pending || !kickStage || (kickStage !== RETURN_ARCHIVE && !comment.trim())
+            }
+            onClick={() =>
+              run(() =>
+                kickStage === RETURN_ARCHIVE
+                  ? setApprovalDocumentArchived({ id: documentId, archived: true })
+                  : kickBackApprovalDocument({
+                      id: documentId,
+                      toStage: kickStage,
+                      comment,
+                    })
+              )
+            }
+          >
+            {kickStage === RETURN_ARCHIVE ? "Archive" : "Kick back"}
+          </Button>
+        </div>
         {error ? <FieldError>{error}</FieldError> : null}
       </CardContent>
     </Card>

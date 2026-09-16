@@ -31,6 +31,7 @@ import {
   type OpenTaskbookItem,
 } from "@/lib/home-dashboard-types";
 import { apparatusTypeLabel } from "@/lib/labels";
+import { loadCdcSouthValleysFireDanger } from "@/lib/cdc-fire-danger";
 import { loadNwsFlagAlerts, loadNwsWeather } from "@/lib/nws-weather";
 import { loadFlagMastStatus } from "@/lib/flag-mast";
 import {
@@ -144,9 +145,10 @@ async function loadWeatherAndFlag(
   const longitude = settings?.weather_longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
   const label = settings?.weather_label ?? DEFAULT_WEATHER_LOCATION.label;
 
-  const [weatherResult, alertsResult] = await Promise.allSettled([
+  const [weatherResult, alertsResult, cdcResult] = await Promise.allSettled([
     loadNwsWeather({ latitude, longitude, label }),
     loadNwsFlagAlerts({ latitude, longitude }),
+    loadCdcSouthValleysFireDanger(),
   ]);
 
   const updater = settings?.updater;
@@ -159,16 +161,40 @@ async function loadWeatherAndFlag(
       })
     : null;
 
+  const overrideLevel = settings?.flag_level ?? "unset";
+  const overrideActive = overrideLevel !== "unset";
+  const cdc =
+    cdcResult.status === "fulfilled"
+      ? cdcResult.value
+      : null;
+  const cdcError =
+    cdcResult.status === "rejected"
+      ? cdcResult.reason instanceof Error
+        ? cdcResult.reason.message
+        : "CDC fire danger is unavailable."
+      : null;
+
+  const detectedLevel = cdc?.level ?? null;
+  const level: FlagLevel = overrideActive ? overrideLevel : detectedLevel ?? "unset";
+
   return {
     weather:
       weatherResult.status === "fulfilled"
         ? weatherResult.value
         : { error: weatherResult.reason instanceof Error ? weatherResult.reason.message : "Weather is unavailable." },
     flag: {
-      level: settings?.flag_level ?? "unset",
-      updatedAt: settings?.flag_updated_at ?? null,
-      updatedByName,
+      level,
+      source: overrideActive ? "override" : detectedLevel ? "cdc" : null,
+      detectedLevel,
+      detectedAt: cdc?.fetchedAt ?? null,
+      imageUpdatedAt: cdc?.imageUpdatedAt ?? null,
+      zoneLabel: cdc?.zone ?? "South Valleys",
+      sourceUrl: cdc?.sourceUrl ?? "https://gacc.nifc.gov/nrcc/dc/idcdc/",
+      overrideActive,
+      updatedAt: overrideActive ? settings?.flag_updated_at ?? null : cdc?.imageUpdatedAt ?? cdc?.fetchedAt ?? null,
+      updatedByName: overrideActive ? updatedByName : null,
       alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [],
+      error: overrideActive ? null : cdcError,
     },
   };
 }
@@ -269,6 +295,7 @@ async function loadApprovalsQueue(
         userId: profileId,
         stage: doc.current_stage,
         createdBy: doc.created_by,
+        assignedTo: doc.assigned_to,
         stageMemberIds,
         committee: doc.committee,
         subcommittee: doc.subcommittee,

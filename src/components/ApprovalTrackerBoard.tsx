@@ -113,6 +113,7 @@ export function ApprovalTrackerBoard({
                         userId: currentUserId,
                         stage: doc.current_stage,
                         createdBy: doc.created_by,
+                        assignedTo: doc.assigned_to,
                         stageMemberIds,
                         committee: doc.committee,
                         subcommittee: doc.subcommittee,
@@ -146,7 +147,10 @@ export function ApprovalTrackerBoard({
                           </div>
                           <p className="text-sm font-medium leading-snug">{doc.title}</p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {personnelDisplayName(doc.creator ?? { display_name: null, email: null })}
+                            {personnelDisplayName(
+                              doc.assignee ??
+                                doc.creator ?? { display_name: null, email: null }
+                            )}
                           </p>
                           <ApprovalPathDots currentStage={doc.current_stage} className="mt-3" />
                           <p className="mt-2 text-[11px] text-muted-foreground">

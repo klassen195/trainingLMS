@@ -64,8 +64,8 @@ export async function setDepartmentFlagLevel(level: string) {
   const payload = {
     client_id: profile.client_id,
     flag_level: flagLevel,
-    flag_updated_at: new Date().toISOString(),
-    flag_updated_by: profile.id,
+    flag_updated_at: flagLevel === "unset" ? null : new Date().toISOString(),
+    flag_updated_by: flagLevel === "unset" ? null : profile.id,
   };
 
   const { error } = existing
@@ -74,4 +74,9 @@ export async function setDepartmentFlagLevel(level: string) {
 
   if (error) throw new Error(supabaseErrorMessage(error));
   revalidatePath("/");
+}
+
+/** Clear admin override and resume CDC South Valleys auto rating. */
+export async function clearDepartmentFlagOverride() {
+  await setDepartmentFlagLevel("unset");
 }

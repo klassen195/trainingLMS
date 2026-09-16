@@ -17,12 +17,14 @@ export function ApprovalPersonnelPicker({
   onChange,
   emptyHint,
   disabled = false,
+  single = false,
 }: {
   profiles: ApprovalProfileOption[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   emptyHint?: string;
   disabled?: boolean;
+  single?: boolean;
 }) {
   const [query, setQuery] = useState("");
 
@@ -59,7 +61,7 @@ export function ApprovalPersonnelPicker({
 
   function add(id: string) {
     if (disabled || selectedIds.includes(id)) return;
-    onChange([...selectedIds, id]);
+    onChange(single ? [id] : [...selectedIds, id]);
     setQuery("");
   }
 
@@ -117,11 +119,15 @@ export function ApprovalPersonnelPicker({
 
       <div className="flex max-h-56 flex-col rounded-md border">
         <div className="shrink-0 border-b px-3 py-2">
-          <p className="text-sm font-medium">Selected ({selectedProfiles.length})</p>
+          <p className="text-sm font-medium">
+            {single ? "Assigned" : `Selected (${selectedProfiles.length})`}
+          </p>
         </div>
         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
           {selectedProfiles.length === 0 ? (
-            <p className="px-1 py-1.5 text-sm text-muted-foreground">None selected yet</p>
+            <p className="px-1 py-1.5 text-sm text-muted-foreground">
+              {single ? "No one assigned yet" : "None selected yet"}
+            </p>
           ) : (
             selectedProfiles.map((person) => (
               <div

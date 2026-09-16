@@ -77,6 +77,27 @@ function parseTitle(raw: string | null | undefined) {
   return title;
 }
 
+function parseAssignedTo(raw: string | null | undefined) {
+  const assignedTo = raw?.trim() ?? "";
+  if (!assignedTo) throw new Error("Choose the person assigned this policy.");
+  return assignedTo;
+}
+
+async function assertAssignableProfile(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  profileId: string
+) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, is_active, is_platform_operator")
+    .eq("id", profileId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data || data.is_platform_operator || !data.is_active) {
+    throw new Error("Choose an active person in this department.");
+  }
+}
+
 function parseDocType(raw: string | null | undefined): ApprovalDocType {
   if (raw && (APPROVAL_DOC_TYPES as readonly string[]).includes(raw)) {
     return raw as ApprovalDocType;
@@ -222,11 +243,13 @@ export async function listApprovalDocuments(options?: {
 
   const documents = (data ?? []) as unknown as (ApprovalDocument & {
     creator?: ApprovalProfileSummary | null;
+    assignee?: ApprovalProfileSummary | null;
   })[];
 
   return documents.map((doc) => ({
     ...doc,
     creator: asProfile(doc.creator),
+    assignee: asProfile(doc.assignee),
   }));
 }
 
@@ -253,11 +276,13 @@ export async function getApprovalDocument(
 
   const document = data as unknown as ApprovalDocument & {
     creator?: ApprovalProfileSummary | null;
+    assignee?: ApprovalProfileSummary | null;
   };
 
   return {
     ...document,
     creator: asProfile(document.creator),
+    assignee: asProfile(document.assignee),
     events: ((events ?? []) as unknown as ApprovalDocumentEvent[]).map((event) => ({
       ...event,
       actor: asProfile(event.actor),
@@ -269,14 +294,17 @@ export async function createApprovalDocument(input: {
   title: string;
   docType: string;
   submissionKind: string;
+  assignedTo: string;
   notes?: string | null;
 }): Promise<{ id: string }> {
   const profile = await assertCapability("approval_tracker");
   const title = parseTitle(input.title);
   const docType = parseDocType(input.docType);
   const submissionKind = parseSubmissionKind(input.submissionKind);
+  const assignedTo = parseAssignedTo(input.assignedTo);
 
   const supabase = await createSupabaseServerClient();
+  await assertAssignableProfile(supabase, assignedTo);
   const { data, error } = await supabase
     .from("approval_documents")
     .insert({
@@ -285,6 +313,7 @@ export async function createApprovalDocument(input: {
       submission_kind: submissionKind,
       notes: input.notes?.trim() || null,
       created_by: profile.id,
+      assigned_to: assignedTo,
       current_stage: "creator",
     })
     .select("id")
@@ -301,20 +330,24 @@ export async function updateApprovalDocument(input: {
   title: string;
   docType: string;
   submissionKind: string;
+  assignedTo: string;
   notes?: string | null;
 }) {
   await assertCapability("approval_tracker");
   const title = parseTitle(input.title);
   const docType = parseDocType(input.docType);
   const submissionKind = parseSubmissionKind(input.submissionKind);
+  const assignedTo = parseAssignedTo(input.assignedTo);
 
   const supabase = await createSupabaseServerClient();
+  await assertAssignableProfile(supabase, assignedTo);
   const { error } = await supabase
     .from("approval_documents")
     .update({
       title,
       doc_type: docType,
       submission_kind: submissionKind,
+      assigned_to: assignedTo,
       notes: input.notes?.trim() || null,
     })
     .eq("id", input.id);
@@ -495,8 +528,19 @@ export async function setApprovalDocumentArchived(input: { id: string; archived:
     .maybeSingle();
   throwIfDbError(error);
   if (!data) throw new Error("Document not found.");
-  if (data.current_stage !== "approved") {
-    throw new Error("Only approved documents can be archived.");
+
+  if (input.archived && data.current_stage !== "approved") {
+    const { data: canArchive, error: actorError } = await supabase.rpc(
+      "is_approval_stage_actor",
+      {
+        p_document_id: input.id,
+        p_stage: data.current_stage,
+      }
+    );
+    throwIfDbError(actorError);
+    if (!canArchive) {
+      throw new Error("Only the current stage can archive this document.");
+    }
   }
 
   const { error: updateError } = await supabase

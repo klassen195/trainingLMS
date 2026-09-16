@@ -184,21 +184,6 @@ export function PersonnelCertificationsPanel({
         </p>
       ) : null}
 
-      {empty ? (
-        <p className="text-sm text-muted-foreground">No certifications recorded.</p>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-            {list}
-          </SortableContext>
-        </DndContext>
-      )}
-
-      {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      {pending && canOrganize ? (
-        <p className="text-xs text-muted-foreground">Saving layout…</p>
-      ) : null}
-
       <div className="flex flex-wrap gap-2">
         {canOrganize ? (
           addingSection ? (
@@ -275,6 +260,21 @@ export function PersonnelCertificationsPanel({
           )
         ) : null}
       </div>
+
+      {empty ? (
+        <p className="text-sm text-muted-foreground">No certifications recorded.</p>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+            {list}
+          </SortableContext>
+        </DndContext>
+      )}
+
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      {pending && canOrganize ? (
+        <p className="text-xs text-muted-foreground">Saving layout…</p>
+      ) : null}
     </div>
   );
 }

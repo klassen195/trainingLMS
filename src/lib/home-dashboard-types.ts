@@ -33,7 +33,7 @@ export const HOME_WIDGET_CATALOG: Record<HomeWidgetType, Omit<HomeWidgetCatalogI
   },
   fire_danger: {
     title: "Fire Danger",
-    description: "Today’s fire-danger rating and any Red Flag Warning.",
+    description: "CDC South Valleys rating, with optional admin override and Red Flag alerts.",
   },
   flag_mast: {
     title: "U.S. Flag",
@@ -124,11 +124,22 @@ export type FlagAlert = {
   ends: string | null;
 };
 
+export type FlagSource = "cdc" | "override";
+
 export type FlagSnapshot = {
+  /** Effective level shown on the meter (override wins when set). */
   level: FlagLevel;
+  source: FlagSource | null;
+  detectedLevel: Exclude<FlagLevel, "unset"> | null;
+  detectedAt: string | null;
+  imageUpdatedAt: string | null;
+  zoneLabel: string | null;
+  sourceUrl: string | null;
+  overrideActive: boolean;
   updatedAt: string | null;
   updatedByName: string | null;
   alerts: FlagAlert[];
+  error: string | null;
 };
 
 export type ApparatusOosItem = {

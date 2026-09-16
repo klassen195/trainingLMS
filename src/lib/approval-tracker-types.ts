@@ -125,6 +125,7 @@ export type ApprovalDocument = {
   storage_path: string | null;
   mime_type: string | null;
   created_by: string;
+  assigned_to: string;
   stage_entered_at: string;
   archived_at: string | null;
   created_at: string;
@@ -133,6 +134,7 @@ export type ApprovalDocument = {
 
 export type ApprovalDocumentListItem = ApprovalDocument & {
   creator?: ApprovalProfileSummary | null;
+  assignee?: ApprovalProfileSummary | null;
 };
 
 export type ApprovalDocumentEvent = {
@@ -149,6 +151,7 @@ export type ApprovalDocumentEvent = {
 
 export type ApprovalDocumentDetail = ApprovalDocument & {
   creator?: ApprovalProfileSummary | null;
+  assignee?: ApprovalProfileSummary | null;
   events: ApprovalDocumentEvent[];
 };
 
@@ -182,9 +185,9 @@ export type ApprovalStageMemberIndex = {
 };
 
 export const APPROVAL_DOCUMENT_SELECT =
-  "id, title, doc_type, submission_kind, committee, subcommittee, current_stage, notes, file_name, storage_path, mime_type, created_by, stage_entered_at, archived_at, created_at, updated_at";
+  "id, title, doc_type, submission_kind, committee, subcommittee, current_stage, notes, file_name, storage_path, mime_type, created_by, assigned_to, stage_entered_at, archived_at, created_at, updated_at";
 
-export const APPROVAL_DOCUMENT_LIST_SELECT = `${APPROVAL_DOCUMENT_SELECT}, creator:profiles!created_by(id, display_name, first_name, last_name, email)`;
+export const APPROVAL_DOCUMENT_LIST_SELECT = `${APPROVAL_DOCUMENT_SELECT}, creator:profiles!created_by(id, display_name, first_name, last_name, email), assignee:profiles!assigned_to(id, display_name, first_name, last_name, email)`;
 
 export const APPROVAL_EVENT_SELECT =
   "id, document_id, from_stage, to_stage, action, comment, acted_by, created_at, actor:profiles!acted_by(id, display_name, first_name, last_name, email)";
@@ -475,6 +478,7 @@ export function isWaitingOnApprovalUser(input: {
   isAdmin?: boolean;
   stage: ApprovalStage;
   createdBy: string;
+  assignedTo?: string | null;
   stageMemberIds: ApprovalStageMemberIndex;
   committee: ApprovalCommittee | null;
   subcommittee?: ApprovalSubcommittee | null;
@@ -482,7 +486,9 @@ export function isWaitingOnApprovalUser(input: {
   votedProfileIds?: string[];
 }) {
   if (input.stage === "approved") return false;
-  if (input.stage === "creator") return input.createdBy === input.userId;
+  if (input.stage === "creator") {
+    return input.createdBy === input.userId || input.assignedTo === input.userId;
+  }
   if (input.stage === "committee") {
     const body = membersForCommitteeBody(
       input.committeeMembers,
@@ -494,6 +500,7 @@ export function isWaitingOnApprovalUser(input: {
     if (member.is_chair) return true;
     return !(input.votedProfileIds ?? []).includes(input.userId);
   }
+  if (input.stage === "policy_holder" && input.assignedTo === input.userId) return true;
   return memberIdsForStage(input.stageMemberIds, input.stage).includes(input.userId);
 }
 
@@ -502,6 +509,7 @@ export function isApprovalStageActor(input: {
   isAdmin: boolean;
   stage: ApprovalStage;
   createdBy: string;
+  assignedTo?: string | null;
   stageMemberIds: ApprovalStageMemberIndex;
   committee: ApprovalCommittee | null;
   subcommittee?: ApprovalSubcommittee | null;
@@ -509,7 +517,9 @@ export function isApprovalStageActor(input: {
 }) {
   if (input.isAdmin) return true;
   if (input.stage === "approved") return false;
-  if (input.stage === "creator") return input.createdBy === input.userId;
+  if (input.stage === "creator") {
+    return input.createdBy === input.userId || input.assignedTo === input.userId;
+  }
   if (input.stage === "committee") {
     return membersForCommitteeBody(
       input.committeeMembers,
@@ -517,6 +527,7 @@ export function isApprovalStageActor(input: {
       input.subcommittee
     ).some((member) => member.profile_id === input.userId);
   }
+  if (input.stage === "policy_holder" && input.assignedTo === input.userId) return true;
   return memberIdsForStage(input.stageMemberIds, input.stage).includes(input.userId);
 }
 

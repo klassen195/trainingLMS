@@ -115,12 +115,17 @@ export function CertificationFilePreview({
     />
   ) : kind === "pdf" && src ? (
     <>
+      {/*
+        Chrome's PDF viewer draws its own scrollbar inside the iframe when a
+        letter page doesn't fit the thumbnail. Size the iframe to a full page,
+        then scale it down so that chrome is clipped by overflow-hidden.
+      */}
       <iframe
-        src={`${src}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+        src={`${src}#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
         title=""
         aria-hidden="true"
         tabIndex={-1}
-        className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-white"
+        className="pointer-events-none absolute left-0 top-0 h-[540%] w-[400%] origin-top-left scale-[0.25] border-0 bg-white"
       />
       <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
         PDF
