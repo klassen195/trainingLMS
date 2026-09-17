@@ -139,6 +139,125 @@ export function buildPersonnelCertificationLayout(
   return items;
 }
 
+/** Section header plus the certifications that follow it until the next section. */
+export function certificationLayoutSectionRange(
+  items: PersonnelCertificationLayoutItem[],
+  sectionIndex: number
+): { start: number; end: number } {
+  if (sectionIndex < 0 || items[sectionIndex]?.kind !== "section") {
+    return { start: sectionIndex, end: sectionIndex };
+  }
+  let end = sectionIndex + 1;
+  while (end < items.length && items[end].kind !== "section") {
+    end += 1;
+  }
+  return { start: sectionIndex, end };
+}
+
+export function groupPersonnelCertificationLayout(items: PersonnelCertificationLayoutItem[]): {
+  ungrouped: PersonnelCertification[];
+  folders: { section: PersonnelCertificationSection; certs: PersonnelCertification[] }[];
+} {
+  const ungrouped: PersonnelCertification[] = [];
+  const folders: { section: PersonnelCertificationSection; certs: PersonnelCertification[] }[] = [];
+  let current: (typeof folders)[number] | null = null;
+
+  for (const item of items) {
+    if (item.kind === "section") {
+      current = { section: item.section, certs: [] };
+      folders.push(current);
+      continue;
+    }
+    if (current) current.certs.push(item.cert);
+    else ungrouped.push(item.cert);
+  }
+
+  return { ungrouped, folders };
+}
+
+function layoutItemIndex(items: PersonnelCertificationLayoutItem[], id: string) {
+  return items.findIndex((item) => item.id === id);
+}
+
+/** Nearest section break above this row, if any. */
+export function containingCertificationSectionId(
+  items: PersonnelCertificationLayoutItem[],
+  itemIndex: number
+): string | null {
+  for (let i = itemIndex; i >= 0; i -= 1) {
+    if (items[i].kind === "section") return items[i].id;
+  }
+  return null;
+}
+
+/** Folder id for a row, or "ungrouped" for certs above the first section. */
+export function certificationLayoutContainerId(
+  items: PersonnelCertificationLayoutItem[],
+  id: string
+): string {
+  const index = layoutItemIndex(items, id);
+  if (index < 0) return "ungrouped";
+  if (items[index].kind === "section") return items[index].id;
+  return containingCertificationSectionId(items, index) ?? "ungrouped";
+}
+
+export function certificationLayoutOrderKey(items: PersonnelCertificationLayoutItem[]) {
+  return items.map((item) => item.id).join(",");
+}
+
+/**
+ * Reorder a certification layout. Section breaks move as folders: the header and
+ * every certification beneath it until the next section stay together.
+ */
+export function movePersonnelCertificationLayout(
+  items: PersonnelCertificationLayoutItem[],
+  activeId: string,
+  overId: string
+): PersonnelCertificationLayoutItem[] {
+  if (activeId === overId) return items;
+  const from = layoutItemIndex(items, activeId);
+  const to = layoutItemIndex(items, overId);
+  if (from < 0 || to < 0) return items;
+
+  const active = items[from];
+  if (active.kind === "cert") {
+    if (items[to].kind === "section") {
+      const without = items.filter((item) => item.id !== activeId);
+      const sectionIndex = layoutItemIndex(without, overId);
+      if (sectionIndex < 0) return items;
+      return [
+        ...without.slice(0, sectionIndex + 1),
+        active,
+        ...without.slice(sectionIndex + 1),
+      ];
+    }
+    const next = items.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  }
+
+  const { start, end } = certificationLayoutSectionRange(items, from);
+  if (to >= start && to < end) return items;
+
+  const block = items.slice(start, end);
+  const rest = [...items.slice(0, start), ...items.slice(end)];
+  const overSectionId = containingCertificationSectionId(items, to);
+  const targetId = overSectionId && overSectionId !== activeId ? overSectionId : overId;
+  const targetIndexInRest = layoutItemIndex(rest, targetId);
+  if (targetIndexInRest < 0) return items;
+
+  const target = rest[targetIndexInRest];
+  // Keep ungrouped certs (those above the first section) outside folders.
+  if (target.kind !== "section") return items;
+
+  const insertAt =
+    from < to
+      ? certificationLayoutSectionRange(rest, targetIndexInRest).end
+      : targetIndexInRest;
+  return [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)];
+}
+
 export type PersonnelRecognition = {
   id: string;
   profile_id: string;

@@ -17,6 +17,13 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     requiredCapabilities: ["access_personnel"],
   },
   {
+    id: "certifications",
+    title: "Certifications",
+    description: "Certifications for a selected person — active only, or including expired.",
+    href: "/reports/certifications",
+    requiredCapabilities: ["access_personnel"],
+  },
+  {
     id: "fleet-status",
     title: "Fleet status",
     description: "Apparatus status, open work orders, and preventive maintenance due dates.",
@@ -25,9 +32,16 @@ export const REPORT_CATALOG: ReportDefinition[] = [
   },
   {
     id: "training-hours",
-    title: "Document training hours",
-    description: "Logged training hours by person for a selected date range.",
+    title: "Total Training Hours",
+    description: "Logged training hours totaled by person for a selected date range.",
     href: "/reports/training-hours",
+    requiredCapabilities: ["document_training"],
+  },
+  {
+    id: "individual-training-hours",
+    title: "Individual Training Hours",
+    description: "Each training session attended by a selected person for a date range.",
+    href: "/reports/individual-training-hours",
     requiredCapabilities: ["document_training"],
   },
   {

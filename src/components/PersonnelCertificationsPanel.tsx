@@ -1,25 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
+  DragOverlay,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { ChevronDown, Folder, FolderOpen, GripVertical } from "lucide-react";
 import {
   createPersonnelCertification,
   createPersonnelCertificationSection,
@@ -40,8 +44,12 @@ import type {
 } from "@/lib/personnel-types";
 import {
   buildPersonnelCertificationLayout,
+  certificationLayoutContainerId,
+  certificationLayoutOrderKey,
+  groupPersonnelCertificationLayout,
   isCertExpired,
   isPersonnelDocumentFile,
+  movePersonnelCertificationLayout,
   PERSONNEL_DOCUMENT_ACCEPT,
   PERSONNEL_DOCUMENTS_BUCKET,
 } from "@/lib/personnel-types";
@@ -50,6 +58,17 @@ import { FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Textarea } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/dates";
+
+const certificationCollision: CollisionDetection = (args) => {
+  const pointerHits = pointerWithin(args);
+  if (pointerHits.length > 0) {
+    const certHit = pointerHits.find(
+      (entry) => entry.data?.droppableContainer?.data?.current?.kind === "cert"
+    );
+    return certHit ? [certHit] : pointerHits.slice(0, 1);
+  }
+  return closestCenter(args);
+};
 
 export function PersonnelCertificationsPanel({
   profileId,
@@ -74,6 +93,10 @@ export function PersonnelCertificationsPanel({
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Record<string, boolean>>({});
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   useEffect(() => {
     setItems(buildPersonnelCertificationLayout(certifications, sections));
@@ -85,6 +108,29 @@ export function PersonnelCertificationsPanel({
   );
 
   const layoutLocked = Boolean(editingId) || adding || pending;
+  const { ungrouped, folders } = useMemo(
+    () => groupPersonnelCertificationLayout(items),
+    [items]
+  );
+  const ungroupedIds = useMemo(() => ungrouped.map((cert) => cert.id), [ungrouped]);
+  const folderIds = useMemo(() => folders.map((folder) => folder.section.id), [folders]);
+  const activeItem = activeId ? items.find((item) => item.id === activeId) : undefined;
+  const draggingSection = activeItem?.kind === "section";
+  const draggingCert = activeItem?.kind === "cert";
+  const activeCert = draggingCert ? activeItem.cert : null;
+
+  function baselineLayout() {
+    return buildPersonnelCertificationLayout(certifications, sections);
+  }
+
+  function toggleCollapsed(sectionId: string) {
+    setCollapsedIds((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  }
+
+  function folderIsCollapsed(sectionId: string, certs: PersonnelCertification[]) {
+    if (editingId && certs.some((cert) => cert.id === editingId)) return false;
+    return Boolean(collapsedIds[sectionId]);
+  }
 
   function persistOrder(next: PersonnelCertificationLayoutItem[]) {
     setItems(next);
@@ -97,90 +143,171 @@ export function PersonnelCertificationsPanel({
         });
         router.refresh();
       } catch (err) {
-        setItems(buildPersonnelCertificationLayout(certifications, sections));
+        setItems(baselineLayout());
         setError(err instanceof Error ? err.message : "Failed to save order");
       }
     });
   }
 
-  function onDragEnd(event: DragEndEvent) {
+  function onDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
+  }
+
+  function onDragCancel() {
+    setActiveId(null);
+    setItems(baselineLayout());
+  }
+
+  function onDragOver(event: DragOverEvent) {
     if (!canOrganize || layoutLocked) return;
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = items.findIndex((item) => item.id === active.id);
-    const newIndex = items.findIndex((item) => item.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    persistOrder(arrayMove(items, oldIndex, newIndex));
+    if (!over) return;
+    const draggedId = String(active.id);
+    const overId = String(over.id);
+    if (draggedId === overId) return;
+
+    const current = itemsRef.current;
+    const dragged = current.find((item) => item.id === draggedId);
+    if (dragged?.kind !== "cert") return;
+    if (certificationLayoutContainerId(current, draggedId) === certificationLayoutContainerId(current, overId)) {
+      return;
+    }
+
+    const next = movePersonnelCertificationLayout(current, draggedId, overId);
+    if (certificationLayoutOrderKey(next) === certificationLayoutOrderKey(current)) return;
+    itemsRef.current = next;
+    setItems(next);
+  }
+
+  function onDragEnd(event: DragEndEvent) {
+    setActiveId(null);
+    if (!canOrganize || layoutLocked) {
+      setItems(baselineLayout());
+      return;
+    }
+    const { active, over } = event;
+    if (!over) {
+      setItems(baselineLayout());
+      return;
+    }
+    const current = itemsRef.current;
+    const next = movePersonnelCertificationLayout(current, String(active.id), String(over.id));
+    if (certificationLayoutOrderKey(next) === certificationLayoutOrderKey(baselineLayout())) return;
+    persistOrder(next);
   }
 
   const empty = items.length === 0 && !adding && !addingSection;
 
-  const list = (
-    <ul className="space-y-3">
-      {items.map((item) =>
-        item.kind === "section" ? (
-          <CertificationSectionRow
-            key={item.id}
-            item={item}
-            canOrganize={canOrganize}
-            disabled={layoutLocked}
-            onRename={(name) => {
-              setError(null);
-              startTransition(async () => {
-                try {
-                  await updatePersonnelCertificationSection({
-                    id: item.id,
-                    profileId,
-                    name,
-                  });
-                  router.refresh();
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Failed to rename section");
-                }
-              });
-            }}
-            onDelete={() => {
-              if (!confirm("Remove this section break? Certifications stay in the list.")) return;
-              setError(null);
-              startTransition(async () => {
-                try {
-                  await deletePersonnelCertificationSection({ id: item.id, profileId });
-                  router.refresh();
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Failed to remove section");
-                }
-              });
-            }}
-          />
-        ) : editingId === item.cert.id ? (
-          <li key={item.id} className="rounded-lg border p-4">
-            <CertificationForm
-              profileId={profileId}
-              initial={item.cert}
-              onDone={() => setEditingId(null)}
-              onCancel={() => setEditingId(null)}
-            />
-          </li>
-        ) : (
-          <CertificationCardRow
-            key={item.id}
-            cert={item.cert}
+  function renderCertRow(cert: PersonnelCertification) {
+    if (editingId === cert.id) {
+      return (
+        <li key={cert.id} className="rounded-lg border p-4">
+          <CertificationForm
             profileId={profileId}
-            canManage={canManage}
-            canOrganize={canOrganize}
-            disabled={layoutLocked}
-            onEdit={() => setEditingId(item.cert.id)}
+            initial={cert}
+            onDone={() => setEditingId(null)}
+            onCancel={() => setEditingId(null)}
           />
-        )
-      )}
-    </ul>
+        </li>
+      );
+    }
+    return (
+      <CertificationCardRow
+        key={cert.id}
+        cert={cert}
+        profileId={profileId}
+        canManage={canManage}
+        canOrganize={canOrganize}
+        disabled={layoutLocked || draggingSection}
+        onEdit={() => setEditingId(cert.id)}
+      />
+    );
+  }
+
+  const list = (
+    <div className="space-y-3">
+      {ungrouped.length > 0 ? (
+        <SortableContext items={ungroupedIds} strategy={verticalListSortingStrategy}>
+          <ul className="space-y-3">{ungrouped.map((cert) => renderCertRow(cert))}</ul>
+        </SortableContext>
+      ) : null}
+      {folders.length > 0 ? (
+        <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
+          <ul className="space-y-3">
+            {folders.map((folder) => {
+              const collapsed = folderIsCollapsed(folder.section.id, folder.certs);
+              return (
+              <CertificationSectionFolder
+                key={folder.section.id}
+                item={{ kind: "section", id: folder.section.id, section: folder.section }}
+                certCount={folder.certs.length}
+                collapsed={collapsed}
+                canOrganize={canOrganize}
+                disabled={layoutLocked}
+                draggingCert={Boolean(draggingCert)}
+                onToggleCollapse={() => toggleCollapsed(folder.section.id)}
+                onRename={(name) => {
+                  setError(null);
+                  startTransition(async () => {
+                    try {
+                      await updatePersonnelCertificationSection({
+                        id: folder.section.id,
+                        profileId,
+                        name,
+                      });
+                      router.refresh();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to rename section");
+                    }
+                  });
+                }}
+                onDelete={() => {
+                  if (!confirm("Remove this section? Certifications stay in the list.")) return;
+                  setError(null);
+                  startTransition(async () => {
+                    try {
+                      await deletePersonnelCertificationSection({
+                        id: folder.section.id,
+                        profileId,
+                      });
+                      router.refresh();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to remove section");
+                    }
+                  });
+                }}
+              >
+                <SortableContext
+                  items={folder.certs.map((cert) => cert.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="space-y-2">
+                    {folder.certs.length === 0 ? (
+                      <li className="pointer-events-none rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                        {canOrganize
+                          ? "Drag certifications here."
+                          : "No certifications in this section."}
+                      </li>
+                    ) : (
+                      folder.certs.map((cert) => renderCertRow(cert))
+                    )}
+                  </ul>
+                </SortableContext>
+              </CertificationSectionFolder>
+              );
+            })}
+          </ul>
+        </SortableContext>
+      ) : null}
+    </div>
   );
 
   return (
     <div className="space-y-4">
       {canOrganize ? (
         <p className="text-xs text-muted-foreground">
-          Add section breaks, then drag certifications into the order that makes sense for you.
+          Add sections to group certifications. Collapse a section to hide its certifications, or
+          drag the section to move it with them.
         </p>
       ) : null}
 
@@ -207,7 +334,7 @@ export function PersonnelCertificationsPanel({
               }}
             >
               <div className="min-w-[12rem] flex-1 space-y-1">
-                <FieldLabel htmlFor="cert-section-name">Section break</FieldLabel>
+                <FieldLabel htmlFor="cert-section-name">Section</FieldLabel>
                 <Input
                   id="cert-section-name"
                   value={sectionName}
@@ -240,7 +367,7 @@ export function PersonnelCertificationsPanel({
               disabled={pending}
               onClick={() => setAddingSection(true)}
             >
-              Add section break
+              Add section
             </Button>
           )
         ) : null}
@@ -264,10 +391,18 @@ export function PersonnelCertificationsPanel({
       {empty ? (
         <p className="text-sm text-muted-foreground">No certifications recorded.</p>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={items.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-            {list}
-          </SortableContext>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={certificationCollision}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragCancel={onDragCancel}
+          onDragEnd={onDragEnd}
+        >
+          {list}
+          <DragOverlay dropAnimation={null}>
+            {activeCert ? <CertificationDragPreview cert={activeCert} /> : null}
+          </DragOverlay>
         </DndContext>
       )}
 
@@ -304,72 +439,139 @@ function DragHandle({
   );
 }
 
-function CertificationSectionRow({
+function CertificationDragPreview({ cert }: { cert: PersonnelCertification }) {
+  return (
+    <div
+      className={cn(
+        "w-[min(36rem,calc(100vw-2rem))] cursor-grabbing rounded-lg border bg-background p-4 shadow-lg",
+        isCertExpired(cert.expires_on) && "border-destructive/50 bg-destructive/5"
+      )}
+    >
+      <p className="font-medium">{cert.name}</p>
+      {cert.issuing_authority ? (
+        <p className="text-sm text-muted-foreground">{cert.issuing_authority}</p>
+      ) : null}
+      <p className="mt-1 text-sm text-muted-foreground">
+        {cert.issued_on ? `Issued ${formatDate(cert.issued_on)}` : "Issue date not recorded"}
+        {cert.expires_on ? ` · Expires ${formatDate(cert.expires_on)}` : null}
+      </p>
+    </div>
+  );
+}
+
+function CertificationSectionFolder({
   item,
+  certCount,
+  collapsed,
   canOrganize,
   disabled,
+  draggingCert,
+  onToggleCollapse,
   onRename,
   onDelete,
+  children,
 }: {
   item: Extract<PersonnelCertificationLayoutItem, { kind: "section" }>;
+  certCount: number;
+  collapsed: boolean;
   canOrganize: boolean;
   disabled?: boolean;
+  draggingCert?: boolean;
+  onToggleCollapse: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
+  children: React.ReactNode;
 }) {
-  const sortable = useSortable({ id: item.id, disabled: !canOrganize || disabled });
+  const sortable = useSortable({
+    id: item.id,
+    animateLayoutChanges: () => false,
+    disabled: {
+      draggable: !canOrganize || Boolean(disabled) || Boolean(draggingCert),
+      droppable: !canOrganize || Boolean(disabled),
+    },
+    data: { kind: "section" },
+  });
   const style = {
-    transform: CSS.Transform.toString(sortable.transform),
-    transition: sortable.transition,
+    transform: draggingCert ? undefined : CSS.Transform.toString(sortable.transform),
+    transition: draggingCert ? undefined : sortable.transition,
   };
+  const FolderIcon = collapsed ? Folder : FolderOpen;
 
   return (
     <li
       ref={sortable.setNodeRef}
       style={style}
+      role="group"
+      aria-label={`${item.section.name}, ${
+        certCount === 1 ? "1 certification" : `${certCount} certifications`
+      }`}
       className={cn(
-        "flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2",
-        sortable.isDragging && "z-10 bg-background opacity-90 shadow-md"
+        "space-y-2 rounded-lg border border-border bg-muted/30 p-2",
+        sortable.isDragging && "z-10 bg-background opacity-90 shadow-md",
+        draggingCert && sortable.isOver && "border-primary/40 bg-primary/5"
       )}
     >
-      {canOrganize ? (
-        <DragHandle
-          label={item.section.name}
-          disabled={disabled}
-          attributes={sortable.attributes}
-          listeners={sortable.listeners}
-        />
-      ) : null}
-      {canOrganize ? (
-        <Input
-          defaultValue={item.section.name}
-          disabled={disabled}
-          className="min-w-[10rem] flex-1 font-semibold"
-          aria-label="Section name"
-          onBlur={(event) => {
-            const next = event.target.value.trim();
-            if (!next || next === item.section.name) {
-              event.target.value = item.section.name;
-              return;
-            }
-            onRename(next);
-          }}
-        />
-      ) : (
-        <p className="min-w-0 flex-1 font-semibold">{item.section.name}</p>
-      )}
-      {canOrganize ? (
-        <Button
+      <div className="flex flex-wrap items-center gap-2 rounded-md px-1 py-1">
+        {canOrganize ? (
+          <DragHandle
+            label={`${item.section.name} and its certifications`}
+            disabled={disabled}
+            attributes={sortable.attributes}
+            listeners={sortable.listeners}
+          />
+        ) : null}
+        <button
           type="button"
-          size="sm"
-          variant="ghost"
-          className="text-destructive"
-          disabled={disabled}
-          onClick={onDelete}
+          className="flex shrink-0 items-center gap-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Expand section" : "Collapse section"}
+          onClick={onToggleCollapse}
         >
-          Remove
-        </Button>
-      ) : null}
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform", collapsed && "-rotate-90")}
+          />
+          <FolderIcon className="h-4 w-4" aria-hidden />
+        </button>
+        {canOrganize ? (
+          <Input
+            defaultValue={item.section.name}
+            disabled={disabled}
+            className="min-w-[10rem] flex-1 font-semibold"
+            aria-label="Section name"
+            onBlur={(event) => {
+              const next = event.target.value.trim();
+              if (!next || next === item.section.name) {
+                event.target.value = item.section.name;
+                return;
+              }
+              onRename(next);
+            }}
+          />
+        ) : (
+          <p
+            className="min-w-0 flex-1 cursor-pointer font-semibold"
+            onClick={onToggleCollapse}
+          >
+            {item.section.name}
+          </p>
+        )}
+        <span className="text-xs text-muted-foreground">
+          {certCount === 1 ? "1 certification" : `${certCount} certifications`}
+        </span>
+        {canOrganize ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="text-destructive"
+            disabled={disabled}
+            onClick={onDelete}
+          >
+            Remove
+          </Button>
+        ) : null}
+      </div>
+      {collapsed ? null : children}
     </li>
   );
 }
@@ -389,9 +591,14 @@ function CertificationCardRow({
   disabled?: boolean;
   onEdit: () => void;
 }) {
-  const sortable = useSortable({ id: cert.id, disabled: !canOrganize || disabled });
+  const sortable = useSortable({
+    id: cert.id,
+    animateLayoutChanges: () => false,
+    disabled: !canOrganize || disabled,
+    data: { kind: "cert" },
+  });
   const style = {
-    transform: CSS.Transform.toString(sortable.transform),
+    transform: sortable.isDragging ? undefined : CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
   };
 
@@ -400,9 +607,9 @@ function CertificationCardRow({
       ref={sortable.setNodeRef}
       style={style}
       className={cn(
-        "rounded-lg border p-4",
+        "rounded-lg border bg-background p-4",
         isCertExpired(cert.expires_on) && "border-destructive/50 bg-destructive/5",
-        sortable.isDragging && "z-10 bg-background opacity-90 shadow-md"
+        sortable.isDragging && "opacity-40 shadow-none"
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">

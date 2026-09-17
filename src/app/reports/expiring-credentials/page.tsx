@@ -41,6 +41,7 @@ export default async function ExpiringCredentialsReportPage({
         rows={rows}
         filterSummary={`Horizon: ${withinMonths} month${withinMonths === 1 ? "" : "s"}`}
         filenameBase={`expiring-credentials-${withinMonths}mo`}
+        facetFilters={[{ key: "kind", label: "Credential type" }]}
         filters={
           <>
             {[1, 3, 6, 12].map((months) => (

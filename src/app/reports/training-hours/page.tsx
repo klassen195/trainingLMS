@@ -45,13 +45,13 @@ export default async function TrainingHoursReportPage({
         </Button>
       </div>
       <ReportShell
-        title="Document training hours"
+        title="Total Training Hours"
         description="Hours logged in Document Training, totaled by person for the selected date range."
         branding={branding}
         columns={TRAINING_HOURS_COLUMNS}
         rows={rows}
         filterSummary={`${start} through ${endInclusive}`}
-        filenameBase={`training-hours-${start}-to-${endInclusive}`}
+        filenameBase={`total-training-hours-${start}-to-${endInclusive}`}
         filters={
           <form className="flex flex-wrap items-end gap-3" method="get">
             <div>

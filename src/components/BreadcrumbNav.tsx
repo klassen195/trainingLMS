@@ -131,10 +131,14 @@ export function BreadcrumbNav() {
     });
     if (paths[1] === "expiring-credentials") {
       breadcrumbs.push({ label: "Expiring credentials" });
+    } else if (paths[1] === "certifications") {
+      breadcrumbs.push({ label: "Certifications" });
     } else if (paths[1] === "fleet-status") {
       breadcrumbs.push({ label: "Fleet status" });
     } else if (paths[1] === "training-hours") {
-      breadcrumbs.push({ label: "Training hours" });
+      breadcrumbs.push({ label: "Total Training Hours" });
+    } else if (paths[1] === "individual-training-hours") {
+      breadcrumbs.push({ label: "Individual Training Hours" });
     } else if (paths[1] === "lms-progress") {
       breadcrumbs.push({ label: "LMS progress" });
     } else if (paths[1] === "ppe-due") {
