@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import {
@@ -13,11 +13,12 @@ import {
   TRAINING_SESSION_FILE_ACCEPT,
   TRAINING_SESSION_FILES_BUCKET,
   isTrainingSessionFile,
+  trainingSessionDayFallbackTitle,
   trainingSessionTypeLabel,
   type TrainingSessionProfileOption,
   type TrainingSessionType,
 } from "@/lib/document-training-types";
-import { toTimeInputValue, hoursBetweenTimes } from "@/lib/dates";
+import { addCalendarDaysIso, toTimeInputValue, hoursBetweenTimes } from "@/lib/dates";
 import type { TrainingCategory } from "@/lib/training-categories-types";
 import type { Qualification } from "@/lib/qualifications-types";
 import {
@@ -46,25 +47,91 @@ const SESSION_TYPES: {
   },
   {
     value: "certification_course",
-    label: "Certification course",
-    description: "External or formal courses that lead to a credential.",
+    label: "Formal Course/Conference",
+    description: "External courses, conferences, and other formal training events.",
   },
 ];
 
 type SessionDayDraft = {
   key: string;
+  title: string;
   occurredOn: string;
   startTime: string;
   endTime: string;
+  categoryId: string;
+  presenter: string;
 };
 
-function newDayDraft(partial?: Partial<Omit<SessionDayDraft, "key">>): SessionDayDraft {
+function newDayDraft(
+  partial?: Partial<Omit<SessionDayDraft, "key">>,
+  key?: string
+): SessionDayDraft {
   return {
-    key: crypto.randomUUID(),
+    // Stable keys for SSR hydration; random only when adding days after mount.
+    key: key ?? crypto.randomUUID(),
+    title: partial?.title ?? "",
     occurredOn: partial?.occurredOn ?? "",
     startTime: partial?.startTime ?? "",
     endTime: partial?.endTime ?? "",
+    categoryId: partial?.categoryId ?? "",
+    presenter: partial?.presenter ?? "",
   };
+}
+
+function SessionTitleEditor({
+  value,
+  fallback,
+  onChange,
+}: {
+  value: string;
+  fallback: string;
+  onChange: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        value={value}
+        placeholder={fallback}
+        aria-label="Session title"
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setEditing(false);
+          }
+        }}
+        className="h-8 font-medium"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="rounded-md px-1 py-0.5 text-left text-sm font-medium text-foreground hover:bg-muted/60"
+      title="Click to rename"
+    >
+      {value.trim() || fallback}
+    </button>
+  );
 }
 
 export type DocumentTrainingFormInitial = {
@@ -72,6 +139,7 @@ export type DocumentTrainingFormInitial = {
   sessionId?: string;
   sessionType: TrainingSessionType;
   categoryId: string;
+  categoryByDay?: boolean;
   title: string;
   location: string;
   notes: string;
@@ -89,6 +157,9 @@ export type DocumentTrainingFormInitial = {
     occurredOn: string;
     startTime: string;
     endTime: string;
+    categoryId?: string;
+    presenter?: string;
+    title?: string;
   }>;
 };
 
@@ -117,6 +188,9 @@ export function DocumentTrainingForm({
   const [categoryId, setCategoryId] = useState(
     initial?.categoryId || categories[0]?.id || ""
   );
+  const [categoryByDay, setCategoryByDay] = useState(
+    Boolean(initial?.categoryByDay)
+  );
   const [title, setTitle] = useState(initial?.title ?? "");
   const [location, setLocation] = useState(initial?.location ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
@@ -135,15 +209,21 @@ export function DocumentTrainingForm({
   const [qualificationId, setQualificationId] = useState(initial?.qualificationId ?? "");
   const [days, setDays] = useState<SessionDayDraft[]>(() => {
     if (initial?.days && initial.days.length > 0) {
-      return initial.days.map((day) =>
-        newDayDraft({
-          occurredOn: day.occurredOn,
-          startTime: toTimeInputValue(day.startTime),
-          endTime: toTimeInputValue(day.endTime),
-        })
+      return initial.days.map((day, index) =>
+        newDayDraft(
+          {
+            title: day.title ?? "",
+            occurredOn: day.occurredOn,
+            startTime: toTimeInputValue(day.startTime),
+            endTime: toTimeInputValue(day.endTime),
+            categoryId: day.categoryId ?? "",
+            presenter: day.presenter ?? "",
+          },
+          `initial-day-${index}`
+        )
       );
     }
-    return [newDayDraft()];
+    return [newDayDraft({}, "initial-day-0")];
   });
   const [hoursOverridden, setHoursOverridden] = useState(
     Boolean(initial?.hoursOverridden)
@@ -231,6 +311,7 @@ export function DocumentTrainingForm({
     setProvider("");
     setExpiresOn("");
     setQualificationId("");
+    setCategoryByDay(false);
     setDays([newDayDraft()]);
     setHoursOverridden(false);
     setHoursOverride("");
@@ -239,11 +320,31 @@ export function DocumentTrainingForm({
 
   function updateDay(
     key: string,
-    patch: Partial<Pick<SessionDayDraft, "occurredOn" | "startTime" | "endTime">>
+    patch: Partial<
+      Pick<
+        SessionDayDraft,
+        "title" | "occurredOn" | "startTime" | "endTime" | "categoryId" | "presenter"
+      >
+    >
   ) {
     setDays((prev) =>
       prev.map((day) => (day.key === key ? { ...day, ...patch } : day))
     );
+  }
+
+  function setCategoryByDayEnabled(next: boolean) {
+    setCategoryByDay(next);
+    if (next) {
+      setDays((prev) =>
+        prev.map((day) => ({
+          ...day,
+          categoryId: day.categoryId || categoryId || categories[0]?.id || "",
+        }))
+      );
+    } else {
+      const firstDayCategory = days.find((day) => day.categoryId)?.categoryId;
+      if (firstDayCategory) setCategoryId(firstDayCategory);
+    }
   }
 
   function removeDay(key: string) {
@@ -268,7 +369,7 @@ export function DocumentTrainingForm({
         setError(null);
 
         if (!sessionType) {
-          setError("Choose in-house training or a certification course.");
+          setError("Choose in-house training or a formal course/conference.");
           return;
         }
         if (!categoryId) {
@@ -288,6 +389,8 @@ export function DocumentTrainingForm({
             const payload = {
               sessionType,
               categoryId,
+              categoryByDay:
+                sessionType === "certification_course" ? categoryByDay : false,
               title,
               location,
               notes,
@@ -303,6 +406,9 @@ export function DocumentTrainingForm({
                       occurredOn: day.occurredOn,
                       startTime: day.startTime,
                       endTime: day.endTime,
+                      categoryId: categoryByDay ? day.categoryId : null,
+                      presenter: day.presenter || null,
+                      title: day.title || null,
                     }))
                   : undefined,
               hoursOverridden:
@@ -404,23 +510,40 @@ export function DocumentTrainingForm({
             <CardContent className="space-y-4">
               <div>
                 <FieldLabel htmlFor="training-category">Category</FieldLabel>
-                <Select
-                  id="training-category"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  required
-                >
-                  {categories.length === 0 ? (
-                    <option value="">No categories available</option>
-                  ) : (
-                    categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                        {!category.is_active ? " (inactive)" : ""}
-                      </option>
-                    ))
-                  )}
-                </Select>
+                {sessionType === "certification_course" && categoryByDay ? (
+                  <FieldHint>
+                    Choose a category on each session below.
+                  </FieldHint>
+                ) : (
+                  <Select
+                    id="training-category"
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    required
+                  >
+                    {categories.length === 0 ? (
+                      <option value="">No categories available</option>
+                    ) : (
+                      categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                          {!category.is_active ? " (inactive)" : ""}
+                        </option>
+                      ))
+                    )}
+                  </Select>
+                )}
+                {sessionType === "certification_course" ? (
+                  <label className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={categoryByDay}
+                      onChange={(e) => setCategoryByDayEnabled(e.target.checked)}
+                    />
+                    Select category by session
+                  </label>
+                ) : null}
               </div>
 
               <div>
@@ -498,64 +621,119 @@ export function DocumentTrainingForm({
 
                   <div className="space-y-3">
                     <div>
-                      <FieldLabel>Session days</FieldLabel>
+                      <FieldLabel>Sessions</FieldLabel>
                       <FieldHint>
-                        Add each day the course met. Hours tally from these times unless
-                        overridden below.
+                        Add each session. Same-day sessions are fine if times don’t
+                        overlap. Hours tally from these times unless overridden below.
                       </FieldHint>
                     </div>
                     {days.map((day, index) => (
                       <div
                         key={day.key}
-                        className="grid gap-3 rounded-md border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
+                        className="space-y-3 rounded-md border border-border p-3"
                       >
-                        <div>
-                          <FieldLabel htmlFor={`day-date-${day.key}`}>
-                            Date{days.length > 1 ? ` ${index + 1}` : ""}
-                          </FieldLabel>
-                          <Input
-                            id={`day-date-${day.key}`}
-                            type="date"
-                            value={day.occurredOn}
-                            onChange={(e) =>
-                              updateDay(day.key, { occurredOn: e.target.value })
-                            }
-                            required
+                        <div className="flex items-center justify-between gap-2">
+                          <SessionTitleEditor
+                            value={day.title}
+                            fallback={trainingSessionDayFallbackTitle(index, days.length)}
+                            onChange={(title) => updateDay(day.key, { title })}
                           />
-                        </div>
-                        <div>
-                          <FieldLabel htmlFor={`day-start-${day.key}`}>Start</FieldLabel>
-                          <TimeInput
-                            id={`day-start-${day.key}`}
-                            value={day.startTime}
-                            onChange={(e) =>
-                              updateDay(day.key, { startTime: e.target.value })
-                            }
-                            required
-                          />
-                        </div>
-                        <div>
-                          <FieldLabel htmlFor={`day-end-${day.key}`}>End</FieldLabel>
-                          <TimeInput
-                            id={`day-end-${day.key}`}
-                            value={day.endTime}
-                            onChange={(e) =>
-                              updateDay(day.key, { endTime: e.target.value })
-                            }
-                            required
-                          />
-                        </div>
-                        <div className="flex items-end">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             disabled={days.length <= 1}
                             onClick={() => removeDay(day.key)}
-                            aria-label={`Remove day ${index + 1}`}
+                            aria-label={`Remove ${trainingSessionDayFallbackTitle(index, days.length)}`}
                           >
                             <X className="h-4 w-4" />
                           </Button>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div>
+                            <FieldLabel htmlFor={`day-date-${day.key}`}>Date</FieldLabel>
+                            <Input
+                              id={`day-date-${day.key}`}
+                              type="date"
+                              value={day.occurredOn}
+                              onChange={(e) =>
+                                updateDay(day.key, { occurredOn: e.target.value })
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel htmlFor={`day-start-${day.key}`}>Start</FieldLabel>
+                            <TimeInput
+                              id={`day-start-${day.key}`}
+                              value={day.startTime}
+                              onChange={(e) =>
+                                updateDay(day.key, { startTime: e.target.value })
+                              }
+                              required
+                            />
+                          </div>
+                          <div>
+                            <FieldLabel htmlFor={`day-end-${day.key}`}>End</FieldLabel>
+                            <TimeInput
+                              id={`day-end-${day.key}`}
+                              value={day.endTime}
+                              onChange={(e) =>
+                                updateDay(day.key, { endTime: e.target.value })
+                              }
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div
+                          className={
+                            categoryByDay
+                              ? "grid gap-3 sm:grid-cols-2"
+                              : undefined
+                          }
+                        >
+                          <div>
+                            <FieldLabel htmlFor={`day-presenter-${day.key}`}>
+                              Presenter
+                            </FieldLabel>
+                            <Input
+                              id={`day-presenter-${day.key}`}
+                              value={day.presenter}
+                              onChange={(e) =>
+                                updateDay(day.key, { presenter: e.target.value })
+                              }
+                              placeholder="Optional"
+                            />
+                          </div>
+                          {categoryByDay ? (
+                            <div>
+                              <FieldLabel htmlFor={`day-category-${day.key}`}>
+                                Category
+                              </FieldLabel>
+                              <Select
+                                id={`day-category-${day.key}`}
+                                value={day.categoryId}
+                                onChange={(e) =>
+                                  updateDay(day.key, { categoryId: e.target.value })
+                                }
+                                required
+                              >
+                                {categories.length === 0 ? (
+                                  <option value="">No categories available</option>
+                                ) : (
+                                  <>
+                                    <option value="">Select category</option>
+                                    {categories.map((category) => (
+                                      <option key={category.id} value={category.id}>
+                                        {category.name}
+                                        {!category.is_active ? " (inactive)" : ""}
+                                      </option>
+                                    ))}
+                                  </>
+                                )}
+                              </Select>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ))}
@@ -563,9 +741,26 @@ export function DocumentTrainingForm({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setDays((prev) => [...prev, newDayDraft()])}
+                      onClick={() =>
+                        setDays((prev) => {
+                          const last = prev[prev.length - 1];
+                          const lastDate = last?.occurredOn?.trim() || "";
+                          const nextDate = lastDate
+                            ? addCalendarDaysIso(lastDate, 1)
+                            : "";
+                          return [
+                            ...prev,
+                            newDayDraft({
+                              occurredOn: nextDate,
+                              categoryId: categoryByDay
+                                ? last?.categoryId || categoryId || categories[0]?.id || ""
+                                : "",
+                            }),
+                          ];
+                        })
+                      }
                     >
-                      Add another day
+                      Add another session
                     </Button>
                   </div>
 
@@ -639,7 +834,7 @@ export function DocumentTrainingForm({
                       <FieldHint>
                         {hoursOverridden
                           ? "Using the certificate total instead of the daily tally."
-                          : "Calculated as the sum of each day’s start and end time."}
+                          : "Calculated as the sum of each session’s start and end time."}
                       </FieldHint>
                     </>
                   ) : (

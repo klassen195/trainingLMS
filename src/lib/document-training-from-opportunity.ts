@@ -11,6 +11,7 @@ export const MAX_SESSION_DAYS_FROM_OPPORTUNITY = 31;
 export type TrainingReportDraftFromOpportunity = {
   sessionType: TrainingSessionType;
   categoryId: string;
+  categoryByDay?: boolean;
   title: string;
   location: string;
   notes: string;
@@ -28,6 +29,7 @@ export type TrainingReportDraftFromOpportunity = {
     occurredOn: string;
     startTime: string;
     endTime: string;
+    categoryId?: string;
   }>;
   sourceUpcomingTrainingId: string;
   sourceUpcomingTrainingTitle: string;
@@ -113,6 +115,7 @@ export function trainingReportDraftFromUpcomingTraining(
   return {
     sessionType: "certification_course",
     categoryId: options?.categoryId ?? "",
+    categoryByDay: false,
     title: listing.title?.trim() ?? "",
     location: combineLocation(listing.location ?? "", listing.city ?? ""),
     notes: buildNotes(listing),

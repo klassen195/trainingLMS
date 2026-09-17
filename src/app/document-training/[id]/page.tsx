@@ -30,6 +30,22 @@ export default async function DocumentTrainingDetailPage({
   if (!session) notFound();
 
   const dateLabel = trainingSessionDisplayDate(session);
+  const dayCategories = session.category_by_day
+    ? [
+        ...new Map(
+          session.days
+            .map((day) => day.category)
+            .filter((category): category is NonNullable<typeof category> =>
+              Boolean(category?.id && category.name)
+            )
+            .map((category) => [category.id, category])
+        ).values(),
+      ]
+    : [];
+  const categorySummary =
+    session.category_by_day && dayCategories.length > 0
+      ? dayCategories.map((category) => category.name).join(", ")
+      : session.category?.name;
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
@@ -52,7 +68,9 @@ export default async function DocumentTrainingDetailPage({
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <ClipboardPen className="h-7 w-7 text-primary" />
           <Badge variant="secondary">{trainingSessionTypeLabel(session.session_type)}</Badge>
-          {session.category?.name ? (
+          {session.category_by_day && dayCategories.length > 1 ? (
+            <Badge variant="outline">Multiple categories</Badge>
+          ) : session.category?.name ? (
             <Badge variant="outline">{session.category.name}</Badge>
           ) : null}
         </div>
@@ -67,7 +85,7 @@ export default async function DocumentTrainingDetailPage({
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <DetailItem label="Category" value={session.category?.name} />
+              <DetailItem label="Category" value={categorySummary} />
               {session.session_type === "in_house" ? (
                 <>
                   <DetailItem label="Instructor" value={session.instructor_name} />
@@ -109,12 +127,15 @@ export default async function DocumentTrainingDetailPage({
             session.days.length > 0 ? (
               <div className="mt-4 border-t pt-4">
                 <p className="mb-2 text-sm font-medium text-muted-foreground">
-                  Session days
+                  Sessions
                 </p>
                 <ul className="space-y-1.5">
-                  {session.days.map((day) => (
+                  {session.days.map((day, index) => (
                     <li key={day.id} className="text-sm">
-                      {trainingSessionDayLabel(day)}
+                      {trainingSessionDayLabel(day, {
+                        index,
+                        total: session.days.length,
+                      })}
                     </li>
                   ))}
                 </ul>

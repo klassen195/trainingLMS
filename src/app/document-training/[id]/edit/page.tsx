@@ -43,10 +43,17 @@ export default async function EditDocumentTrainingPage({
 
   // Keep the current category available even if it was later deactivated.
   let categories = activeCategories;
-  if (session.category && !categories.some((c) => c.id === session.category_id)) {
+  const neededCategoryIds = new Set<string>([session.category_id]);
+  for (const day of session.days) {
+    if (day.category_id) neededCategoryIds.add(day.category_id);
+  }
+  const missingIds = [...neededCategoryIds].filter(
+    (id) => !categories.some((c) => c.id === id)
+  );
+  if (missingIds.length > 0) {
     const { rows: allCategories } = await listTrainingCategories(supabase);
-    const current = allCategories.find((c) => c.id === session.category_id);
-    if (current) categories = [current, ...categories];
+    const extras = allCategories.filter((c) => missingIds.includes(c.id));
+    if (extras.length > 0) categories = [...extras, ...categories];
   }
 
   let qualifications = activeQualifications;
@@ -63,6 +70,7 @@ export default async function EditDocumentTrainingPage({
     sessionId: session.id,
     sessionType: session.session_type,
     categoryId: session.category_id,
+    categoryByDay: session.category_by_day,
     title: session.title,
     location: session.location ?? "",
     notes: session.notes ?? "",
@@ -82,6 +90,9 @@ export default async function EditDocumentTrainingPage({
             occurredOn: day.occurred_on,
             startTime: day.start_time,
             endTime: day.end_time,
+            categoryId: day.category_id ?? "",
+            presenter: day.presenter ?? "",
+            title: day.title ?? "",
           }))
         : session.started_on
           ? [
@@ -89,6 +100,9 @@ export default async function EditDocumentTrainingPage({
                 occurredOn: session.started_on,
                 startTime: session.start_time ?? "",
                 endTime: session.end_time ?? "",
+                categoryId: session.category_id,
+                presenter: "",
+                title: "",
               },
             ]
           : [],

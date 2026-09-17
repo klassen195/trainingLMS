@@ -50,29 +50,67 @@ export function formatTime(value: string | null | undefined, empty = "—") {
   return `${pad2(Number(match[1]))}:${match[2]}`;
 }
 
+function isValidClockTime(hours: number, minutes: number, seconds: number) {
+  return (
+    Number.isFinite(hours) &&
+    Number.isFinite(minutes) &&
+    Number.isFinite(seconds) &&
+    hours >= 0 &&
+    hours <= 23 &&
+    minutes >= 0 &&
+    minutes <= 59 &&
+    seconds >= 0 &&
+    seconds <= 59
+  );
+}
+
+/**
+ * Parse flexible 24-hour time entry: `HH:mm`, `HH:mm:ss`, or compact military (`0800`, `800`, `8`).
+ * Returns null when empty or unparseable.
+ */
+function parseFlexibleTime(
+  value: string | null | undefined
+): { hours: number; minutes: number; seconds: number } | null {
+  const trimmed = value?.trim() || "";
+  if (!trimmed) return null;
+
+  const withColons = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (withColons) {
+    const hours = Number(withColons[1]);
+    const minutes = Number(withColons[2]);
+    const seconds = withColons[3] != null ? Number(withColons[3]) : 0;
+    if (!isValidClockTime(hours, minutes, seconds)) return null;
+    return { hours, minutes, seconds };
+  }
+
+  // Compact military / digits only: 0800 → 08:00, 830 → 08:30, 8 → 08:00
+  const digits = trimmed.replace(/[\s.-]/g, "");
+  if (!/^\d{1,4}$/.test(digits)) return null;
+
+  let hours: number;
+  let minutes: number;
+  if (digits.length <= 2) {
+    hours = Number(digits);
+    minutes = 0;
+  } else if (digits.length === 3) {
+    hours = Number(digits.slice(0, 1));
+    minutes = Number(digits.slice(1));
+  } else {
+    hours = Number(digits.slice(0, 2));
+    minutes = Number(digits.slice(2));
+  }
+
+  if (!isValidClockTime(hours, minutes, 0)) return null;
+  return { hours, minutes, seconds: 0 };
+}
+
 /** Normalize form/DB time strings to `HH:MM:SS`, or null if empty. */
 export function normalizeTimeInput(value: string | null | undefined): string | null {
   const trimmed = value?.trim() || "";
   if (!trimmed) return null;
-  const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (!match) throw new Error("Invalid time.");
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const seconds = match[3] != null ? Number(match[3]) : 0;
-  if (
-    !Number.isFinite(hours) ||
-    !Number.isFinite(minutes) ||
-    !Number.isFinite(seconds) ||
-    hours < 0 ||
-    hours > 23 ||
-    minutes < 0 ||
-    minutes > 59 ||
-    seconds < 0 ||
-    seconds > 59
-  ) {
-    throw new Error("Invalid time.");
-  }
-  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+  const parsed = parseFlexibleTime(trimmed);
+  if (!parsed) throw new Error("Invalid time.");
+  return `${pad2(parsed.hours)}:${pad2(parsed.minutes)}:${pad2(parsed.seconds)}`;
 }
 
 /** Hours between two times (`HH:MM` / `HH:MM:SS`), rounded to 2 decimals. */
@@ -98,12 +136,11 @@ export function hoursBetweenTimes(
   return Math.round(((toMinutes(end) - toMinutes(start)) / 60) * 100) / 100;
 }
 
-/** Value suitable for `<input type="time">` (`HH:MM`). */
+/** Value suitable for time text inputs (`HH:MM`). Accepts `HH:mm` or compact military (`0800`). */
 export function toTimeInputValue(value: string | null | undefined) {
-  if (!value) return "";
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return "";
-  return `${pad2(Number(match[1]))}:${match[2]}`;
+  const parsed = parseFlexibleTime(value);
+  if (!parsed) return "";
+  return `${pad2(parsed.hours)}:${pad2(parsed.minutes)}`;
 }
 
 function shiftDayAnchorLocal() {

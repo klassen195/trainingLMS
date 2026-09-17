@@ -31,6 +31,9 @@ export type TrainingSessionDayInput = {
   occurredOn: string;
   startTime: string;
   endTime: string;
+  categoryId?: string | null;
+  presenter?: string | null;
+  title?: string | null;
 };
 
 function throwIfDbError(error: PostgrestError | null) {
@@ -75,34 +78,43 @@ function parseSessionTimes(input: {
   return { startTime, endTime, hours };
 }
 
-function parseCertificationDays(daysInput: TrainingSessionDayInput[] | undefined) {
+type ParsedSessionDay = {
+  occurred_on: string;
+  start_time: string;
+  end_time: string;
+  sort_order: number;
+  category_id: string | null;
+  presenter: string | null;
+  title: string | null;
+  hours: number;
+};
+
+function parseCertificationDays(
+  daysInput: TrainingSessionDayInput[] | undefined,
+  options?: { categoryByDay?: boolean }
+) {
   if (!daysInput || daysInput.length === 0) {
-    throw new Error("Add at least one session day.");
+    throw new Error("Add at least one session.");
   }
 
-  const seenDates = new Set<string>();
-  const days: {
-    occurred_on: string;
-    start_time: string;
-    end_time: string;
-    sort_order: number;
-    hours: number;
-  }[] = [];
+  const categoryByDay = Boolean(options?.categoryByDay);
+  const days: ParsedSessionDay[] = [];
 
   for (let i = 0; i < daysInput.length; i++) {
     const occurredOn = daysInput[i].occurredOn?.trim() || "";
-    if (!occurredOn) throw new Error(`Day ${i + 1}: date is required.`);
-    if (seenDates.has(occurredOn)) {
-      throw new Error("Each session day must use a different date.");
-    }
-    seenDates.add(occurredOn);
+    if (!occurredOn) throw new Error(`Session ${i + 1}: date is required.`);
 
     let parsed: { startTime: string; endTime: string; hours: number };
     try {
       parsed = parseSessionTimes(daysInput[i]);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Invalid times.";
-      throw new Error(`Day ${i + 1}: ${message}`);
+      throw new Error(`Session ${i + 1}: ${message}`);
+    }
+
+    const dayCategoryId = daysInput[i].categoryId?.trim() || null;
+    if (categoryByDay && !dayCategoryId) {
+      throw new Error(`Session ${i + 1}: category is required.`);
     }
 
     days.push({
@@ -110,14 +122,36 @@ function parseCertificationDays(daysInput: TrainingSessionDayInput[] | undefined
       start_time: parsed.startTime,
       end_time: parsed.endTime,
       sort_order: i,
+      category_id: categoryByDay ? dayCategoryId : null,
+      presenter: daysInput[i].presenter?.trim() || null,
+      title: daysInput[i].title?.trim() || null,
       hours: parsed.hours,
     });
   }
 
-  days.sort((a, b) => a.occurred_on.localeCompare(b.occurred_on));
+  days.sort((a, b) => {
+    const byDate = a.occurred_on.localeCompare(b.occurred_on);
+    if (byDate !== 0) return byDate;
+    return a.start_time.localeCompare(b.start_time);
+  });
   days.forEach((day, index) => {
     day.sort_order = index;
   });
+
+  for (let i = 0; i < days.length; i++) {
+    for (let j = i + 1; j < days.length; j++) {
+      if (days[i].occurred_on !== days[j].occurred_on) break;
+      // Adjacent times (end === start) are allowed; only true overlaps are rejected.
+      if (
+        days[i].start_time < days[j].end_time &&
+        days[j].start_time < days[i].end_time
+      ) {
+        throw new Error(
+          `Sessions on ${days[i].occurred_on} have overlapping times.`
+        );
+      }
+    }
+  }
 
   const talliedHours =
     Math.round(days.reduce((sum, day) => sum + day.hours, 0) * 100) / 100;
@@ -125,6 +159,32 @@ function parseCertificationDays(daysInput: TrainingSessionDayInput[] | undefined
   const endedOn = days[days.length - 1].occurred_on;
 
   return { days, talliedHours, startedOn, endedOn };
+}
+
+async function assertTrainingCategories(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  categoryIds: string[],
+  options?: { allowInactiveIds?: string[] }
+) {
+  const unique = uniqueIds(categoryIds);
+  if (unique.length === 0) throw new Error("Category is required.");
+
+  const { data, error } = await supabase
+    .from("training_categories")
+    .select("id, is_active")
+    .in("id", unique);
+  throwIfDbError(error);
+
+  const byId = new Map((data ?? []).map((row) => [row.id as string, row]));
+  const allowInactive = new Set(options?.allowInactiveIds ?? []);
+
+  for (const id of unique) {
+    const category = byId.get(id);
+    if (!category) throw new Error("Category not found.");
+    if (!category.is_active && !allowInactive.has(id)) {
+      throw new Error("That category is inactive.");
+    }
+  }
 }
 
 function parseHoursOverride(raw: string | number | null | undefined) {
@@ -141,12 +201,15 @@ function parseHoursOverride(raw: string | number | null | undefined) {
 async function replaceSessionDays(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   sessionId: string,
-  days: {
+  days: Array<{
     occurred_on: string;
     start_time: string;
     end_time: string;
     sort_order: number;
-  }[]
+    category_id: string | null;
+    presenter: string | null;
+    title: string | null;
+  }>
 ) {
   const { error: deleteError } = await supabase
     .from("training_session_days")
@@ -163,6 +226,9 @@ async function replaceSessionDays(
       start_time: day.start_time,
       end_time: day.end_time,
       sort_order: day.sort_order,
+      category_id: day.category_id,
+      presenter: day.presenter,
+      title: day.title,
     }))
   );
   throwIfDbError(insertError);
@@ -409,6 +475,7 @@ export async function getTrainingSession(sessionId: string): Promise<TrainingSes
 export async function createTrainingSession(input: {
   sessionType: TrainingSessionType;
   categoryId: string;
+  categoryByDay?: boolean;
   title: string;
   location?: string | null;
   notes?: string | null;
@@ -427,43 +494,41 @@ export async function createTrainingSession(input: {
   const profile = await assertCapability("document_training");
   const title = input.title.trim();
   if (!title) throw new Error("Title is required.");
-  const categoryId = input.categoryId.trim();
-  if (!categoryId) throw new Error("Category is required.");
 
   const location = input.location?.trim() || null;
   const notes = input.notes?.trim() || null;
   const attendeeIds = uniqueIds(input.attendeeIds);
+  const categoryByDay =
+    input.sessionType === "certification_course" && Boolean(input.categoryByDay);
 
   const supabase = await createSupabaseServerClient();
 
-  const { data: category, error: categoryError } = await supabase
-    .from("training_categories")
-    .select("id, is_active")
-    .eq("id", categoryId)
-    .maybeSingle();
-  throwIfDbError(categoryError);
-  if (!category) throw new Error("Category not found.");
-  if (!category.is_active) throw new Error("That category is inactive.");
-
-  const qualificationId = await resolveQualificationId(supabase, input.qualificationId);
-
   let row: Record<string, unknown>;
-  let certificationDays: {
+  let certificationDays: Array<{
     occurred_on: string;
     start_time: string;
     end_time: string;
     sort_order: number;
-  }[] | null = null;
+    category_id: string | null;
+    presenter: string | null;
+    title: string | null;
+  }> | null = null;
 
   if (input.sessionType === "in_house") {
+    const categoryId = input.categoryId.trim();
+    if (!categoryId) throw new Error("Category is required.");
+    await assertTrainingCategories(supabase, [categoryId]);
+
     const occurredOn = input.occurredOn?.trim() || "";
     const instructorName = input.instructorName?.trim() || "";
     if (!occurredOn) throw new Error("Training date is required.");
     if (!instructorName) throw new Error("Instructor is required.");
     const { startTime, endTime, hours } = parseSessionTimes(input);
+    const qualificationId = await resolveQualificationId(supabase, input.qualificationId);
     row = {
       session_type: "in_house",
       category_id: categoryId,
+      category_by_day: false,
       title,
       hours,
       hours_overridden: false,
@@ -483,15 +548,32 @@ export async function createTrainingSession(input: {
   } else if (input.sessionType === "certification_course") {
     const provider = input.provider?.trim() || "";
     if (!provider) throw new Error("Course provider is required.");
-    const parsedDays = parseCertificationDays(input.days);
+    const parsedDays = parseCertificationDays(input.days, { categoryByDay });
     const hoursOverridden = Boolean(input.hoursOverridden);
     const hours = hoursOverridden
       ? parseHoursOverride(input.hoursOverride)
       : parsedDays.talliedHours;
     certificationDays = parsedDays.days;
+
+    let categoryId: string;
+    if (categoryByDay) {
+      categoryId = parsedDays.days[0]?.category_id?.trim() || "";
+      if (!categoryId) throw new Error("Category is required.");
+      await assertTrainingCategories(
+        supabase,
+        parsedDays.days.map((day) => day.category_id!).filter(Boolean)
+      );
+    } else {
+      categoryId = input.categoryId.trim();
+      if (!categoryId) throw new Error("Category is required.");
+      await assertTrainingCategories(supabase, [categoryId]);
+    }
+
+    const qualificationId = await resolveQualificationId(supabase, input.qualificationId);
     row = {
       session_type: "certification_course",
       category_id: categoryId,
+      category_by_day: categoryByDay,
       title,
       hours,
       hours_overridden: hoursOverridden,
@@ -603,6 +685,7 @@ export async function updateTrainingSession(input: {
   sessionId: string;
   sessionType: TrainingSessionType;
   categoryId: string;
+  categoryByDay?: boolean;
   title: string;
   location?: string | null;
   notes?: string | null;
@@ -624,12 +707,12 @@ export async function updateTrainingSession(input: {
 
   const title = input.title.trim();
   if (!title) throw new Error("Title is required.");
-  const categoryId = input.categoryId.trim();
-  if (!categoryId) throw new Error("Category is required.");
 
   const location = input.location?.trim() || null;
   const notes = input.notes?.trim() || null;
   const attendeeIds = uniqueIds(input.attendeeIds);
+  const categoryByDay =
+    input.sessionType === "certification_course" && Boolean(input.categoryByDay);
 
   const supabase = await createSupabaseServerClient();
 
@@ -644,39 +727,47 @@ export async function updateTrainingSession(input: {
     throw new Error("Training type cannot be changed after the report is created.");
   }
 
-  const { data: category, error: categoryError } = await supabase
-    .from("training_categories")
-    .select("id, is_active")
-    .eq("id", categoryId)
-    .maybeSingle();
-  throwIfDbError(categoryError);
-  if (!category) throw new Error("Category not found.");
-  if (!category.is_active && categoryId !== existing.category_id) {
-    throw new Error("That category is inactive.");
-  }
-
-  const qualificationId = await resolveQualificationId(
-    supabase,
-    input.qualificationId,
-    existing.qualification_id as string | null
-  );
+  const { data: existingDays, error: existingDaysError } = await supabase
+    .from("training_session_days")
+    .select("category_id")
+    .eq("session_id", sessionId);
+  throwIfDbError(existingDaysError);
+  const allowInactiveCategoryIds = uniqueIds([
+    existing.category_id as string,
+    ...(existingDays ?? []).map((day) => day.category_id as string | null).filter(Boolean) as string[],
+  ]);
 
   let patch: Record<string, unknown>;
-  let certificationDays: {
+  let certificationDays: Array<{
     occurred_on: string;
     start_time: string;
     end_time: string;
     sort_order: number;
-  }[] | null = null;
+    category_id: string | null;
+    presenter: string | null;
+    title: string | null;
+  }> | null = null;
 
   if (input.sessionType === "in_house") {
+    const categoryId = input.categoryId.trim();
+    if (!categoryId) throw new Error("Category is required.");
+    await assertTrainingCategories(supabase, [categoryId], {
+      allowInactiveIds: allowInactiveCategoryIds,
+    });
+
     const occurredOn = input.occurredOn?.trim() || "";
     const instructorName = input.instructorName?.trim() || "";
     if (!occurredOn) throw new Error("Training date is required.");
     if (!instructorName) throw new Error("Instructor is required.");
     const { startTime, endTime, hours } = parseSessionTimes(input);
+    const qualificationId = await resolveQualificationId(
+      supabase,
+      input.qualificationId,
+      existing.qualification_id as string | null
+    );
     patch = {
       category_id: categoryId,
+      category_by_day: false,
       title,
       hours,
       hours_overridden: false,
@@ -695,14 +786,38 @@ export async function updateTrainingSession(input: {
   } else if (input.sessionType === "certification_course") {
     const provider = input.provider?.trim() || "";
     if (!provider) throw new Error("Course provider is required.");
-    const parsedDays = parseCertificationDays(input.days);
+    const parsedDays = parseCertificationDays(input.days, { categoryByDay });
     const hoursOverridden = Boolean(input.hoursOverridden);
     const hours = hoursOverridden
       ? parseHoursOverride(input.hoursOverride)
       : parsedDays.talliedHours;
     certificationDays = parsedDays.days;
+
+    let categoryId: string;
+    if (categoryByDay) {
+      categoryId = parsedDays.days[0]?.category_id?.trim() || "";
+      if (!categoryId) throw new Error("Category is required.");
+      await assertTrainingCategories(
+        supabase,
+        parsedDays.days.map((day) => day.category_id!).filter(Boolean),
+        { allowInactiveIds: allowInactiveCategoryIds }
+      );
+    } else {
+      categoryId = input.categoryId.trim();
+      if (!categoryId) throw new Error("Category is required.");
+      await assertTrainingCategories(supabase, [categoryId], {
+        allowInactiveIds: allowInactiveCategoryIds,
+      });
+    }
+
+    const qualificationId = await resolveQualificationId(
+      supabase,
+      input.qualificationId,
+      existing.qualification_id as string | null
+    );
     patch = {
       category_id: categoryId,
+      category_by_day: categoryByDay,
       title,
       hours,
       hours_overridden: hoursOverridden,

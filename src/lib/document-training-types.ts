@@ -7,6 +7,7 @@ export type TrainingSession = {
   id: string;
   session_type: TrainingSessionType;
   category_id: string;
+  category_by_day: boolean;
   title: string;
   hours: number | null;
   hours_overridden: boolean;
@@ -33,6 +34,10 @@ export type TrainingSessionDay = {
   start_time: string;
   end_time: string;
   sort_order: number;
+  category_id: string | null;
+  presenter: string | null;
+  title: string | null;
+  category?: TrainingSessionCategory | null;
 };
 
 export type TrainingSessionCategory = {
@@ -100,12 +105,12 @@ export type TrainingSessionProfileOption = {
 };
 
 export const TRAINING_SESSION_SELECT =
-  "id, session_type, category_id, title, hours, hours_overridden, location, notes, occurred_on, start_time, end_time, instructor_name, provider, started_on, ended_on, expires_on, qualification_id, recorded_by, created_at, updated_at";
+  "id, session_type, category_id, category_by_day, title, hours, hours_overridden, location, notes, occurred_on, start_time, end_time, instructor_name, provider, started_on, ended_on, expires_on, qualification_id, recorded_by, created_at, updated_at";
 
 export const TRAINING_SESSION_WITH_RECORDER_SELECT = `${TRAINING_SESSION_SELECT}, recorder:profiles!recorded_by(id, display_name, email), category:training_categories!category_id(id, name), qualification:qualifications!qualification_id(id, name)`;
 
 export const TRAINING_SESSION_DAY_SELECT =
-  "id, session_id, occurred_on, start_time, end_time, sort_order";
+  "id, session_id, occurred_on, start_time, end_time, sort_order, category_id, presenter, title, category:training_categories!category_id(id, name)";
 
 export const TRAINING_SESSION_FILES_BUCKET = "training-session-files";
 
@@ -152,7 +157,7 @@ export function buildTrainingSessionFileStoragePath(
 }
 
 export function trainingSessionTypeLabel(type: TrainingSessionType) {
-  return type === "in_house" ? "In-house training" : "Certification course";
+  return type === "in_house" ? "In-house training" : "Formal Course/Conference";
 }
 
 export function trainingSessionTimeRange(session: {
@@ -167,14 +172,42 @@ export function trainingSessionTimeRange(session: {
   return null;
 }
 
-export function trainingSessionDayLabel(day: {
-  occurred_on: string;
-  start_time?: string | null;
-  end_time?: string | null;
-}) {
+export function trainingSessionDayFallbackTitle(index: number, total: number) {
+  return total > 1 ? `Session ${index + 1}` : "Session";
+}
+
+export function trainingSessionDayTitle(
+  day: { title?: string | null },
+  index: number,
+  total: number
+) {
+  const custom = day.title?.trim();
+  return custom || trainingSessionDayFallbackTitle(index, total);
+}
+
+export function trainingSessionDayLabel(
+  day: {
+    occurred_on: string;
+    start_time?: string | null;
+    end_time?: string | null;
+    title?: string | null;
+    presenter?: string | null;
+    category?: { name?: string | null } | null;
+  },
+  options?: { index?: number; total?: number }
+) {
   const date = formatDate(day.occurred_on);
   const times = trainingSessionTimeRange(day);
-  return times ? `${date} · ${times}` : date;
+  const category = day.category?.name?.trim() || "";
+  const presenter = day.presenter?.trim() || "";
+  const index = options?.index ?? 0;
+  const total = options?.total ?? 1;
+  const title = trainingSessionDayTitle(day, index, total);
+  const schedule = times ? `${date} · ${times}` : date;
+  const parts = [title, schedule];
+  if (presenter) parts.push(presenter);
+  if (category) parts.push(category);
+  return parts.join(" · ");
 }
 
 export function trainingSessionDisplayDate(session: {

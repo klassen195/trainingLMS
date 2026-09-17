@@ -141,6 +141,18 @@ export async function deleteTrainingCategory(id: string) {
     );
   }
 
+  const { count: dayCount, error: dayCountError } = await supabase
+    .from("training_session_days")
+    .select("id", { count: "exact", head: true })
+    .eq("category_id", category.id);
+
+  if (dayCountError) throw new Error(supabaseErrorMessage(dayCountError));
+  if ((dayCount ?? 0) > 0) {
+    throw new Error(
+      `Cannot delete "${category.name}" while ${dayCount} session day${dayCount === 1 ? "" : "s"} still use it. Deactivate it instead, or reassign those days.`
+    );
+  }
+
   const { error } = await supabase.from("training_categories").delete().eq("id", id);
   throwIfMissing(error);
   if (error) throw new Error(supabaseErrorMessage(error));

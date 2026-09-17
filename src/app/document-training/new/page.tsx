@@ -56,6 +56,7 @@ export default async function NewDocumentTrainingPage({
       initial = {
         sessionType: draft.sessionType,
         categoryId: draft.categoryId,
+        categoryByDay: draft.categoryByDay ?? false,
         title: draft.title,
         location: draft.location,
         notes: draft.notes,
@@ -95,7 +96,7 @@ export default async function NewDocumentTrainingPage({
         <p className="text-muted-foreground">
           {sourceOpportunity
             ? "Review the details pulled from the opportunity, choose a category, then save the report."
-            : "Start by choosing in-house training or a certification course, then fill in the details."}
+            : "Start by choosing in-house training or a formal course/conference, then fill in the details."}
         </p>
         <div className="mt-4">
           <Button asChild variant="outline" size="sm">
