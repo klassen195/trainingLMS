@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import type { FlagLevel } from "@/lib/home-dashboard-types";
 
 export const CDC_FIRE_DANGER_ZONE = "South Valleys" as const;
@@ -98,6 +97,8 @@ export function detectFireDangerLevelFromGifPixels(
 }
 
 async function decodeGif(buffer: Buffer) {
+  // Dynamic import so a missing/broken sharp binary cannot take down the home page at module load.
+  const { default: sharp } = await import("sharp");
   const { data, info } = await sharp(buffer).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   if (info.channels < 3) {
     throw new Error("Unexpected CDC banner image format.");
