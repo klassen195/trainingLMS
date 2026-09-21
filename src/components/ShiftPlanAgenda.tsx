@@ -5,13 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { deleteShiftPlanItem, setShiftPlanItemCompleted } from "@/app/shift-plan/actions";
 import { cn } from "@/lib/cn";
-import {
-  addShiftBlocks,
-  formatDate,
-  formatShiftDayRange,
-  formatTime,
-} from "@/lib/dates";
-import { shiftColorForShiftDay } from "@/lib/shift-rotation";
+import { formatDate, formatTime } from "@/lib/dates";
 import type { Location } from "@/lib/locations-types";
 import {
   compareShiftPlanItems,
@@ -20,6 +14,7 @@ import {
   type ShiftPlanFilter,
   type ShiftPlanItem,
 } from "@/lib/shift-plan-types";
+import { useShiftHelpers } from "@/components/ShiftScheduleProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -53,16 +48,19 @@ export function ShiftPlanAgenda({
   items: ShiftPlanItem[];
   locations: Location[];
 }) {
+  const { colorForDay, labelForColor, formatDayRange, addBlocks, preset, config } = useShiftHelpers();
   const [filter, setFilter] = useState<ShiftPlanFilter>("all");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftPlanItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
 
-  const color = shiftColorForShiftDay(shiftDate);
+  const color = colorForDay(shiftDate);
+  const colorLabel = labelForColor(color);
   const isCurrent = shiftDate === currentShiftDate;
-  const prevShift = addShiftBlocks(shiftDate, -1);
-  const nextShift = addShiftBlocks(shiftDate, 1);
+  const prevShift = addBlocks(shiftDate, -1);
+  const nextShift = addBlocks(shiftDate, 1);
+  const startTimeLabel = `${String(config.startHour).padStart(2, "0")}:${String(config.startMinute).padStart(2, "0")}`;
 
   const sortedItems = useMemo(() => items.slice().sort(compareShiftPlanItems), [items]);
   const battalionItems =
@@ -125,12 +123,14 @@ export function ShiftPlanAgenda({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle className="text-lg">
-                {color} · {formatShiftDayRange(shiftDate)}
+                {colorLabel} · {formatDayRange(shiftDate)}
               </CardTitle>
-              <Badge className={shiftColorBadgeClass(color)}>{color}</Badge>
+              <Badge className={shiftColorBadgeClass(color)}>{colorLabel}</Badge>
               {isCurrent ? <Badge>Current shift</Badge> : null}
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">48-hour block starting 08:00.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {preset.onDays * 24}-hour block starting {startTimeLabel}.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -223,7 +223,7 @@ export function ShiftPlanAgenda({
           <SheetHeader>
             <SheetTitle>{editing ? "Edit plan item" : "Add plan item"}</SheetTitle>
             <SheetDescription>
-              {color} · {formatShiftDayRange(shiftDate)}
+              {colorLabel} · {formatDayRange(shiftDate)}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">

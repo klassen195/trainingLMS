@@ -6,9 +6,10 @@ import {
   updateShiftPlanItem,
   type ShiftPlanItemInput,
 } from "@/app/shift-plan/actions";
-import { formatDate, shiftBlockCalendarDays, toTimeInputValue } from "@/lib/dates";
+import { formatDate, toTimeInputValue } from "@/lib/dates";
 import type { Location } from "@/lib/locations-types";
 import type { ShiftPlanItem, ShiftPlanScope } from "@/lib/shift-plan-types";
+import { useShiftHelpers } from "@/components/ShiftScheduleProvider";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
@@ -25,6 +26,7 @@ export function ShiftPlanItemForm({
   item?: ShiftPlanItem | null;
   onDone: () => void;
 }) {
+  const { blockDays, preset } = useShiftHelpers();
   const [title, setTitle] = useState(item?.title ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
   const [scope, setScope] = useState<ShiftPlanScope>(item?.scope ?? "station");
@@ -35,7 +37,7 @@ export function ShiftPlanItemForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [dayOne, dayTwo] = shiftBlockCalendarDays(shiftDate);
+  const days = blockDays(shiftDate);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -114,10 +116,15 @@ export function ShiftPlanItemForm({
         <FieldLabel htmlFor="sp-item-date">Day (optional)</FieldLabel>
         <Select id="sp-item-date" value={itemDate} onChange={(e) => setItemDate(e.target.value)}>
           <option value="">Not specified</option>
-          <option value={dayOne}>{formatDate(dayOne)}</option>
-          <option value={dayTwo}>{formatDate(dayTwo)}</option>
+          {days.map((day) => (
+            <option key={day} value={day}>
+              {formatDate(day)}
+            </option>
+          ))}
         </Select>
-        <FieldHint>Which calendar day of this 48-hour shift.</FieldHint>
+        <FieldHint>
+          Which calendar day of this {preset.onDays * 24}-hour shift.
+        </FieldHint>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

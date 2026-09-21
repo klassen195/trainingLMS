@@ -10,6 +10,8 @@ import {
   isIsoDateString,
   shiftDayStartForCalendarDate,
 } from "@/lib/dates";
+import { getClientShiftSchedule } from "@/lib/shift-schedule-server";
+import { shiftSchedulePreset } from "@/lib/shift-schedule";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { MissingProfileSetup } from "@/components/MissingProfileSetup";
 import { ShiftPlanDatabaseSetup } from "@/components/ShiftPlanDatabaseSetup";
@@ -31,9 +33,10 @@ export default async function ShiftPlanShiftPage({
   if (auth.kind === "missing_profile") return <MissingProfileSetup userId={auth.userId} />;
   await requireCapability("access_shift_plan");
 
+  const schedule = await getClientShiftSchedule();
   const { shiftDate: raw } = await params;
   if (!isIsoDateString(raw)) notFound();
-  const shiftDate = shiftDayStartForCalendarDate(raw);
+  const shiftDate = shiftDayStartForCalendarDate(raw, schedule);
   if (shiftDate !== raw) redirect(`/shift-plan/${shiftDate}`);
 
   const supabase = await createSupabaseServerClient();
@@ -55,6 +58,7 @@ export default async function ShiftPlanShiftPage({
   if (locationsError) throw new Error(locationsError.message);
 
   const items = parseShiftPlanItems(itemsRes.data).sort(compareShiftPlanItems);
+  const hours = shiftSchedulePreset(schedule.scheduleType).onDays * 24;
 
   return (
     <div className="container mx-auto px-4 py-10">
@@ -64,13 +68,14 @@ export default async function ShiftPlanShiftPage({
           <h1 className="text-3xl font-bold">Shift Plan</h1>
         </div>
         <p className="max-w-2xl text-muted-foreground">
-          What is on the plan for this 48-hour shift. Battalion items apply everywhere; stations add their own.
+          What is on the plan for this {hours}-hour shift. Battalion items apply everywhere; stations
+          add their own.
         </p>
       </div>
 
       <ShiftPlanBoard
         shiftDate={shiftDate}
-        currentShiftDate={currentShiftDayStartIso()}
+        currentShiftDate={currentShiftDayStartIso(new Date(), schedule)}
         items={items}
         locations={locations}
       />

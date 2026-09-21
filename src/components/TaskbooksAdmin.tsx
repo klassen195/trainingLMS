@@ -31,21 +31,29 @@ import {
   taskbookGroupLabelForKey,
   type TaskbookTypeWithPrerequisites,
 } from "@/lib/taskbook-types";
+import type { Qualification } from "@/lib/qualifications-types";
 import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { FieldError, FieldLabel } from "@/components/ui/Field";
+import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 
 type PrereqDraft = { code?: string; label: string };
 
-function CreateTaskbookTypeForm({ pdipEnabled = false }: { pdipEnabled?: boolean }) {
+function CreateTaskbookTypeForm({
+  qualifications,
+  pdipEnabled = false,
+}: {
+  qualifications: Qualification[];
+  pdipEnabled?: boolean;
+}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [groupKey, setGroupKey] = useState("rank");
   const [autoIssued, setAutoIssued] = useState(false);
   const [requestable, setRequestable] = useState(true);
   const [pdipEligible, setPdipEligible] = useState(false);
+  const [qualificationId, setQualificationId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -64,12 +72,14 @@ function CreateTaskbookTypeForm({ pdipEnabled = false }: { pdipEnabled?: boolean
               auto_issued: autoIssued,
               requestable: autoIssued ? false : requestable,
               pdip_eligible: pdipEnabled ? pdipEligible : false,
+              qualification_id: qualificationId || null,
               prerequisites: [],
             });
             setName("");
             setAutoIssued(false);
             setRequestable(true);
             setPdipEligible(false);
+            setQualificationId("");
             router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create taskbook");
@@ -105,6 +115,27 @@ function CreateTaskbookTypeForm({ pdipEnabled = false }: { pdipEnabled?: boolean
             ))}
           </Select>
         </div>
+      </div>
+      <div className="space-y-2">
+        <FieldLabel htmlFor="new-taskbook-qualification">Awards qualification on completion</FieldLabel>
+        <Select
+          id="new-taskbook-qualification"
+          value={qualificationId}
+          disabled={pending}
+          onChange={(e) => setQualificationId(e.target.value)}
+        >
+          <option value="">None</option>
+          {qualifications.map((qualification) => (
+            <option key={qualification.id} value={qualification.id}>
+              {qualification.name}
+              {!qualification.is_active ? " (inactive)" : ""}
+            </option>
+          ))}
+        </Select>
+        <FieldHint>
+          When someone completes this taskbook, they receive the selected qualification on their
+          personnel file.
+        </FieldHint>
       </div>
       <div className="flex flex-wrap gap-4">
         <label className="flex items-center gap-2 text-sm">
@@ -151,9 +182,11 @@ function CreateTaskbookTypeForm({ pdipEnabled = false }: { pdipEnabled?: boolean
 
 function SortableTaskbookRow({
   taskbook,
+  qualifications,
   pdipEnabled,
 }: {
   taskbook: TaskbookTypeWithPrerequisites;
+  qualifications: Qualification[];
   pdipEnabled: boolean;
 }) {
   const router = useRouter();
@@ -164,6 +197,7 @@ function SortableTaskbookRow({
   const [autoIssued, setAutoIssued] = useState(taskbook.auto_issued);
   const [requestable, setRequestable] = useState(taskbook.requestable);
   const [pdipEligible, setPdipEligible] = useState(taskbook.pdip_eligible);
+  const [qualificationId, setQualificationId] = useState(taskbook.qualification_id ?? "");
   const [notes, setNotes] = useState(taskbook.notes);
   const [prerequisites, setPrerequisites] = useState<PrereqDraft[]>(
     taskbook.prerequisites.map((item) => ({ code: item.code, label: item.label }))
@@ -180,6 +214,9 @@ function SortableTaskbookRow({
     transition,
   };
 
+  const linkedQualification =
+    qualifications.find((q) => q.id === taskbook.qualification_id) ?? null;
+
   function reset() {
     setName(taskbook.name);
     setGroupKey(taskbook.group_key);
@@ -187,6 +224,7 @@ function SortableTaskbookRow({
     setAutoIssued(taskbook.auto_issued);
     setRequestable(taskbook.requestable);
     setPdipEligible(taskbook.pdip_eligible);
+    setQualificationId(taskbook.qualification_id ?? "");
     setNotes(taskbook.notes);
     setPrerequisites(
       taskbook.prerequisites.map((item) => ({ code: item.code, label: item.label }))
@@ -241,6 +279,11 @@ function SortableTaskbookRow({
                   PDIP
                 </Badge>
               ) : null}
+              {linkedQualification ? (
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  → {linkedQualification.name}
+                </Badge>
+              ) : null}
               {taskbook.prerequisites.length > 0 ? (
                 <span className="text-xs text-muted-foreground">
                   {taskbook.prerequisites.length} prereq
@@ -278,6 +321,7 @@ function SortableTaskbookRow({
                   auto_issued: autoIssued,
                   requestable: autoIssued ? false : requestable,
                   pdip_eligible: pdipEnabled ? pdipEligible : taskbook.pdip_eligible,
+                  qualification_id: qualificationId || null,
                   notes,
                   prerequisites,
                 });
@@ -315,6 +359,29 @@ function SortableTaskbookRow({
                 ))}
               </Select>
             </div>
+          </div>
+          <div className="space-y-1">
+            <FieldLabel htmlFor={`taskbook-qualification-${taskbook.id}`}>
+              Awards qualification on completion
+            </FieldLabel>
+            <Select
+              id={`taskbook-qualification-${taskbook.id}`}
+              value={qualificationId}
+              disabled={pending}
+              onChange={(e) => setQualificationId(e.target.value)}
+            >
+              <option value="">None</option>
+              {qualifications.map((qualification) => (
+                <option key={qualification.id} value={qualification.id}>
+                  {qualification.name}
+                  {!qualification.is_active ? " (inactive)" : ""}
+                </option>
+              ))}
+            </Select>
+            <FieldHint>
+              Completing this taskbook grants the selected qualification if the person does not
+              already have it.
+            </FieldHint>
           </div>
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm">
@@ -458,9 +525,11 @@ function SortableTaskbookRow({
 
 export function TaskbooksAdmin({
   taskbooks,
+  qualifications,
   pdipEnabled = false,
 }: {
   taskbooks: TaskbookTypeWithPrerequisites[];
+  qualifications: Qualification[];
   pdipEnabled?: boolean;
 }) {
   const router = useRouter();
@@ -498,13 +567,14 @@ export function TaskbooksAdmin({
 
   return (
     <div className="space-y-6">
-      <CreateTaskbookTypeForm pdipEnabled={pdipEnabled} />
+      <CreateTaskbookTypeForm qualifications={qualifications} pdipEnabled={pdipEnabled} />
       <div className="rounded-lg border">
         <div className="border-b px-3 py-2">
           <p className="text-sm font-medium">Available taskbooks</p>
           <p className="text-xs text-muted-foreground">
             Drag to reorder. Inactive taskbooks stay on existing records but cannot be newly
-            requested or issued.
+            requested or issued. Link a qualification so completing the taskbook awards it on the
+            personnel file.
             {pdipEnabled
               ? " Use “Counts for PDIP” so completed assignments of that taskbook appear on the PDIP report."
               : ""}
@@ -523,6 +593,7 @@ export function TaskbooksAdmin({
                   <SortableTaskbookRow
                     key={taskbook.id}
                     taskbook={taskbook}
+                    qualifications={qualifications}
                     pdipEnabled={pdipEnabled}
                   />
                 ))}

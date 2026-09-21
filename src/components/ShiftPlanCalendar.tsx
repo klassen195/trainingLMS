@@ -4,13 +4,9 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
-import {
-  addCalendarDaysIso,
-  isoDateLocal,
-  shiftDayStartForCalendarDate,
-} from "@/lib/dates";
-import { shiftColorForShiftDay } from "@/lib/shift-rotation";
+import { addCalendarDaysIso, isoDateLocal } from "@/lib/dates";
 import { shiftColorDayClass } from "@/lib/shift-plan-types";
+import { useShiftHelpers } from "@/components/ShiftScheduleProvider";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
@@ -61,12 +57,14 @@ export function ShiftPlanCalendar({
   shiftDate: string;
   currentShiftDate: string;
 }) {
+  const { colorForDay, labelForColor, dayStartForCalendarDate, preset } = useShiftHelpers();
   const selected = parseYearMonth(shiftDate);
   const [browse, setBrowse] = useState<{ year: number; month: number } | null>(null);
   const year = browse?.year ?? selected.year;
   const month = browse?.month ?? selected.month;
 
   const cells = useMemo(() => monthGrid(year, month), [year, month]);
+  const platoonNames = preset.platoons.map((c) => labelForColor(c)).join(", ");
 
   function shiftMonth(delta: number) {
     const next = new Date(year, month + delta, 1);
@@ -98,8 +96,9 @@ export function ShiftPlanCalendar({
         </div>
         <div className="mt-1 grid grid-cols-7 gap-1">
           {cells.map((cell) => {
-            const blockStart = shiftDayStartForCalendarDate(cell.iso);
-            const color = shiftColorForShiftDay(blockStart);
+            const blockStart = dayStartForCalendarDate(cell.iso);
+            const color = colorForDay(blockStart);
+            const label = labelForColor(color);
             const isSelected = blockStart === shiftDate;
             const isCurrent = blockStart === currentShiftDate;
             return (
@@ -114,7 +113,7 @@ export function ShiftPlanCalendar({
                   isCurrent && !isSelected && "font-bold"
                 )}
                 aria-current={isSelected ? "date" : undefined}
-                title={`${cell.iso} · ${color}`}
+                title={`${cell.iso} · ${label}`}
               >
                 {Number(cell.iso.slice(8))}
               </Link>
@@ -122,7 +121,8 @@ export function ShiftPlanCalendar({
           })}
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Days are colored by the on-duty shift (Green, Red, Blue). Click a day to open that 48-hour plan.
+          Days are colored by the on-duty shift ({platoonNames}). Click a day to open that{" "}
+          {preset.onDays === 1 ? "shift day" : `${preset.onDays * 24}-hour`} plan.
         </p>
       </CardContent>
     </Card>

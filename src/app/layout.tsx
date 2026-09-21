@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppHeader, AppHeaderFallback } from "@/components/AppHeader";
+import { ShiftScheduleGate } from "@/components/ShiftScheduleGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +31,13 @@ export default function RootLayout({
         <Suspense fallback={<AppHeaderFallback />}>
           <AppHeader />
         </Suspense>
-        <main className="min-h-[calc(100vh-5rem)] flex-1">{children}</main>
+        <Suspense
+          fallback={<main className="min-h-[calc(100vh-5rem)] flex-1" aria-busy="true" />}
+        >
+          <ShiftScheduleGate>
+            <main className="min-h-[calc(100vh-5rem)] flex-1">{children}</main>
+          </ShiftScheduleGate>
+        </Suspense>
         <footer className="mt-auto border-t bg-muted/50 py-8">
           <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
             <p>© {new Date().getFullYear()} Anchor Point</p>

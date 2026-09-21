@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { currentUserHasCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { listQualifications } from "@/lib/qualifications";
 import { listTaskbookTypes } from "@/lib/taskbooks";
 import { TaskbooksAdmin } from "@/components/TaskbooksAdmin";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +12,10 @@ export default async function AdminTaskbooksPage() {
   await requireAdmin();
   const supabase = await createSupabaseServerClient();
   const pdipEnabled = await currentUserHasCapability("access_pdip");
-  const { rows, error } = await listTaskbookTypes(supabase, { withPrerequisites: true });
+  const [{ rows, error }, { rows: qualifications }] = await Promise.all([
+    listTaskbookTypes(supabase, { withPrerequisites: true }),
+    listQualifications(supabase),
+  ]);
 
   if (
     error &&
@@ -46,7 +50,8 @@ export default async function AdminTaskbooksPage() {
             <h1 className="text-4xl font-bold">Taskbooks</h1>
           </div>
           <p className="text-lg text-muted-foreground">
-            Manage which taskbooks are available, how they group, prerequisites, and PDIP credit.
+            Manage which taskbooks are available, how they group, prerequisites, qualifications
+            awarded on completion, and PDIP credit.
           </p>
         </div>
         <Button variant="outline" asChild>
@@ -54,7 +59,11 @@ export default async function AdminTaskbooksPage() {
         </Button>
       </div>
 
-      <TaskbooksAdmin taskbooks={rows} pdipEnabled={pdipEnabled} />
+      <TaskbooksAdmin
+        taskbooks={rows}
+        qualifications={qualifications}
+        pdipEnabled={pdipEnabled}
+      />
     </div>
   );
 }

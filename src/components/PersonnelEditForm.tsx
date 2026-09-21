@@ -26,13 +26,13 @@ import {
   normalizeSwingUpRanks,
   parseFamilyKids,
   personnelDisplayName,
-  personnelShiftLabel,
-  personnelShifts,
   rankHasTitle,
   rankShowsPromotionDate,
   serializeFamilyKids,
   type FamilyKidInput,
 } from "@/lib/personnel-types";
+import { personnelShiftsForSchedule } from "@/lib/shift-schedule";
+import { useShiftHelpers } from "@/components/ShiftScheduleProvider";
 import type { Profile } from "@/lib/training-lms-types";
 import type { PermissionLevel } from "@/lib/permission-levels-types";
 import { profilePermissionLevelIds } from "@/lib/permission-levels";
@@ -126,6 +126,8 @@ export function PersonnelEditForm({
   /** Full admin editor (work, security, credentials). Self editors only get demographics + languages. */
   asAdminEditor?: boolean;
 }) {
+  const { config, labelForPersonnelShift } = useShiftHelpers();
+  const shiftOptions = personnelShiftsForSchedule(config);
   const [firstName, setFirstName] = useState(person.first_name ?? "");
   const [lastName, setLastName] = useState(person.last_name ?? "");
   const [rank, setRank] = useState(person.rank ?? "");
@@ -598,9 +600,9 @@ export function PersonnelEditForm({
                   onChange={(e) => setShift(e.target.value as PersonnelShift | "")}
                 >
                   <option value="">Not set</option>
-                  {personnelShifts.map((option) => (
+                  {shiftOptions.map((option) => (
                     <option key={option} value={option}>
-                      {personnelShiftLabel(option)}
+                      {labelForPersonnelShift(option)}
                     </option>
                   ))}
                 </Select>

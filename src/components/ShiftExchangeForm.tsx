@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { createShiftExchangeRequest } from "@/app/shift-exchange/actions";
-import { currentShiftDayStartIso, formatShiftDayRange } from "@/lib/dates";
 import type { ShiftExchangeCategory } from "@/lib/shift-exchange-types";
-import { shiftColorForShiftDay } from "@/lib/shift-rotation";
+import { useShiftHelpers } from "@/components/ShiftScheduleProvider";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError, FieldHint, FieldLabel, FieldSuccess } from "@/components/ui/Field";
@@ -26,6 +25,7 @@ export function ShiftExchangeForm({
   stationLabel: string;
   defaultShiftDate: string;
 }) {
+  const { colorForDay, labelForColor, formatDayRange, currentDayStart } = useShiftHelpers();
   const [category, setCategory] = useState<ShiftExchangeCategory>("station");
   const [shiftDate, setShiftDate] = useState(defaultShiftDate);
   const [requestNotes, setRequestNotes] = useState("");
@@ -47,7 +47,7 @@ export function ShiftExchangeForm({
         requestNotes: requestNotes.trim(),
       });
       setRequestNotes("");
-      setShiftDate(currentShiftDayStartIso());
+      setShiftDate(currentDayStart());
       setSuccess("Note submitted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit note");
@@ -83,7 +83,12 @@ export function ShiftExchangeForm({
 
           <div className="grid gap-1.5">
             <FieldLabel htmlFor="sx-shift">Shift</FieldLabel>
-            <Input id="sx-shift" type="text" value={shiftColorForShiftDay(shiftDate)} readOnly />
+            <Input
+              id="sx-shift"
+              type="text"
+              value={labelForColor(colorForDay(shiftDate))}
+              readOnly
+            />
           </div>
 
           <div className="grid gap-1.5">
@@ -96,7 +101,7 @@ export function ShiftExchangeForm({
               onChange={(e) => setShiftDate(e.target.value)}
               suppressHydrationWarning
             />
-            <FieldHint>Shift Set {formatShiftDayRange(shiftDate)}</FieldHint>
+            <FieldHint>Shift Set {formatDayRange(shiftDate)}</FieldHint>
           </div>
 
           <div className="grid gap-1.5 md:col-span-2">

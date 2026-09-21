@@ -5,6 +5,7 @@ import { requireCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingShiftExchangeTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { defaultShiftDateIso } from "@/lib/dates";
+import { getClientShiftSchedule } from "@/lib/shift-schedule-server";
 import { DatabaseSetup } from "@/components/DatabaseSetup";
 import { MissingProfileSetup } from "@/components/MissingProfileSetup";
 import { ShiftExchangeDatabaseSetup } from "@/components/ShiftExchangeDatabaseSetup";
@@ -39,6 +40,7 @@ export default async function ShiftExchangeStationPage({
 
   const supabase = await createSupabaseServerClient();
   const label = stationLabel(stationNumber);
+  const schedule = await getClientShiftSchedule();
 
   const { data: rows, error } = await supabase
     .from("shift_exchange_requests")
@@ -73,7 +75,10 @@ export default async function ShiftExchangeStationPage({
       </header>
 
       <div className="grid gap-6 xl:grid-cols-[420px_1fr] xl:items-start">
-        <ShiftExchangeForm stationLabel={label} defaultShiftDate={defaultShiftDateIso()} />
+        <ShiftExchangeForm
+          stationLabel={label}
+          defaultShiftDate={defaultShiftDateIso(schedule)}
+        />
         <RequestList rows={(rows ?? []) as ShiftExchangeRequestRow[]} currentUserId={auth.profile.id} />
       </div>
     </div>

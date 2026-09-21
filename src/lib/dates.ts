@@ -1,9 +1,9 @@
 import {
-  SHIFT_BLOCK_MS,
-  SHIFT_DAY_ANCHOR_ISO,
-  SHIFT_DAY_START_HOUR,
-  SHIFT_DAY_START_MINUTE,
-} from "@/lib/shift-rotation";
+  DEFAULT_SHIFT_SCHEDULE,
+  shiftBlockDays,
+  shiftBlockMs,
+  type ShiftScheduleConfig,
+} from "@/lib/shift-schedule";
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
@@ -143,28 +143,32 @@ export function toTimeInputValue(value: string | null | undefined) {
   return `${pad2(parsed.hours)}:${pad2(parsed.minutes)}`;
 }
 
-function shiftDayAnchorLocal() {
-  const [yStr, mStr, dStr] = SHIFT_DAY_ANCHOR_ISO.split("-");
+function shiftDayAnchorLocal(config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE) {
+  const [yStr, mStr, dStr] = config.anchorDate.split("-");
   const y = Number(yStr);
   const m = Number(mStr);
   const d = Number(dStr);
-  return new Date(y, m - 1, d, SHIFT_DAY_START_HOUR, SHIFT_DAY_START_MINUTE, 0, 0);
+  return new Date(y, m - 1, d, config.startHour, config.startMinute, 0, 0);
 }
 
 /**
  * Shift day start for the current local date/time.
- * Blocks run 08:00 → 08:00 two calendar days later (e.g. 5/26 08:00–5/28 08:00 => 5/26).
+ * Block length follows the department schedule (1 day for 24/48 & 24/72, 2 for 48/96).
  */
-export function currentShiftDayStartIso(now = new Date()) {
-  const anchor = shiftDayAnchorLocal();
+export function currentShiftDayStartIso(
+  now = new Date(),
+  config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE
+) {
+  const anchor = shiftDayAnchorLocal(config);
+  const blockMs = shiftBlockMs(config);
   const elapsed = now.getTime() - anchor.getTime();
-  const blockIndex = Math.floor(elapsed / SHIFT_BLOCK_MS);
-  const blockStart = new Date(anchor.getTime() + blockIndex * SHIFT_BLOCK_MS);
+  const blockIndex = Math.floor(elapsed / blockMs);
+  const blockStart = new Date(anchor.getTime() + blockIndex * blockMs);
   return isoDateLocal(blockStart);
 }
 
-export function defaultShiftDateIso() {
-  return currentShiftDayStartIso();
+export function defaultShiftDateIso(config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE) {
+  return currentShiftDayStartIso(new Date(), config);
 }
 
 /** Stable display (no locale) — avoids SSR/client hydration mismatches. */
@@ -173,10 +177,14 @@ export function formatShiftDate(isoDate: string) {
 }
 
 /**
- * Shift Day is a 2-day window based on the stored `shift_date` (start day).
- * Example: 2026-05-26 => "05/26-05/27"
+ * Shift Day display from the stored `shift_date` (start day).
+ * Example (48/96): 2026-05-26 => "05/26-05/27"
+ * Example (24/48): 2026-05-26 => "05/26"
  */
-export function formatShiftDayRange(startIso: string) {
+export function formatShiftDayRange(
+  startIso: string,
+  config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE
+) {
   const [yStr, mStr, dStr] = startIso.split("-");
   if (!yStr || !mStr || !dStr) return startIso;
 
@@ -185,12 +193,17 @@ export function formatShiftDayRange(startIso: string) {
   const d = Number(dStr);
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return startIso;
 
-  // Use local calendar math (matches how `isoDateLocal` is produced).
+  const onDays = shiftBlockDays(config);
   const start = new Date(y, m - 1, d);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 1);
-
   const startLabel = `${pad2(start.getMonth() + 1)}/${pad2(start.getDate())}`;
+
+  if (onDays <= 1) {
+    return startLabel;
+  }
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + (onDays - 1));
+
   const endLabel = `${pad2(end.getMonth() + 1)}/${pad2(end.getDate())}`;
 
   if (start.getFullYear() === end.getFullYear()) {
@@ -228,21 +241,36 @@ export function addCalendarDaysIso(isoDate: string, days: number) {
 
 /**
  * Shift-day start that owns this calendar date at local noon.
- * Both labeled days of a 48-hour block map to the same start date.
+ * All labeled days of a multi-day block map to the same start date.
  */
-export function shiftDayStartForCalendarDate(isoDate: string) {
+export function shiftDayStartForCalendarDate(
+  isoDate: string,
+  config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE
+) {
   const [yStr, mStr, dStr] = isoDate.split("-");
   const y = Number(yStr);
   const m = Number(mStr);
   const d = Number(dStr);
   if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return isoDate;
-  return currentShiftDayStartIso(new Date(y, m - 1, d, 12, 0, 0, 0));
+  return currentShiftDayStartIso(new Date(y, m - 1, d, 12, 0, 0, 0), config);
 }
 
-export function addShiftBlocks(shiftDayStartIso: string, blocks: number) {
-  return addCalendarDaysIso(shiftDayStartIso, blocks * 2);
+export function addShiftBlocks(
+  shiftDayStartIso: string,
+  blocks: number,
+  config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE
+) {
+  return addCalendarDaysIso(shiftDayStartIso, blocks * shiftBlockDays(config));
 }
 
-export function shiftBlockCalendarDays(shiftDayStartIso: string): [string, string] {
-  return [shiftDayStartIso, addCalendarDaysIso(shiftDayStartIso, 1)];
+export function shiftBlockCalendarDays(
+  shiftDayStartIso: string,
+  config: ShiftScheduleConfig = DEFAULT_SHIFT_SCHEDULE
+): string[] {
+  const onDays = shiftBlockDays(config);
+  const days: string[] = [];
+  for (let i = 0; i < onDays; i++) {
+    days.push(addCalendarDaysIso(shiftDayStartIso, i));
+  }
+  return days;
 }

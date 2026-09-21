@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { resolveShiftExchangeRequest } from "@/app/shift-exchange/actions";
-import { formatShiftDayRange, formatTimestamp } from "@/lib/dates";
+import { formatTimestamp } from "@/lib/dates";
 import { cn } from "@/lib/cn";
+import { useShiftHelpers } from "@/components/ShiftScheduleProvider";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FieldError } from "@/components/ui/Field";
@@ -51,6 +52,7 @@ export function RequestList({
   rows: ShiftExchangeRequestRow[];
   currentUserId: string | null;
 }) {
+  const { labelForColor, formatDayRange } = useShiftHelpers();
   const [tab, setTab] = useState<"open" | "resolved">("open");
   const [sortBy, setSortBy] = useState<"date" | "category">("date");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
@@ -226,7 +228,7 @@ export function RequestList({
                   <tr key={r.id} className="border-b border-border align-top">
                     <td className="px-3 py-3">
                       <div className="font-medium">
-                        {r.shift_color} — {formatShiftDayRange(r.shift_date)}
+                        {labelForColor(r.shift_color)} — {formatDayRange(r.shift_date)}
                       </div>
                     </td>
                     <td className="px-3 py-3">{formatCategoryLabel(r.category)}</td>

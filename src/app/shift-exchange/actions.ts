@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingShiftExchangeTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import type { ShiftExchangeCategory } from "@/lib/shift-exchange-types";
 import { shiftColorForShiftDay } from "@/lib/shift-rotation";
+import { getClientShiftSchedule } from "@/lib/shift-schedule-server";
 
 function throwIfDbError(error: PostgrestError | null) {
   if (!error) return;
@@ -34,11 +35,12 @@ export async function createShiftExchangeRequest(input: {
 }) {
   const profile = await requireUserProfile();
   const supabase = await createSupabaseServerClient();
+  const schedule = await getClientShiftSchedule();
 
   const { error } = await supabase.from("shift_exchange_requests").insert({
     client_id: profile.client_id,
     category: input.category,
-    shift_color: shiftColorForShiftDay(input.shiftDate),
+    shift_color: shiftColorForShiftDay(input.shiftDate, schedule),
     shift_date: input.shiftDate,
     station_or_unit: input.stationLabel,
     request_notes: input.requestNotes ?? "",

@@ -50,12 +50,14 @@ export function shiftPlanCreatorName(creator: ShiftPlanCreator | null | undefine
 export function shiftColorDayClass(color: ShiftColor) {
   if (color === "Green") return "bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30";
   if (color === "Red") return "bg-red-500/20 text-red-100 hover:bg-red-500/30";
+  if (color === "White") return "bg-slate-400/25 text-slate-100 hover:bg-slate-400/35";
   return "bg-sky-500/20 text-sky-100 hover:bg-sky-500/30";
 }
 
 export function shiftColorBadgeClass(color: ShiftColor) {
   if (color === "Green") return "border-emerald-500/40 bg-emerald-500/20 text-emerald-100";
   if (color === "Red") return "border-red-500/40 bg-red-500/20 text-red-100";
+  if (color === "White") return "border-slate-400/40 bg-slate-400/20 text-slate-100";
   return "border-sky-500/40 bg-sky-500/20 text-sky-100";
 }
 

@@ -7,12 +7,14 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingShiftPlanTable, supabaseErrorMessage } from "@/lib/supabase/errors";
 import { listLocations } from "@/lib/locations";
 import {
-  addCalendarDaysIso,
   isIsoDateString,
   normalizeTimeInput,
+  shiftBlockCalendarDays,
   shiftDayStartForCalendarDate,
 } from "@/lib/dates";
 import { shiftColorForShiftDay } from "@/lib/shift-rotation";
+import { getClientShiftSchedule } from "@/lib/shift-schedule-server";
+import type { ShiftScheduleConfig } from "@/lib/shift-schedule";
 import type { ShiftPlanScope } from "@/lib/shift-plan-types";
 
 function throwIfDbError(error: PostgrestError | null) {
@@ -30,9 +32,9 @@ function revalidateShiftPlan(shiftDate: string) {
   revalidatePath(`/shift-plan/${shiftDate}`);
 }
 
-function parseShiftDate(value: string) {
+function parseShiftDate(value: string, schedule: ShiftScheduleConfig) {
   if (!isIsoDateString(value)) throw new Error("Invalid shift date.");
-  return shiftDayStartForCalendarDate(value);
+  return shiftDayStartForCalendarDate(value, schedule);
 }
 
 function parseScope(value: string): ShiftPlanScope {
@@ -40,12 +42,16 @@ function parseScope(value: string): ShiftPlanScope {
   throw new Error("Choose battalion or station.");
 }
 
-function parseOptionalDate(value: string | null | undefined, shiftDate: string) {
+function parseOptionalDate(
+  value: string | null | undefined,
+  shiftDate: string,
+  schedule: ShiftScheduleConfig
+) {
   const trimmed = value?.trim() || "";
   if (!trimmed) return null;
   if (!isIsoDateString(trimmed)) throw new Error("Invalid item date.");
-  const dayTwo = addCalendarDaysIso(shiftDate, 1);
-  if (trimmed !== shiftDate && trimmed !== dayTwo) {
+  const days = shiftBlockCalendarDays(shiftDate, schedule);
+  if (!days.includes(trimmed)) {
     throw new Error("Item date must fall on this shift.");
   }
   return trimmed;
@@ -64,11 +70,12 @@ export type ShiftPlanItemInput = {
 
 async function resolvedItemFields(input: ShiftPlanItemInput) {
   const profile = await assertCapability("access_shift_plan");
-  const shiftDate = parseShiftDate(input.shiftDate);
+  const schedule = await getClientShiftSchedule();
+  const shiftDate = parseShiftDate(input.shiftDate, schedule);
   const title = input.title.trim();
   if (!title) throw new Error("Title is required.");
   const scope = parseScope(input.scope);
-  const itemDate = parseOptionalDate(input.itemDate, shiftDate);
+  const itemDate = parseOptionalDate(input.itemDate, shiftDate, schedule);
   const startTime = normalizeTimeInput(input.startTime);
   const endTime = normalizeTimeInput(input.endTime);
   if (endTime && !startTime) throw new Error("Set a start time before an end time.");
@@ -95,7 +102,7 @@ async function resolvedItemFields(input: ShiftPlanItemInput) {
       client_id: profile.client_id,
       created_by: profile.id,
       shift_date: shiftDate,
-      shift_color: shiftColorForShiftDay(shiftDate),
+      shift_color: shiftColorForShiftDay(shiftDate, schedule),
       scope,
       location_id: locationId,
       title,
@@ -138,7 +145,8 @@ export async function updateShiftPlanItem(input: ShiftPlanItemInput & { id: stri
 
 export async function deleteShiftPlanItem(input: { id: string; shiftDate: string }) {
   await assertCapability("access_shift_plan");
-  const shiftDate = parseShiftDate(input.shiftDate);
+  const schedule = await getClientShiftSchedule();
+  const shiftDate = parseShiftDate(input.shiftDate, schedule);
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("shift_plan_items").delete().eq("id", input.id);
   throwIfDbError(error);
@@ -151,7 +159,8 @@ export async function setShiftPlanItemCompleted(input: {
   completed: boolean;
 }) {
   await assertCapability("access_shift_plan");
-  const shiftDate = parseShiftDate(input.shiftDate);
+  const schedule = await getClientShiftSchedule();
+  const shiftDate = parseShiftDate(input.shiftDate, schedule);
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("shift_plan_items")
