@@ -95,8 +95,6 @@ export function ClientsAdminUi({
 
   return (
     <div className="space-y-8">
-      <PlatformModuleOrderEditor items={masterOrder} />
-
       <Card>
         <CardHeader>
           <CardTitle>Create client</CardTitle>
@@ -268,6 +266,8 @@ export function ClientsAdminUi({
           )}
         </CardContent>
       </Card>
+
+      <PlatformModuleOrderEditor items={masterOrder} />
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
