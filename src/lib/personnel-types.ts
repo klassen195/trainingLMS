@@ -98,6 +98,7 @@ export type PersonnelCertification = {
   storage_path: string | null;
   mime_type: string | null;
   sort_order: number;
+  pdip_eligible: boolean;
   created_by: string | null;
   created_at: string;
   /** Signed URL for thumbnail/preview; populated when loading a personnel file. */
@@ -401,7 +402,7 @@ export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_
 export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!profiles_primary_location_id_fkey(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)`;
 
 export const PERSONNEL_CERTIFICATION_SELECT =
-  "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, file_name, storage_path, mime_type, sort_order, created_by, created_at";
+  "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, file_name, storage_path, mime_type, sort_order, pdip_eligible, created_by, created_at";
 
 export const PERSONNEL_CERTIFICATION_SECTION_SELECT =
   "id, profile_id, name, sort_order, created_at";

@@ -9,6 +9,7 @@ export const APP_CAPABILITIES = [
   "access_assets",
   "access_personnel",
   "access_reports",
+  "access_pdip",
   "browse_program_catalog",
   "self_enroll",
   "author_training",
@@ -87,6 +88,11 @@ export const capabilityMeta: Record<
     group: "Modules",
     label: "Reports",
     description: "Open the Reports hub and export department reports.",
+  },
+  access_pdip: {
+    group: "Modules",
+    label: "PDIP",
+    description: "Mark certifications and qualifications for PDIP and run the PDIP report.",
   },
   browse_program_catalog: {
     group: "Training",

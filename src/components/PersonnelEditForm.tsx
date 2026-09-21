@@ -88,6 +88,7 @@ export function PersonnelEditForm({
   ytdHours,
   ytdYear,
   permissionLevels,
+  pdipEnabled = false,
 }: {
   person: PersonnelProfile;
   viewerId: string;
@@ -111,6 +112,7 @@ export function PersonnelEditForm({
   ytdHours: number;
   ytdYear: number;
   permissionLevels: PermissionLevel[];
+  pdipEnabled?: boolean;
 }) {
   const [firstName, setFirstName] = useState(person.first_name ?? "");
   const [lastName, setLastName] = useState(person.last_name ?? "");
@@ -675,6 +677,7 @@ export function PersonnelEditForm({
               sections={certificationSections}
               canManage
               canOrganize
+              pdipEnabled={pdipEnabled}
             />
           </CardContent>
         </Card>

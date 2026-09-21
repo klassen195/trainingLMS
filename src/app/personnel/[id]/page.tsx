@@ -339,6 +339,7 @@ export default async function PersonnelDetailPage({
               sections={certificationSections}
               canManage={canManage}
               canOrganize={canManage || isSelf}
+              pdipEnabled={viewerCaps.access_pdip}
             />
           </CardContent>
         </Card>

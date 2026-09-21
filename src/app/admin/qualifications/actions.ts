@@ -30,6 +30,7 @@ export type QualificationFormInput = {
   sort_order?: number;
   is_active?: boolean;
   notes?: string;
+  pdip_eligible?: boolean;
 };
 
 function revalidateQualifications() {
@@ -65,6 +66,7 @@ export async function createQualification(input: QualificationFormInput) {
       sort_order: sortOrder,
       is_active: input.is_active ?? true,
       notes: input.notes?.trim() ?? "",
+      pdip_eligible: input.pdip_eligible ?? false,
     })
     .select(QUALIFICATION_SELECT)
     .single();
@@ -102,6 +104,7 @@ export async function updateQualification(id: string, input: QualificationFormIn
       sort_order: input.sort_order ?? previous.sort_order,
       is_active: input.is_active ?? previous.is_active,
       notes: input.notes?.trim() ?? previous.notes,
+      pdip_eligible: input.pdip_eligible ?? previous.pdip_eligible,
     })
     .eq("id", id)
     .select(QUALIFICATION_SELECT)

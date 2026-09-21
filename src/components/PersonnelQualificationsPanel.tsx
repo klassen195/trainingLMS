@@ -209,6 +209,7 @@ function QualificationForm({
         sort_order: 0,
         is_active: false,
         notes: "",
+        pdip_eligible: false,
         created_at: "",
         updated_at: "",
       });

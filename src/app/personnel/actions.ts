@@ -455,6 +455,7 @@ export async function createPersonnelCertification(input: {
   notes?: string;
   fileName?: string | null;
   mimeType?: string | null;
+  pdipEligible?: boolean;
 }) {
   const admin = await requireAdmin();
   const name = input.name.trim();
@@ -484,6 +485,7 @@ export async function createPersonnelCertification(input: {
     storage_path: storagePath,
     mime_type: hasFile ? input.mimeType?.trim() || null : null,
     sort_order: sortOrder,
+    pdip_eligible: Boolean(input.pdipEligible),
     created_by: admin.id,
   });
   throwIfDbError(error);
@@ -504,6 +506,7 @@ export async function updatePersonnelCertification(input: {
   mimeType?: string | null;
   /** When true, remove any attached file. */
   removeFile?: boolean;
+  pdipEligible?: boolean;
 }) {
   await requireAdmin();
   const name = input.name.trim();
@@ -519,13 +522,16 @@ export async function updatePersonnelCertification(input: {
   throwIfDbError(existingError);
   if (!existing) throw new Error("Certification not found.");
 
-  const patch: Record<string, string | null> = {
+  const patch: Record<string, string | number | boolean | null> = {
     name,
     issuing_authority: input.issuingAuthority?.trim() || null,
     issued_on: input.issuedOn || null,
     expires_on: input.expiresOn || null,
     notes: input.notes?.trim() || null,
   };
+  if (input.pdipEligible !== undefined) {
+    patch.pdip_eligible = Boolean(input.pdipEligible);
+  }
 
   let storagePath: string | null = null;
   const attachingFile = Boolean(input.fileName?.trim()) && !input.removeFile;

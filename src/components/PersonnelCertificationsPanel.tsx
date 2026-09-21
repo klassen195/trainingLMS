@@ -76,12 +76,14 @@ export function PersonnelCertificationsPanel({
   sections = [],
   canManage,
   canOrganize = false,
+  pdipEnabled = false,
 }: {
   profileId: string;
   certifications: PersonnelCertification[];
   sections?: PersonnelCertificationSection[];
   canManage: boolean;
   canOrganize?: boolean;
+  pdipEnabled?: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -205,6 +207,7 @@ export function PersonnelCertificationsPanel({
           <CertificationForm
             profileId={profileId}
             initial={cert}
+            pdipEnabled={pdipEnabled}
             onDone={() => setEditingId(null)}
             onCancel={() => setEditingId(null)}
           />
@@ -218,6 +221,7 @@ export function PersonnelCertificationsPanel({
         profileId={profileId}
         canManage={canManage}
         canOrganize={canOrganize}
+        pdipEnabled={pdipEnabled}
         disabled={layoutLocked || draggingSection}
         onEdit={() => setEditingId(cert.id)}
       />
@@ -376,6 +380,7 @@ export function PersonnelCertificationsPanel({
             <div className="w-full rounded-lg border p-4">
               <CertificationForm
                 profileId={profileId}
+                pdipEnabled={pdipEnabled}
                 onDone={() => setAdding(false)}
                 onCancel={() => setAdding(false)}
               />
@@ -581,6 +586,7 @@ function CertificationCardRow({
   profileId,
   canManage,
   canOrganize,
+  pdipEnabled,
   disabled,
   onEdit,
 }: {
@@ -588,6 +594,7 @@ function CertificationCardRow({
   profileId: string;
   canManage: boolean;
   canOrganize: boolean;
+  pdipEnabled: boolean;
   disabled?: boolean;
   onEdit: () => void;
 }) {
@@ -634,7 +641,12 @@ function CertificationCardRow({
             />
           ) : null}
           <div className="min-w-0">
-            <p className="font-medium">{cert.name}</p>
+            <p className="font-medium">
+              {cert.name}
+              {pdipEnabled && cert.pdip_eligible ? (
+                <span className="ml-2 text-xs font-normal text-muted-foreground">PDIP</span>
+              ) : null}
+            </p>
             {cert.issuing_authority ? (
               <p className="text-sm text-muted-foreground">{cert.issuing_authority}</p>
             ) : null}
@@ -839,11 +851,13 @@ function ClearableDateField({
 function CertificationForm({
   profileId,
   initial,
+  pdipEnabled = false,
   onDone,
   onCancel,
 }: {
   profileId: string;
   initial?: PersonnelCertification;
+  pdipEnabled?: boolean;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -854,6 +868,7 @@ function CertificationForm({
   const [issuedOn, setIssuedOn] = useState(initial?.issued_on ?? "");
   const [expiresOn, setExpiresOn] = useState(initial?.expires_on ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [pdipEligible, setPdipEligible] = useState(Boolean(initial?.pdip_eligible));
   const [removeFile, setRemoveFile] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [convertingHeic, setConvertingHeic] = useState(false);
@@ -891,6 +906,7 @@ function CertificationForm({
                 fileName: file?.name ?? null,
                 mimeType: file?.type || null,
                 removeFile: removeFile && !file,
+                ...(pdipEnabled ? { pdipEligible } : {}),
               });
               if (file && storagePath) {
                 const supabase = createSupabaseBrowserClient();
@@ -912,6 +928,7 @@ function CertificationForm({
                 notes,
                 fileName: file?.name ?? null,
                 mimeType: file?.type || null,
+                pdipEligible: pdipEnabled ? pdipEligible : false,
               });
               if (file && storagePath) {
                 const supabase = createSupabaseBrowserClient();
@@ -963,6 +980,17 @@ function CertificationForm({
         <FieldLabel htmlFor="cert-notes">Notes</FieldLabel>
         <Textarea id="cert-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
       </div>
+      {pdipEnabled ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={pdipEligible}
+            disabled={pending}
+            onChange={(e) => setPdipEligible(e.target.checked)}
+          />
+          Counts for PDIP
+        </label>
+      ) : null}
       <div className="space-y-2">
         <FieldLabel htmlFor="cert-file">
           {existingFileName ? "Replace file" : "Upload file"}

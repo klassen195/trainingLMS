@@ -468,7 +468,8 @@ export async function getTrainingSession(sessionId: string): Promise<TrainingSes
     ...session,
     attendees: (attendees ?? []) as unknown as TrainingSessionDetail["attendees"],
     files: (files ?? []) as TrainingSessionFile[],
-    days: (days ?? []) as TrainingSessionDay[],
+    // Supabase types nested many-to-one joins as arrays; normalize via unknown.
+    days: (days ?? []) as unknown as TrainingSessionDay[],
   };
 }
 

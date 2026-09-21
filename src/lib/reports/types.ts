@@ -24,6 +24,14 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     requiredCapabilities: ["access_personnel"],
   },
   {
+    id: "pdip",
+    title: "PDIP",
+    description:
+      "Active PDIP-eligible certifications and qualifications for a selected person, with totals.",
+    href: "/reports/pdip",
+    requiredCapabilities: ["access_personnel", "access_pdip"],
+  },
+  {
     id: "fleet-status",
     title: "Fleet status",
     description: "Apparatus status, open work orders, and preventive maintenance due dates.",

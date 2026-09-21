@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
+import { currentUserHasCapability } from "@/lib/capability-access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingQualificationsTable } from "@/lib/supabase/errors";
 import {
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 export default async function AdminQualificationsPage() {
   await requireAdmin();
   const supabase = await createSupabaseServerClient();
+  const pdipEnabled = await currentUserHasCapability("access_pdip");
 
   const { data, error } = await supabase
     .from("qualifications")
@@ -56,7 +58,10 @@ export default async function AdminQualificationsPage() {
         </Button>
       </div>
 
-      <QualificationsAdmin qualifications={(data ?? []) as Qualification[]} />
+      <QualificationsAdmin
+        qualifications={(data ?? []) as Qualification[]}
+        pdipEnabled={pdipEnabled}
+      />
     </div>
   );
 }

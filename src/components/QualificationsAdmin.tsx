@@ -33,9 +33,10 @@ import { Button } from "@/components/ui/Button";
 import { FieldError, FieldLabel } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 
-export function CreateQualificationForm() {
+export function CreateQualificationForm({ pdipEnabled = false }: { pdipEnabled?: boolean }) {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [pdipEligible, setPdipEligible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -47,8 +48,12 @@ export function CreateQualificationForm() {
         setError(null);
         startTransition(async () => {
           try {
-            await createQualification({ name });
+            await createQualification({
+              name,
+              pdip_eligible: pdipEnabled ? pdipEligible : false,
+            });
             setName("");
+            setPdipEligible(false);
             router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create qualification");
@@ -68,6 +73,17 @@ export function CreateQualificationForm() {
           onChange={(e) => setName(e.target.value)}
         />
       </div>
+      {pdipEnabled ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={pdipEligible}
+            disabled={pending}
+            onChange={(e) => setPdipEligible(e.target.checked)}
+          />
+          Counts for PDIP
+        </label>
+      ) : null}
       {error ? <FieldError>{error}</FieldError> : null}
       <Button type="submit" size="sm" disabled={pending || !name.trim()}>
         {pending ? "Adding…" : "Add qualification"}
@@ -76,11 +92,18 @@ export function CreateQualificationForm() {
   );
 }
 
-function SortableQualificationRow({ qualification }: { qualification: Qualification }) {
+function SortableQualificationRow({
+  qualification,
+  pdipEnabled,
+}: {
+  qualification: Qualification;
+  pdipEnabled: boolean;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(qualification.name);
   const [isActive, setIsActive] = useState(qualification.is_active);
+  const [pdipEligible, setPdipEligible] = useState(qualification.pdip_eligible);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -96,6 +119,7 @@ function SortableQualificationRow({ qualification }: { qualification: Qualificat
   function reset() {
     setName(qualification.name);
     setIsActive(qualification.is_active);
+    setPdipEligible(qualification.pdip_eligible);
     setError(null);
     setEditing(false);
   }
@@ -128,6 +152,11 @@ function SortableQualificationRow({ qualification }: { qualification: Qualificat
                   Inactive
                 </Badge>
               ) : null}
+              {pdipEnabled && qualification.pdip_eligible ? (
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+                  PDIP
+                </Badge>
+              ) : null}
             </div>
           </div>
           <Button
@@ -137,6 +166,7 @@ function SortableQualificationRow({ qualification }: { qualification: Qualificat
             onClick={() => {
               setName(qualification.name);
               setIsActive(qualification.is_active);
+              setPdipEligible(qualification.pdip_eligible);
               setError(null);
               setEditing(true);
             }}
@@ -156,6 +186,7 @@ function SortableQualificationRow({ qualification }: { qualification: Qualificat
                   name,
                   sort_order: qualification.sort_order,
                   is_active: isActive,
+                  pdip_eligible: pdipEnabled ? pdipEligible : qualification.pdip_eligible,
                 });
                 setEditing(false);
                 router.refresh();
@@ -177,15 +208,28 @@ function SortableQualificationRow({ qualification }: { qualification: Qualificat
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-            <label className="flex h-8 items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isActive}
-                disabled={pending}
-                onChange={(e) => setIsActive(e.target.checked)}
-              />
-              Active
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex h-8 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isActive}
+                  disabled={pending}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                />
+                Active
+              </label>
+              {pdipEnabled ? (
+                <label className="flex h-8 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={pdipEligible}
+                    disabled={pending}
+                    onChange={(e) => setPdipEligible(e.target.checked)}
+                  />
+                  PDIP
+                </label>
+              ) : null}
+            </div>
           </div>
           {error ? <FieldError>{error}</FieldError> : null}
           <div className="flex flex-wrap gap-2">
@@ -230,8 +274,10 @@ function SortableQualificationRow({ qualification }: { qualification: Qualificat
 
 export function QualificationsAdmin({
   qualifications,
+  pdipEnabled = false,
 }: {
   qualifications: Qualification[];
+  pdipEnabled?: boolean;
 }) {
   const [ordered, setOrdered] = useState(qualifications);
   const [error, setError] = useState<string | null>(null);
@@ -294,7 +340,11 @@ export function QualificationsAdmin({
               >
                 <ul className="overflow-hidden rounded-md border">
                   {ordered.map((row) => (
-                    <SortableQualificationRow key={row.id} qualification={row} />
+                    <SortableQualificationRow
+                      key={row.id}
+                      qualification={row}
+                      pdipEnabled={pdipEnabled}
+                    />
                   ))}
                 </ul>
               </SortableContext>
@@ -302,7 +352,7 @@ export function QualificationsAdmin({
           </>
         )}
       </div>
-      <CreateQualificationForm />
+      <CreateQualificationForm pdipEnabled={pdipEnabled} />
     </div>
   );
 }

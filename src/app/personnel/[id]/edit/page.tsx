@@ -32,6 +32,7 @@ import {
 import { PersonnelDatabaseSetup } from "@/components/PersonnelDatabaseSetup";
 import { PersonnelEditForm } from "@/components/PersonnelEditForm";
 import { PersonnelBackToFileButton } from "@/components/PersonnelSectionNavButtons";
+import { currentUserHasCapability } from "@/lib/capability-access";
 
 export default async function PersonnelEditPage({
   params,
@@ -41,6 +42,7 @@ export default async function PersonnelEditPage({
   const admin = await requireAdmin();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
+  const pdipEnabled = await currentUserHasCapability("access_pdip");
 
   const { profile, error } = await fetchPersonnelProfile(supabase, id);
   if (isMissingTrainingLmsTables(error) || isMissingPersonnelTables(error)) {
@@ -177,6 +179,7 @@ export default async function PersonnelEditPage({
         ytdHours={ytdHours}
         ytdYear={ytdYear}
         permissionLevels={permissionLevels}
+        pdipEnabled={pdipEnabled}
       />
     </div>
   );

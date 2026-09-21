@@ -15,6 +15,7 @@ export const CLIENT_MODULES = [
   "approval_tracker",
   "author_training",
   "access_reports",
+  "access_pdip",
 ] as const satisfies readonly AppCapability[];
 
 export type ClientModuleKey = (typeof CLIENT_MODULES)[number];
@@ -44,6 +45,7 @@ export function clientModuleLabel(key: ClientModuleKey): string {
   if (key === "approval_tracker") return "Policy Tracker";
   if (key === "document_training") return "Training";
   if (key === "access_reports") return "Reports";
+  if (key === "access_pdip") return "PDIP";
   return capabilityMeta[key].label;
 }
 
@@ -82,12 +84,16 @@ export function masterModuleKeys(
   );
 }
 
+function defaultModuleEnabled(module_key: ClientModuleKey): boolean {
+  return module_key !== "access_pdip";
+}
+
 export function defaultClientModules(
   masterOrder?: readonly PlatformModuleOrderItem[] | readonly ClientModuleKey[] | null
 ): ClientModule[] {
   return masterModuleKeys(masterOrder).map((module_key, index) => ({
     module_key,
-    enabled: true,
+    enabled: defaultModuleEnabled(module_key),
     sort_order: index + 1,
   }));
 }
@@ -110,7 +116,7 @@ export function normalizeClientModules(
     const existing = byKey.get(module_key);
     return {
       module_key,
-      enabled: existing?.enabled ?? true,
+      enabled: existing?.enabled ?? defaultModuleEnabled(module_key),
       sort_order: existing?.sort_order ?? index + 1,
     };
   });

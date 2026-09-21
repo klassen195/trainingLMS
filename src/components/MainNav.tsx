@@ -52,9 +52,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/Sheet";
 
-const MODULE_NAV: Record<
-  ClientModuleKey,
-  { href: string; label: string; icon: LucideIcon }
+const MODULE_NAV: Partial<
+  Record<ClientModuleKey, { href: string; label: string; icon: LucideIcon }>
 > = {
   access_shift_exchange: { href: "/shift-exchange", label: "Shift Exchange", icon: ArrowLeftRight },
   access_shift_plan: { href: "/shift-plan", label: "Shift Plan", icon: CalendarDays },
@@ -86,6 +85,7 @@ function authNavItemsFor(options: {
   return order.flatMap((key) => {
     if (!options.enabledModules[key]) return [];
     const def = MODULE_NAV[key];
+    if (!def) return [];
     return [{ href: def.href, label: def.label, icon: def.icon }];
   });
 }
