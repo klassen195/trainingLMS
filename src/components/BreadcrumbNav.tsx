@@ -143,6 +143,8 @@ export function BreadcrumbNav() {
       breadcrumbs.push({ label: "LMS progress" });
     } else if (paths[1] === "ppe-due") {
       breadcrumbs.push({ label: "PPE due" });
+    } else if (paths[1] === "pdip") {
+      breadcrumbs.push({ label: "PDIP" });
     } else if (paths[1]) {
       breadcrumbs.push({
         label: paths[1]

@@ -11,6 +11,7 @@ import {
   fetchPersonnelProfile,
   fetchPersonnelQualifications,
   fetchPersonnelRecognitions,
+  fetchPersonnelLanguages,
   fetchPersonnelTaskbooks,
   fetchPersonnelTaskbookPrerequisiteChecks,
   fetchPendingTaskbookApprovals,
@@ -54,6 +55,7 @@ import {
 import { PersonnelNotesPanel } from "@/components/PersonnelNotesPanel";
 import { PersonnelQualificationsPanel } from "@/components/PersonnelQualificationsPanel";
 import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPanel";
+import { PersonnelLanguagesPanel } from "@/components/PersonnelLanguagesPanel";
 import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
 import { PersonnelDirectoryButton, PersonnelEditButton } from "@/components/PersonnelSectionNavButtons";
@@ -67,6 +69,7 @@ import {
   isMissingTrainingLmsTables,
 } from "@/lib/supabase/errors";
 import { listQualifications } from "@/lib/qualifications";
+import { listTaskbookTypes } from "@/lib/taskbooks";
 
 export default async function PersonnelDetailPage({
   params,
@@ -104,11 +107,13 @@ export default async function PersonnelDetailPage({
     { rows: taskbooks, error: taskbooksError },
     { rows: prerequisiteChecks, error: prereqError },
     { rows: recognitions, error: recognitionsError },
+    { rows: languages, error: languagesError },
     { rows: pendingApprovals, error: pendingError },
     { programs, error: trainingError },
     { hours: ytdHours, year: ytdYear, error: ytdError },
     { hasSupervisor, error: supervisorCoverageError },
     { rows: qualificationCatalog, error: catalogError },
+    { rows: taskbookCatalog, error: taskbookCatalogError },
     { rows: emsLevelCatalog, error: emsCatalogError },
     { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
     viewerCaps,
@@ -123,6 +128,7 @@ export default async function PersonnelDetailPage({
     fetchPersonnelTaskbooks(supabase, id),
     fetchPersonnelTaskbookPrerequisiteChecks(supabase, id),
     fetchPersonnelRecognitions(supabase, id),
+    fetchPersonnelLanguages(supabase, id),
     isSelf
       ? fetchPendingTaskbookApprovals(supabase, viewer)
       : Promise.resolve({ rows: [], error: null }),
@@ -130,6 +136,7 @@ export default async function PersonnelDetailPage({
     fetchPersonnelYtdTrainingHours(supabase, id),
     personHasSupervisorCoverage(supabase, profile),
     listQualifications(supabase, { activeOnly: true }),
+    listTaskbookTypes(supabase, { withPrerequisites: true }),
     listEmsLevels(supabase, { activeOnly: true }),
     listEmsClearanceLevels(supabase, { activeOnly: true }),
     getProfileCapabilities(viewer),
@@ -147,8 +154,12 @@ export default async function PersonnelDetailPage({
     (taskbooksError && isMissingPersonnelTables(taskbooksError)) ||
     (prereqError && isMissingPersonnelTables(prereqError)) ||
     (recognitionsError && isMissingPersonnelTables(recognitionsError)) ||
+    (languagesError && isMissingPersonnelTables(languagesError)) ||
     (pendingError && isMissingPersonnelTables(pendingError)) ||
-    (supervisorCoverageError && isMissingPersonnelTables(supervisorCoverageError))
+    (supervisorCoverageError && isMissingPersonnelTables(supervisorCoverageError)) ||
+    (taskbookCatalogError &&
+      (taskbookCatalogError.code === "PGRST205" ||
+        taskbookCatalogError.message.includes("taskbook_types")))
   ) {
     return <PersonnelDatabaseSetup />;
   }
@@ -162,13 +173,19 @@ export default async function PersonnelDetailPage({
   if (taskbooksError) throw taskbooksError;
   if (prereqError) throw prereqError;
   if (recognitionsError) throw recognitionsError;
+  if (languagesError) throw languagesError;
   if (pendingError) throw pendingError;
   if (trainingError) throw trainingError;
   if (ytdError) throw ytdError;
   if (supervisorCoverageError) throw supervisorCoverageError;
   if (catalogError) throw new Error(catalogError.message);
+  if (taskbookCatalogError) throw new Error(taskbookCatalogError.message);
   if (emsCatalogError) throw new Error(emsCatalogError.message);
   if (emsClearanceCatalogError) throw new Error(emsClearanceCatalogError.message);
+
+  const canEditOwnFile = isSelf && viewerCaps.edit_own_personnel;
+  const canEditFile = canManage || canEditOwnFile;
+  const canManageLanguages = canManage || canEditOwnFile;
 
   const { data: allPrograms } = canManage
     ? await supabase.from("programs").select("id, title, status").order("title")
@@ -264,6 +281,16 @@ export default async function PersonnelDetailPage({
         <Card>
           <CardContent className="space-y-6 pt-6">
             <PersonnelFieldGrid rows={demographicsRows} />
+            <div className="space-y-3 border-t pt-6">
+              <h3 className="text-sm font-medium">Languages spoken</h3>
+              <PersonnelLanguagesPanel
+                profileId={id}
+                languages={languages}
+                canManage={canManageLanguages}
+                canVerify={viewerCaps.verify_personnel_languages}
+                pdipEnabled={viewerCaps.access_pdip}
+              />
+            </div>
             <div className="space-y-3 border-t pt-6">
               <h3 className="text-sm font-medium">Family</h3>
               {familyDates.length === 0 ? (
@@ -368,6 +395,7 @@ export default async function PersonnelDetailPage({
         <PersonnelTaskbooksPanel
           profileId={id}
           taskbooks={taskbooks}
+          catalog={taskbookCatalog}
           prerequisiteChecks={prerequisiteChecks}
           pendingApprovals={isSelf ? pendingApprovals : []}
           canRequest={isSelf}
@@ -375,6 +403,7 @@ export default async function PersonnelDetailPage({
           canDecide={canManage || isSupervisorOfPerson}
           canIssue={canManage}
           hasSupervisor={hasSupervisor}
+          pdipEnabled={viewerCaps.access_pdip}
         />
       ),
     },
@@ -507,7 +536,7 @@ export default async function PersonnelDetailPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <PersonnelDirectoryButton />
-          {canManage ? <PersonnelEditButton personId={id} /> : null}
+          {canEditFile ? <PersonnelEditButton personId={id} /> : null}
         </div>
       </div>
 

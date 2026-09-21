@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  BookOpen,
   Building2,
   ChevronRight,
   ClipboardCheck,
@@ -35,6 +36,23 @@ type AdminGroup = {
 
 const ADMIN_GROUPS: AdminGroup[] = [
   {
+    title: "Site",
+    items: [
+      {
+        href: "/admin/modules",
+        label: "Module order",
+        description: "Drag to set main navigation order",
+        icon: LayoutGrid,
+      },
+      {
+        href: "/admin/branding",
+        label: "Branding",
+        description: "Department logo for reports and letterhead",
+        icon: Image,
+      },
+    ],
+  },
+  {
     title: "People",
     items: [
       {
@@ -48,18 +66,6 @@ const ADMIN_GROUPS: AdminGroup[] = [
         label: "Permissions",
         description: "Named levels and capability matrix",
         icon: Shield,
-      },
-      {
-        href: "/admin/modules",
-        label: "Module order",
-        description: "Drag to set main navigation order",
-        icon: LayoutGrid,
-      },
-      {
-        href: "/admin/branding",
-        label: "Branding",
-        description: "Department logo for reports and letterhead",
-        icon: Image,
       },
       {
         href: "/admin/ems-levels",
@@ -89,6 +95,12 @@ const ADMIN_GROUPS: AdminGroup[] = [
         label: "Qualifications",
         description: "Qualifications granted by training",
         icon: BadgeCheck,
+      },
+      {
+        href: "/admin/taskbooks",
+        label: "Taskbooks",
+        description: "Available taskbooks and prerequisites",
+        icon: BookOpen,
       },
       {
         href: "/admin/upcoming-training-ops",

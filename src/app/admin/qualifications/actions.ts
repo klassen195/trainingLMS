@@ -133,7 +133,7 @@ export async function deleteQualification(id: string) {
 
   const qualification = existing as Qualification;
 
-  const [{ count: sessionCount, error: sessionCountError }, { count: personnelCount, error: personnelCountError }] =
+  const [{ count: sessionCount, error: sessionCountError }, { count: personnelCount, error: personnelCountError }, { count: taskbookCount, error: taskbookCountError }] =
     await Promise.all([
       supabase
         .from("training_sessions")
@@ -143,20 +143,29 @@ export async function deleteQualification(id: string) {
         .from("personnel_qualifications")
         .select("id", { count: "exact", head: true })
         .eq("qualification_id", qualification.id),
+      supabase
+        .from("taskbook_types")
+        .select("id", { count: "exact", head: true })
+        .eq("qualification_id", qualification.id),
     ]);
 
   if (sessionCountError) throw new Error(supabaseErrorMessage(sessionCountError));
   if (personnelCountError) throw new Error(supabaseErrorMessage(personnelCountError));
+  if (taskbookCountError) throw new Error(supabaseErrorMessage(taskbookCountError));
 
   const sessions = sessionCount ?? 0;
   const people = personnelCount ?? 0;
-  if (sessions > 0 || people > 0) {
+  const taskbooks = taskbookCount ?? 0;
+  if (sessions > 0 || people > 0 || taskbooks > 0) {
     const parts: string[] = [];
     if (sessions > 0) {
       parts.push(`${sessions} training report${sessions === 1 ? "" : "s"}`);
     }
     if (people > 0) {
       parts.push(`${people} personnel assignment${people === 1 ? "" : "s"}`);
+    }
+    if (taskbooks > 0) {
+      parts.push(`${taskbooks} taskbook${taskbooks === 1 ? "" : "s"}`);
     }
     throw new Error(
       `Cannot delete "${qualification.name}" while it is still used by ${parts.join(" and ")}. Deactivate it instead.`

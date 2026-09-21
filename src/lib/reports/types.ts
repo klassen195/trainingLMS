@@ -27,7 +27,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     id: "pdip",
     title: "PDIP",
     description:
-      "Active PDIP-eligible certifications and qualifications for a selected person, with totals.",
+      "Active PDIP-eligible certifications, qualifications, completed taskbooks, and verified languages for a selected person, with totals.",
     href: "/reports/pdip",
     requiredCapabilities: ["access_personnel", "access_pdip"],
   },
@@ -71,6 +71,10 @@ export const REPORT_CATALOG: ReportDefinition[] = [
 export type ReportColumn = {
   key: string;
   header: string;
+  /** Defaults to text. Image cells expect a URL string (and optional mime/fileName companion keys). */
+  format?: "text" | "image";
+  mimeKey?: string;
+  fileNameKey?: string;
 };
 
 export type ReportBranding = {

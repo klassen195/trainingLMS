@@ -13,6 +13,7 @@ import type {
   PersonnelProfile,
   PersonnelQualification,
   PersonnelRecognition,
+  PersonnelLanguage,
   PersonnelShift,
   PersonnelTaskbook,
   PersonnelTaskbookPrerequisiteCheck,
@@ -57,7 +58,9 @@ import {
 import { PersonnelNotesPanel } from "@/components/PersonnelNotesPanel";
 import { PersonnelQualificationsPanel } from "@/components/PersonnelQualificationsPanel";
 import { PersonnelRecognitionsPanel } from "@/components/PersonnelRecognitionsPanel";
+import { PersonnelLanguagesPanel } from "@/components/PersonnelLanguagesPanel";
 import { PersonnelTaskbooksPanel } from "@/components/PersonnelTaskbooksPanel";
+import type { TaskbookTypeWithPrerequisites } from "@/lib/taskbook-types";
 import { PersonnelTrainingPanel } from "@/components/PersonnelTrainingPanel";
 import { PermissionLevelPicker } from "@/components/PermissionLevelPicker";
 import { Button } from "@/components/ui/Button";
@@ -81,14 +84,18 @@ export function PersonnelEditForm({
   documents,
   notes,
   taskbooks,
+  taskbookCatalog = [],
   prerequisiteChecks = [],
   recognitions = [],
+  languages = [],
   programs,
   allPrograms,
   ytdHours,
   ytdYear,
   permissionLevels,
   pdipEnabled = false,
+  canVerifyLanguages = false,
+  asAdminEditor = true,
 }: {
   person: PersonnelProfile;
   viewerId: string;
@@ -105,14 +112,19 @@ export function PersonnelEditForm({
   documents: PersonnelDocument[];
   notes: PersonnelNote[];
   taskbooks: PersonnelTaskbook[];
+  taskbookCatalog?: TaskbookTypeWithPrerequisites[];
   prerequisiteChecks?: PersonnelTaskbookPrerequisiteCheck[];
   recognitions?: PersonnelRecognition[];
+  languages?: PersonnelLanguage[];
   programs: PersonnelTrainingProgram[];
   allPrograms: { id: string; title: string; status: string }[];
   ytdHours: number;
   ytdYear: number;
   permissionLevels: PermissionLevel[];
   pdipEnabled?: boolean;
+  canVerifyLanguages?: boolean;
+  /** Full admin editor (work, security, credentials). Self editors only get demographics + languages. */
+  asAdminEditor?: boolean;
 }) {
   const [firstName, setFirstName] = useState(person.first_name ?? "");
   const [lastName, setLastName] = useState(person.last_name ?? "");
@@ -162,7 +174,7 @@ export function PersonnelEditForm({
     setError(null);
     startTransition(async () => {
       try {
-        if (permissionLevelIds.length === 0) {
+        if (asAdminEditor && permissionLevelIds.length === 0) {
           setError("Assign at least one permission level.");
           return;
         }
@@ -353,15 +365,27 @@ export function PersonnelEditForm({
                   onChange={(e) => setEmergencyContacts(e.target.value)}
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <FieldLabel htmlFor="hrInfo">HR info</FieldLabel>
-                <Textarea
-                  id="hrInfo"
-                  rows={3}
-                  value={hrInfo}
-                  onChange={(e) => setHrInfo(e.target.value)}
-                />
-              </div>
+              {asAdminEditor ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <FieldLabel htmlFor="hrInfo">HR info</FieldLabel>
+                  <Textarea
+                    id="hrInfo"
+                    rows={3}
+                    value={hrInfo}
+                    onChange={(e) => setHrInfo(e.target.value)}
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="space-y-4 border-t pt-4">
+              <p className="text-sm font-medium">Languages spoken</p>
+              <PersonnelLanguagesPanel
+                profileId={person.id}
+                languages={languages}
+                canManage
+                canVerify={canVerifyLanguages}
+                pdipEnabled={pdipEnabled}
+              />
             </div>
             <div className="space-y-4 border-t pt-4">
               <p className="text-sm font-medium">Family</p>
@@ -397,14 +421,14 @@ export function PersonnelEditForm({
                 </div>
                 <div className="space-y-3 sm:col-span-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <FieldLabel>Kids</FieldLabel>
+                    <FieldLabel>Children</FieldLabel>
                     <Button
                       type="button"
                       size="sm"
                       variant="secondary"
                       onClick={() => setKids((prev) => [...prev, { name: "", birthday: "" }])}
                     >
-                      Add kid
+                      Add child
                     </Button>
                   </div>
                   <ul className="space-y-2">
@@ -414,9 +438,9 @@ export function PersonnelEditForm({
                         className="grid max-w-xl gap-2 sm:grid-cols-[minmax(0,14rem)_11rem_auto] sm:items-end"
                       >
                         <div className="space-y-1.5">
-                          <FieldLabel htmlFor={`kid-name-${index}`}>Name</FieldLabel>
+                          <FieldLabel htmlFor={`child-name-${index}`}>Name</FieldLabel>
                           <Input
-                            id={`kid-name-${index}`}
+                            id={`child-name-${index}`}
                             value={kid.name}
                             onChange={(e) => {
                               const value = e.target.value;
@@ -427,9 +451,9 @@ export function PersonnelEditForm({
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <FieldLabel htmlFor={`kid-birthday-${index}`}>Birthday</FieldLabel>
+                          <FieldLabel htmlFor={`child-birthday-${index}`}>Birthday</FieldLabel>
                           <Input
-                            id={`kid-birthday-${index}`}
+                            id={`child-birthday-${index}`}
                             type="date"
                             value={kid.birthday}
                             onChange={(e) => {
@@ -706,12 +730,14 @@ export function PersonnelEditForm({
         <PersonnelTaskbooksPanel
           profileId={person.id}
           taskbooks={taskbooks}
+          catalog={taskbookCatalog}
           prerequisiteChecks={prerequisiteChecks}
           canRequest={false}
           canCheckPrerequisites={viewerId === person.id}
           canDecide
           canIssue
           hasSupervisor={Boolean(person.supervisor_id)}
+          pdipEnabled={pdipEnabled}
         />
       ),
     },
@@ -878,5 +904,9 @@ export function PersonnelEditForm({
     },
   ];
 
-  return <PersonnelFileLayout sections={sections} />;
+  const visibleSections = asAdminEditor
+    ? sections
+    : sections.filter((section) => section.id === "demographics");
+
+  return <PersonnelFileLayout sections={visibleSections} />;
 }

@@ -30,6 +30,8 @@ export const APP_CAPABILITIES = [
   "resolve_maintenance",
   "manage_users",
   "edit_ems_clearance_log",
+  "verify_personnel_languages",
+  "edit_own_personnel",
   "manage_incidents",
 ] as const;
 
@@ -92,7 +94,8 @@ export const capabilityMeta: Record<
   access_pdip: {
     group: "Modules",
     label: "PDIP",
-    description: "Mark certifications and qualifications for PDIP and run the PDIP report.",
+    description:
+      "Mark certifications, qualifications, and taskbooks for PDIP; verified languages also count. Run the PDIP report.",
   },
   browse_program_catalog: {
     group: "Training",
@@ -193,6 +196,17 @@ export const capabilityMeta: Record<
     group: "Administration",
     label: "Edit EMS clearance log",
     description: "Add, edit, and delete EMS clearance history on personnel files.",
+  },
+  verify_personnel_languages: {
+    group: "Administration",
+    label: "Verify personnel languages",
+    description: "Mark languages spoken on personnel files as verified (counts for PDIP).",
+  },
+  edit_own_personnel: {
+    group: "Administration",
+    label: "Edit own personnel file",
+    description:
+      "Edit your own demographics and languages. Does not grant language verification.",
   },
   manage_incidents: {
     group: "Assets & operations",

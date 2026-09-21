@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin, requireUserProfile } from "@/lib/auth";
-import { assertCapability } from "@/lib/capability-access";
+import { assertCapability, currentUserHasCapability } from "@/lib/capability-access";
+import type { Profile } from "@/lib/training-lms-types";
 import { isoDateLocal } from "@/lib/dates";
 import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import {
@@ -16,6 +17,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   buildPersonnelCertificationStoragePath,
   buildPersonnelDocumentStoragePath,
+  buildPersonnelTaskbookStoragePath,
   PERSONNEL_DOCUMENTS_BUCKET,
   sanitizePersonnelFileName,
   composePersonnelDisplayName,
@@ -30,7 +32,9 @@ import {
   type PersonnelShift,
 } from "@/lib/personnel-types";
 import { listShiftBattalionChiefIds, personHasSupervisorCoverage } from "@/lib/personnel";
-import { autoIssuedTaskbooks, swingUpRanks, taskbookRanks, getTaskbookPrerequisites } from "@/lib/labels";
+import { swingUpRanks } from "@/lib/labels";
+import { listTaskbookTypes, findTaskbookTypeByName } from "@/lib/taskbooks";
+import type { TaskbookTypeWithPrerequisites } from "@/lib/taskbook-types";
 import { isRecognitionAwardId } from "@/lib/recognition-awards";
 import { normalizeAuthEmail } from "@/lib/auth-messages";
 import { formatPhoneInput } from "@/lib/phone";
@@ -50,6 +54,23 @@ function throwIfDbError(error: PostgrestError | null) {
     );
   }
   throw new Error(supabaseErrorMessage(error));
+}
+
+async function assertCanEditPersonnelFile(profileId: string): Promise<{
+  viewer: Profile;
+  asAdmin: boolean;
+}> {
+  const viewer = await requireUserProfile();
+  if (isAdmin(viewer)) return { viewer, asAdmin: true };
+  if (viewer.id === profileId && (await currentUserHasCapability("edit_own_personnel"))) {
+    return { viewer, asAdmin: false };
+  }
+  throw new Error("You do not have permission to edit this personnel file.");
+}
+
+async function assertCanManagePersonnelLanguages(profileId: string): Promise<Profile> {
+  const { viewer } = await assertCanEditPersonnelFile(profileId);
+  return viewer;
 }
 
 function revalidatePersonnel(userId?: string) {
@@ -201,19 +222,27 @@ export async function createPersonnelMember(input: {
 
   const approvedOn = new Date().toISOString().slice(0, 10);
   const dueOn = addYearsToDate(approvedOn, 1);
-  const { error: taskbookError } = await admin.from("personnel_taskbooks").insert({
-    profile_id: userId,
-    client_id: clientId,
-    rank: "Firefighter",
-    status: "active",
-    approved_on: approvedOn,
-    due_on: dueOn,
-    notes: "Issued automatically upon hire.",
-    requested_by: userId,
-    decided_by: null,
+  const { rows: autoIssuedTypes } = await listTaskbookTypes(admin, {
+    activeOnly: true,
+    withPrerequisites: false,
   });
-  if (taskbookError && taskbookError.code !== "23505") {
-    throw new Error(taskbookError.message);
+  const autoIssued = autoIssuedTypes.filter((type) => type.auto_issued);
+  if (autoIssued.length > 0) {
+    const { error: taskbookError } = await admin.from("personnel_taskbooks").insert(
+      autoIssued.map((type) => ({
+        profile_id: userId,
+        rank: type.name,
+        status: "active",
+        approved_on: approvedOn,
+        due_on: dueOn,
+        notes: "Issued automatically upon hire.",
+        requested_by: userId,
+        decided_by: null,
+      }))
+    );
+    if (taskbookError && taskbookError.code !== "23505") {
+      throw new Error(taskbookError.message);
+    }
   }
 
   revalidatePersonnel(userId);
@@ -292,8 +321,8 @@ export async function updatePersonnelProfile(input: {
   isAdmin: boolean;
   section?: string | null;
 }) {
-  const admin = await requireAdmin();
-  if (input.userId === admin.id && !input.isAdmin) {
+  const { viewer, asAdmin } = await assertCanEditPersonnelFile(input.userId);
+  if (asAdmin && input.userId === viewer.id && !input.isAdmin) {
     throw new Error("You cannot remove your own system admin access.");
   }
   if (input.supervisorId && input.supervisorId === input.userId) {
@@ -303,6 +332,32 @@ export async function updatePersonnelProfile(input: {
   const firstName = input.firstName.trim() || null;
   const lastName = input.lastName.trim() || null;
   const displayName = composePersonnelDisplayName(firstName, lastName);
+
+  const supabase = await createSupabaseServerClient();
+
+  if (!asAdmin) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        display_name: displayName,
+        first_name: firstName,
+        last_name: lastName,
+        phone: input.phone ? formatPhoneInput(input.phone.trim()) || null : null,
+        home_address: input.homeAddress
+          ? serializePostalAddress(parsePostalAddress(input.homeAddress))
+          : null,
+        emergency_contacts: input.emergencyContacts?.trim() || null,
+        anniversary: input.anniversary || null,
+        spouse_name: input.spouseName?.trim() || null,
+        spouse_birthday: input.spouseBirthday || null,
+        kids_birthdays: input.kidsBirthdays?.trim() || null,
+      })
+      .eq("id", input.userId);
+    throwIfDbError(error);
+    revalidatePersonnel(input.userId);
+    redirect(personnelFilePath(input.userId, input.section));
+  }
+
   const rank = input.rank?.trim() || null;
   const jobTitle = rankHasTitle(rank) ? input.jobTitle?.trim() || null : null;
   const hireDate = input.hireDate || null;
@@ -310,7 +365,6 @@ export async function updatePersonnelProfile(input: {
     ? null
     : effectiveRankPromotedOn(rank, input.rankPromotedOn || null, hireDate);
 
-  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -350,7 +404,7 @@ export async function updatePersonnelProfile(input: {
   throwIfDbError(error);
   await replaceProfilePermissionLevels(supabase, {
     profileId: input.userId,
-    clientId: admin.client_id,
+    clientId: viewer.client_id,
     permissionLevelIds: input.permissionLevelIds,
   });
   revalidatePersonnel(input.userId);
@@ -1210,6 +1264,102 @@ export async function deletePersonnelRecognition(input: { id: string; profileId:
   revalidatePersonnel(input.profileId);
 }
 
+export async function createPersonnelLanguage(input: {
+  profileId: string;
+  name: string;
+  notes?: string;
+}) {
+  const actor = await assertCanManagePersonnelLanguages(input.profileId);
+  const name = input.name.trim();
+  if (!name) throw new Error("Language name is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("personnel_languages").insert({
+    profile_id: input.profileId,
+    name,
+    notes: input.notes?.trim() || null,
+    created_by: actor.id,
+  });
+  if (error?.code === "23505") {
+    throw new Error("That language is already on this file.");
+  }
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function updatePersonnelLanguage(input: {
+  id: string;
+  profileId: string;
+  name: string;
+  notes?: string;
+}) {
+  await assertCanManagePersonnelLanguages(input.profileId);
+  const name = input.name.trim();
+  if (!name) throw new Error("Language name is required.");
+
+  const supabase = await createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("personnel_languages")
+    .select("id, name, verified")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(existingError);
+
+  const nameChanged =
+    existing && existing.name.trim().toLowerCase() !== name.toLowerCase();
+  const clearVerification = Boolean(existing?.verified && nameChanged);
+
+  const { error } = await supabase
+    .from("personnel_languages")
+    .update({
+      name,
+      notes: input.notes?.trim() || null,
+      ...(clearVerification
+        ? { verified: false, verified_at: null, verified_by: null }
+        : {}),
+    })
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  if (error?.code === "23505") {
+    throw new Error("That language is already on this file.");
+  }
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function setPersonnelLanguageVerified(input: {
+  id: string;
+  profileId: string;
+  verified: boolean;
+}) {
+  const actor = await assertCapability("verify_personnel_languages");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_languages")
+    .update({
+      verified: input.verified,
+      verified_at: input.verified ? new Date().toISOString() : null,
+      verified_by: input.verified ? actor.id : null,
+    })
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
+export async function deletePersonnelLanguage(input: { id: string; profileId: string }) {
+  await assertCanManagePersonnelLanguages(input.profileId);
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("personnel_languages")
+    .delete()
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+  revalidatePersonnel(input.profileId);
+}
+
 export async function createPersonnelDocument(input: {
   profileId: string;
   title: string;
@@ -1388,11 +1538,29 @@ export async function unassignModuleFromUser(input: {
   if (input.programId) revalidatePath(`/programs/${input.programId}`);
 }
 
-function assertTaskbookRank(rank: string) {
-  if (!(taskbookRanks as readonly string[]).includes(rank)) {
-    throw new Error("Invalid taskbook rank.");
+async function loadTaskbookCatalog(supabase?: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+  const client = supabase ?? (await createSupabaseServerClient());
+  const { rows, error } = await listTaskbookTypes(client, {
+    activeOnly: false,
+    withPrerequisites: true,
+  });
+  throwIfDbError(error);
+  return rows;
+}
+
+async function assertTaskbookType(
+  rankInput: string,
+  options?: { requireActive?: boolean; catalog?: TaskbookTypeWithPrerequisites[] }
+) {
+  const rank = rankInput.trim();
+  if (!rank) throw new Error("Invalid taskbook.");
+  const catalog = options?.catalog ?? (await loadTaskbookCatalog());
+  const type = findTaskbookTypeByName(catalog, rank);
+  if (!type) throw new Error("Invalid taskbook.");
+  if (options?.requireActive !== false && !type.is_active) {
+    throw new Error("That taskbook is no longer available.");
   }
-  return rank;
+  return type;
 }
 
 async function requireTaskbookDecider(profileId: string) {
@@ -1440,15 +1608,62 @@ async function grantSwingUpForRank(profileId: string, rank: string) {
   if (updateError) throw new Error(updateError.message);
 }
 
+async function grantQualificationForCompletedTaskbook(input: {
+  profileId: string;
+  taskbookId: string;
+  rank: string;
+  completedOn: string;
+  createdBy: string | null;
+}) {
+  const type = await assertTaskbookType(input.rank, { requireActive: false });
+  const qualificationId = type.qualification_id;
+  if (!qualificationId) return;
+
+  const admin = createSupabaseServiceClient();
+  const { data: existing, error: existingError } = await admin
+    .from("personnel_qualifications")
+    .select("id, source_taskbook_id")
+    .eq("profile_id", input.profileId)
+    .eq("qualification_id", qualificationId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  if (existing) {
+    if (existing.source_taskbook_id == null) {
+      const { error: linkError } = await admin
+        .from("personnel_qualifications")
+        .update({ source_taskbook_id: input.taskbookId })
+        .eq("id", existing.id);
+      if (linkError) throw new Error(linkError.message);
+    }
+    return;
+  }
+
+  const { error: insertError } = await admin.from("personnel_qualifications").insert({
+    profile_id: input.profileId,
+    qualification_id: qualificationId,
+    earned_on: input.completedOn,
+    expires_on: null,
+    source_taskbook_id: input.taskbookId,
+    created_by: input.createdBy,
+  });
+  if (insertError) throw new Error(insertError.message);
+}
+
 export async function requestPersonnelTaskbook(input: {
   rank: string;
   notes?: string;
 }) {
   const viewer = await requireUserProfile();
-  const rank = assertTaskbookRank(input.rank);
-  if ((autoIssuedTaskbooks as readonly string[]).includes(rank)) {
-    throw new Error("The Firefighter taskbook is issued automatically upon hire.");
+  const type = await assertTaskbookType(input.rank);
+  if (type.auto_issued || !type.requestable) {
+    throw new Error(
+      type.auto_issued
+        ? "That taskbook is issued automatically upon hire."
+        : "That taskbook cannot be requested."
+    );
   }
+  const rank = type.name;
 
   const supabase = await createSupabaseServerClient();
   const { data: profile, error: profileError } = await supabase
@@ -1577,7 +1792,8 @@ export async function issuePersonnelTaskbook(input: {
   notes?: string;
 }) {
   const admin = await requireAdmin();
-  const rank = assertTaskbookRank(input.rank);
+  const type = await assertTaskbookType(input.rank);
+  const rank = type.name;
   const approvedOn = input.approvedOn || new Date().toISOString().slice(0, 10);
   const dueOn = input.dueOn || addYearsToDate(approvedOn, 1);
   if (dueOn < approvedOn) throw new Error("Due date must be on or after the approval date.");
@@ -1604,12 +1820,25 @@ export async function issuePersonnelTaskbook(input: {
   revalidatePersonnel(input.profileId);
 }
 
+async function createTaskbookSignedUpload(storagePath: string) {
+  const service = createSupabaseServiceClient();
+  const { data, error } = await service.storage
+    .from(PERSONNEL_DOCUMENTS_BUCKET)
+    .createSignedUploadUrl(storagePath);
+  if (error) throw new Error(error.message);
+  if (!data?.token || !data.path) throw new Error("Could not create upload link.");
+  return { storagePath: data.path, token: data.token };
+}
+
 export async function completePersonnelTaskbook(input: {
   id: string;
   profileId: string;
   completedOn?: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  pdipEligible?: boolean;
 }) {
-  await requireTaskbookDecider(input.profileId);
+  const decider = await requireTaskbookDecider(input.profileId);
   const supabase = await createSupabaseServerClient();
 
   const { data: row, error: lookupError } = await supabase
@@ -1623,19 +1852,121 @@ export async function completePersonnelTaskbook(input: {
   if (row.status !== "active") throw new Error("Only active taskbooks can be completed.");
 
   const completedOn = input.completedOn || new Date().toISOString().slice(0, 10);
+  const hasFile = Boolean(input.fileName?.trim());
+  const fileName = hasFile ? sanitizePersonnelFileName(input.fileName!) : null;
+  if (hasFile && !fileName) throw new Error("File name is required.");
+
+  const storagePath =
+    hasFile && fileName
+      ? buildPersonnelTaskbookStoragePath(input.profileId, input.id, fileName)
+      : null;
+
   const { error } = await supabase
     .from("personnel_taskbooks")
     .update({
       status: "completed",
       completed_on: completedOn,
+      file_name: fileName,
+      storage_path: storagePath,
+      mime_type: hasFile ? input.mimeType?.trim() || null : null,
+      pdip_eligible: Boolean(input.pdipEligible),
     })
     .eq("id", input.id)
     .eq("profile_id", input.profileId);
   throwIfDbError(error);
 
   await grantSwingUpForRank(input.profileId, row.rank);
+  await grantQualificationForCompletedTaskbook({
+    profileId: input.profileId,
+    taskbookId: input.id,
+    rank: row.rank,
+    completedOn,
+    createdBy: decider.id,
+  });
   revalidatePersonnel(input.profileId);
   revalidatePath("/personnel/supervisor");
+
+  if (!storagePath) return { storagePath: null as string | null, token: null as string | null };
+  return createTaskbookSignedUpload(storagePath);
+}
+
+export async function updatePersonnelTaskbookCompletion(input: {
+  id: string;
+  profileId: string;
+  completedOn?: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  removeFile?: boolean;
+  pdipEligible?: boolean;
+}) {
+  const viewer = await requireTaskbookDecider(input.profileId);
+  const supabase = await createSupabaseServerClient();
+
+  const { data: row, error: lookupError } = await supabase
+    .from("personnel_taskbooks")
+    .select("id, status, storage_path")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(lookupError);
+  if (!row) throw new Error("Taskbook not found.");
+  if (row.status !== "completed") {
+    throw new Error("Only completed taskbooks can be updated this way.");
+  }
+
+  const patch: Record<string, string | boolean | null> = {};
+  if (input.completedOn !== undefined) {
+    if (!isAdmin(viewer)) {
+      throw new Error("Only a system admin can change the completion date.");
+    }
+    const completedOn = input.completedOn.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(completedOn)) {
+      throw new Error("Enter a valid completion date.");
+    }
+    patch.completed_on = completedOn;
+  }
+  if (input.pdipEligible !== undefined) {
+    patch.pdip_eligible = Boolean(input.pdipEligible);
+  }
+
+  let storagePath: string | null = null;
+  const attachingFile = Boolean(input.fileName?.trim()) && !input.removeFile;
+
+  if (input.removeFile || attachingFile) {
+    if (row.storage_path) {
+      const service = createSupabaseServiceClient();
+      await service.storage.from(PERSONNEL_DOCUMENTS_BUCKET).remove([row.storage_path]);
+    }
+    if (input.removeFile) {
+      patch.file_name = null;
+      patch.storage_path = null;
+      patch.mime_type = null;
+    } else if (attachingFile) {
+      const fileName = sanitizePersonnelFileName(input.fileName!);
+      if (!fileName) throw new Error("File name is required.");
+      storagePath = buildPersonnelTaskbookStoragePath(input.profileId, input.id, fileName);
+      patch.file_name = fileName;
+      patch.storage_path = storagePath;
+      patch.mime_type = input.mimeType?.trim() || null;
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { storagePath: null as string | null, token: null as string | null };
+  }
+
+  const { error } = await supabase
+    .from("personnel_taskbooks")
+    .update(patch)
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId);
+  throwIfDbError(error);
+
+  revalidatePersonnel(input.profileId);
+  revalidatePath("/personnel/supervisor");
+
+  if (!storagePath) return { storagePath: null as string | null, token: null as string | null };
+  return createTaskbookSignedUpload(storagePath);
 }
 
 export async function updatePersonnelTaskbookCompletedOn(input: {
@@ -1644,38 +1975,55 @@ export async function updatePersonnelTaskbookCompletedOn(input: {
   completedOn: string;
 }) {
   await requireAdmin();
-  const completedOn = input.completedOn.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(completedOn)) {
-    throw new Error("Enter a valid completion date.");
-  }
+  return updatePersonnelTaskbookCompletion({
+    id: input.id,
+    profileId: input.profileId,
+    completedOn: input.completedOn,
+  });
+}
+
+export async function getPersonnelTaskbookDownloadUrl(input: {
+  id: string;
+  profileId: string;
+}) {
+  await assertCanAccessPersonnelFiles(input.profileId);
 
   const supabase = await createSupabaseServerClient();
-  const { data: row, error: lookupError } = await supabase
+  const { data: taskbook, error } = await supabase
     .from("personnel_taskbooks")
-    .select("id, status")
+    .select("storage_path, profile_id")
     .eq("id", input.id)
     .eq("profile_id", input.profileId)
     .maybeSingle();
-  throwIfDbError(lookupError);
-  if (!row) throw new Error("Taskbook not found.");
-  if (row.status !== "completed") {
-    throw new Error("Only completed taskbooks have a completion date to adjust.");
-  }
-
-  const { error } = await supabase
-    .from("personnel_taskbooks")
-    .update({ completed_on: completedOn })
-    .eq("id", input.id)
-    .eq("profile_id", input.profileId);
   throwIfDbError(error);
+  if (!taskbook?.storage_path) throw new Error("Taskbook file not found.");
 
-  revalidatePersonnel(input.profileId);
-  revalidatePath("/personnel/supervisor");
+  const service = createSupabaseServiceClient();
+  const { data, error: signedError } = await service.storage
+    .from(PERSONNEL_DOCUMENTS_BUCKET)
+    .createSignedUrl(taskbook.storage_path, 60);
+  if (signedError) throw new Error(signedError.message);
+  if (!data?.signedUrl) throw new Error("Could not create download link.");
+  return { url: data.signedUrl };
 }
 
 export async function deletePersonnelTaskbook(input: { id: string; profileId: string }) {
   await requireAdmin();
   const supabase = await createSupabaseServerClient();
+
+  const { data, error: fetchError } = await supabase
+    .from("personnel_taskbooks")
+    .select("storage_path")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(fetchError);
+
+  if (data?.storage_path) {
+    const service = createSupabaseServiceClient();
+    await service.storage.from(PERSONNEL_DOCUMENTS_BUCKET).remove([data.storage_path]);
+  }
+
   const { error } = await supabase
     .from("personnel_taskbooks")
     .delete()
@@ -1691,12 +2039,12 @@ export async function setPersonnelTaskbookPrerequisiteCheck(input: {
   checked: boolean;
 }) {
   const viewer = await requireUserProfile();
-  const rank = assertTaskbookRank(input.rank);
+  const type = await assertTaskbookType(input.rank, { requireActive: false });
+  const rank = type.name;
   const prerequisiteId = input.prerequisiteId.trim();
   if (!prerequisiteId) throw new Error("Invalid prerequisite.");
 
-  const items = getTaskbookPrerequisites(rank);
-  if (!items.some((item) => item.id === prerequisiteId)) {
+  if (!type.prerequisites.some((item) => item.code === prerequisiteId)) {
     throw new Error("Unknown prerequisite for that taskbook.");
   }
 

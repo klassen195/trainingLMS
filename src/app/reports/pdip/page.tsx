@@ -34,6 +34,8 @@ export default async function PdipReportPage({
           personName: null as string | null,
           certCount: 0,
           qualCount: 0,
+          taskbookCount: 0,
+          languageCount: 0,
           total: 0,
         }),
   ]);
@@ -41,7 +43,7 @@ export default async function PdipReportPage({
   const selectedPerson = people.find((person) => person.id === personId);
   const personLabel = report.personName ?? selectedPerson?.label ?? null;
   const filterSummary = personLabel
-    ? `${personLabel} · PDIP certifications: ${report.certCount} · PDIP qualifications: ${report.qualCount} · Total: ${report.total}`
+    ? `${personLabel} · PDIP certifications: ${report.certCount} · PDIP qualifications: ${report.qualCount} · PDIP taskbooks: ${report.taskbookCount} · Verified languages: ${report.languageCount} · Total: ${report.total}`
     : "Select a person to run this report.";
 
   return (
@@ -53,7 +55,7 @@ export default async function PdipReportPage({
       </div>
       <ReportShell
         title="PDIP"
-        description="Active PDIP-eligible certifications and qualifications for a selected person."
+        description="Active PDIP-eligible certifications, qualifications, completed taskbooks, and verified languages for a selected person."
         branding={branding}
         columns={PDIP_COLUMNS}
         rows={report.rows}

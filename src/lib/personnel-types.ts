@@ -272,6 +272,21 @@ export type PersonnelRecognition = {
 export const PERSONNEL_RECOGNITION_SELECT =
   "id, profile_id, award_id, awarded_on, notes, created_by, created_at";
 
+export type PersonnelLanguage = {
+  id: string;
+  profile_id: string;
+  name: string;
+  verified: boolean;
+  verified_at: string | null;
+  verified_by: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export const PERSONNEL_LANGUAGE_SELECT =
+  "id, profile_id, name, verified, verified_at, verified_by, notes, created_by, created_at";
+
 export type PersonnelQualification = {
   id: string;
   profile_id: string;
@@ -280,13 +295,14 @@ export type PersonnelQualification = {
   expires_on: string | null;
   notes: string | null;
   source_session_id: string | null;
+  source_taskbook_id: string | null;
   created_by: string | null;
   created_at: string;
   qualification?: { id: string; name: string } | null;
 };
 
 export const PERSONNEL_QUALIFICATION_SELECT =
-  "id, profile_id, qualification_id, earned_on, expires_on, notes, source_session_id, created_by, created_at, qualification:qualifications!qualification_id(id, name)";
+  "id, profile_id, qualification_id, earned_on, expires_on, notes, source_session_id, source_taskbook_id, created_by, created_at, qualification:qualifications!qualification_id(id, name)";
 
 export type PersonnelEmsLicense = {
   id: string;
@@ -357,6 +373,10 @@ export type PersonnelTaskbook = {
   denied_on: string | null;
   denial_reason: string | null;
   notes: string | null;
+  file_name: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
+  pdip_eligible: boolean;
   requested_by: string | null;
   decided_by: string | null;
   created_at: string;
@@ -414,7 +434,7 @@ export const PERSONNEL_NOTE_SELECT =
   "id, profile_id, body, created_by, created_at, created_by_profile:profiles!created_by(id, display_name, first_name, last_name, email)";
 
 export const PERSONNEL_TASKBOOK_SELECT =
-  "id, profile_id, rank, status, requested_at, approved_on, due_on, completed_on, denied_on, denial_reason, notes, requested_by, decided_by, created_at";
+  "id, profile_id, rank, status, requested_at, approved_on, due_on, completed_on, denied_on, denial_reason, notes, file_name, storage_path, mime_type, pdip_eligible, requested_by, decided_by, created_at";
 
 export const PERSONNEL_TASKBOOK_WITH_PROFILE_SELECT = `${PERSONNEL_TASKBOOK_SELECT}, profile:profiles!profile_id(id, display_name, first_name, last_name, email)`;
 
@@ -514,6 +534,15 @@ export function buildPersonnelCertificationStoragePath(
   fileName: string
 ) {
   return buildPersonnelDocumentStoragePath(profileId, certificationId, fileName);
+}
+
+/** Same path layout as documents so existing storage RLS applies. */
+export function buildPersonnelTaskbookStoragePath(
+  profileId: string,
+  taskbookId: string,
+  fileName: string
+) {
+  return buildPersonnelDocumentStoragePath(profileId, taskbookId, fileName);
 }
 
 export function composePersonnelDisplayName(
@@ -710,7 +739,7 @@ export function expiringWhenLabel(daysUntil: number) {
 
 export type FamilyDateEntry = {
   role: "spouse" | "anniversary" | "kid";
-  /** Kid name when known */
+  /** Child name when known */
   name: string | null;
   event: "birthday" | "anniversary";
   /** Original date string for display when available */
@@ -944,13 +973,13 @@ export function familyDateTitle(item: Pick<FamilyDateEntry, "role" | "name">) {
   if (item.name) return item.name;
   if (item.role === "spouse") return "Spouse";
   if (item.role === "anniversary") return "Anniversary";
-  return "Kid";
+  return "Child";
 }
 
 /** Secondary role/event labels (excluding the date itself). */
 export function familyDateEventLabel(item: Pick<FamilyDateEntry, "role" | "event" | "name">) {
   if (item.role === "spouse") return "Spouse";
-  if (item.role === "kid") return "Kid";
+  if (item.role === "kid") return "Child";
   if (item.event === "anniversary") return "Anniversary";
   return null;
 }

@@ -10,6 +10,7 @@ import {
   PERSONNEL_PROFILE_SELECT,
   PERSONNEL_QUALIFICATION_SELECT,
   PERSONNEL_RECOGNITION_SELECT,
+  PERSONNEL_LANGUAGE_SELECT,
   PERSONNEL_TASKBOOK_SELECT,
   PERSONNEL_TASKBOOK_WITH_PROFILE_SELECT,
   PERSONNEL_TASKBOOK_PREREQ_CHECK_SELECT,
@@ -26,6 +27,7 @@ import {
   type PersonnelProfile,
   type PersonnelQualification,
   type PersonnelRecognition,
+  type PersonnelLanguage,
   type PersonnelShift,
   type PersonnelTaskbook,
   type PersonnelTaskbookPrerequisiteCheck,
@@ -537,6 +539,19 @@ export async function fetchPersonnelRecognitions(supabase: SupabaseClient, profi
 
   return {
     rows: (data ?? []) as PersonnelRecognition[],
+    error: error as PostgrestError | null,
+  };
+}
+
+export async function fetchPersonnelLanguages(supabase: SupabaseClient, profileId: string) {
+  const { data, error } = await supabase
+    .from("personnel_languages")
+    .select(PERSONNEL_LANGUAGE_SELECT)
+    .eq("profile_id", profileId)
+    .order("name", { ascending: true });
+
+  return {
+    rows: (data ?? []) as PersonnelLanguage[],
     error: error as PostgrestError | null,
   };
 }

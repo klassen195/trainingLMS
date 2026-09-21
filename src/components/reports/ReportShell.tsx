@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, Columns3, Download, FileText } from "lucide-react";
 import { buildCsv, downloadCsv } from "@/lib/reports/csv";
 import { downloadReportPdf } from "@/components/reports/ReportPdfDocument";
+import { CertificationFilePreview } from "@/components/CertificationFilePreview";
 import type { ReportBranding, ReportColumn } from "@/lib/reports/types";
 import { Button } from "@/components/ui/Button";
 import {
@@ -22,6 +23,33 @@ export type ReportFacetFilter = {
   key: string;
   label: string;
 };
+
+function reportCellDisplay(
+  column: ReportColumn,
+  row: Record<string, unknown>
+): React.ReactNode {
+  if (column.format === "image") {
+    const src = row[column.key] == null ? "" : String(row[column.key]).trim();
+    if (!src) return "—";
+    const mimeType =
+      column.mimeKey && row[column.mimeKey] != null ? String(row[column.mimeKey]) : null;
+    const fileName =
+      column.fileNameKey && row[column.fileNameKey] != null
+        ? String(row[column.fileNameKey])
+        : null;
+    return (
+      <CertificationFilePreview
+        src={src}
+        mimeType={mimeType}
+        fileName={fileName}
+        className="h-16 w-24"
+      />
+    );
+  }
+
+  if (row[column.key] == null || row[column.key] === "") return "—";
+  return String(row[column.key]);
+}
 
 export function ReportShell({
   title,
@@ -89,11 +117,16 @@ export function ReportShell({
         if (value !== selected) return false;
       }
       if (!q) return true;
-      return columns.some((column) =>
-        String(row[column.key] ?? "")
+      return columns.some((column) => {
+        if (column.format === "image") {
+          const fileNameKey = column.fileNameKey;
+          const fileName = fileNameKey ? String(row[fileNameKey] ?? "") : "";
+          return fileName.toLowerCase().includes(q);
+        }
+        return String(row[column.key] ?? "")
           .toLowerCase()
-          .includes(q)
-      );
+          .includes(q);
+      });
     });
   }, [columns, facetFilters, facetValues, query, rows]);
 
@@ -339,9 +372,7 @@ export function ReportDataTable({
             <tr key={index} className="border-b last:border-0 odd:bg-muted/20">
               {columns.map((column) => (
                 <td key={column.key} className="px-3 py-2 align-top">
-                  {row[column.key] == null || row[column.key] === ""
-                    ? "—"
-                    : String(row[column.key])}
+                  {reportCellDisplay(column, row)}
                 </td>
               ))}
             </tr>

@@ -9,8 +9,11 @@ import {
   View,
   pdf,
 } from "@react-pdf/renderer";
-import type { ReportBranding, ReportColumn, ReportExportMeta } from "@/lib/reports/types";
+import { convertHeicBlobToJpeg, isHeicImage } from "@/lib/heic";
 import { formatDateTime } from "@/lib/dates";
+import { renderPdfFirstPageThumbnailDataUrl } from "@/lib/pdf-thumbnail";
+import { personnelFilePreviewKind } from "@/lib/personnel-types";
+import type { ReportBranding, ReportColumn, ReportExportMeta } from "@/lib/reports/types";
 
 const styles = StyleSheet.create({
   page: {
@@ -79,6 +82,15 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     fontSize: 8,
   },
+  thumbCell: {
+    paddingHorizontal: 3,
+    justifyContent: "center",
+  },
+  thumb: {
+    width: 54,
+    height: 36,
+    objectFit: "contain",
+  },
   footer: {
     position: "absolute",
     bottom: 24,
@@ -96,6 +108,111 @@ const styles = StyleSheet.create({
 
 function columnFlex(columnCount: number) {
   return Math.max(1, Math.floor(100 / Math.max(columnCount, 1)));
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * react-pdf can only embed raster images. Convert PDF/HEIC preview URLs to JPEG
+ * data URLs so certificate thumbnails appear in the exported report.
+ */
+async function prepareImageCellsForPdf(
+  columns: ReportColumn[],
+  rows: Record<string, unknown>[]
+): Promise<Record<string, unknown>[]> {
+  const imageColumns = columns.filter((column) => column.format === "image");
+  if (imageColumns.length === 0) return rows;
+
+  return Promise.all(
+    rows.map(async (row) => {
+      let next = row;
+      for (const column of imageColumns) {
+        const src = row[column.key] == null ? "" : String(row[column.key]).trim();
+        if (!src) continue;
+
+        const mime =
+          column.mimeKey && row[column.mimeKey] != null ? String(row[column.mimeKey]) : "";
+        const fileName =
+          column.fileNameKey && row[column.fileNameKey] != null
+            ? String(row[column.fileNameKey])
+            : "";
+        const kind = personnelFilePreviewKind(mime, fileName);
+
+        try {
+          if (kind === "pdf") {
+            const dataUrl = await renderPdfFirstPageThumbnailDataUrl(src);
+            next = {
+              ...next,
+              [column.key]: dataUrl,
+              ...(column.mimeKey ? { [column.mimeKey]: "image/jpeg" } : {}),
+            };
+          } else if (isHeicImage(mime, fileName)) {
+            const response = await fetch(src);
+            if (!response.ok) continue;
+            const jpeg = await convertHeicBlobToJpeg(await response.blob());
+            next = {
+              ...next,
+              [column.key]: await blobToDataUrl(jpeg),
+              ...(column.mimeKey ? { [column.mimeKey]: "image/jpeg" } : {}),
+            };
+          }
+        } catch {
+          // Leave original cell; PdfCell falls back to a text label.
+        }
+      }
+      return next;
+    })
+  );
+}
+
+function PdfCell({
+  column,
+  row,
+  flex,
+}: {
+  column: ReportColumn;
+  row: Record<string, unknown>;
+  flex: number;
+}) {
+  if (column.format === "image") {
+    const src = row[column.key] == null ? "" : String(row[column.key]).trim();
+    const mime =
+      column.mimeKey && row[column.mimeKey] != null
+        ? String(row[column.mimeKey]).toLowerCase()
+        : "";
+    const fileName =
+      column.fileNameKey && row[column.fileNameKey] != null
+        ? String(row[column.fileNameKey]).trim()
+        : "";
+    const isDataImage = src.startsWith("data:image/");
+    const isRaster =
+      isDataImage ||
+      (mime.startsWith("image/") && !mime.includes("heic") && !mime.includes("heif"));
+
+    if (src && isRaster) {
+      return (
+        <View style={[styles.thumbCell, { flex }]}>
+          <Image src={src} style={styles.thumb} />
+        </View>
+      );
+    }
+
+    const label = !src ? "—" : fileName || (mime === "application/pdf" ? "PDF" : "File");
+    return <Text style={[styles.cell, { flex }]}>{label}</Text>;
+  }
+
+  return (
+    <Text style={[styles.cell, { flex }]}>
+      {row[column.key] == null || row[column.key] === "" ? "—" : String(row[column.key])}
+    </Text>
+  );
 }
 
 export function ReportPdfDocument({
@@ -151,9 +268,7 @@ export function ReportPdfDocument({
             wrap={false}
           >
             {columns.map((column) => (
-              <Text key={column.key} style={[styles.cell, { flex }]}>
-                {row[column.key] == null ? "" : String(row[column.key])}
-              </Text>
+              <PdfCell key={column.key} column={column} row={row} flex={flex} />
             ))}
           </View>
         ))}
@@ -176,12 +291,13 @@ export async function downloadReportPdf(input: {
   columns: ReportColumn[];
   rows: Record<string, unknown>[];
 }) {
+  const rows = await prepareImageCellsForPdf(input.columns, input.rows);
   const blob = await pdf(
     <ReportPdfDocument
       branding={input.branding}
       meta={input.meta}
       columns={input.columns}
-      rows={input.rows}
+      rows={rows}
     />
   ).toBlob();
   const url = URL.createObjectURL(blob);

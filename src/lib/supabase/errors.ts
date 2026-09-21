@@ -132,6 +132,7 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
     error.message.includes("personnel_taskbooks") ||
     error.message.includes("personnel_taskbook_prerequisite_checks") ||
     error.message.includes("personnel_recognitions") ||
+    error.message.includes("personnel_languages") ||
     error.message.includes("personnel_qualifications") ||
     error.message.includes("personnel_ems_licenses") ||
     error.message.includes("personnel_ems_clearance_log") ||

@@ -1,5 +1,5 @@
-import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import { isAdmin, requireUserProfile } from "@/lib/auth";
 import {
   fetchPersonnelCertifications,
   fetchPersonnelCertificationSections,
@@ -10,6 +10,7 @@ import {
   fetchPersonnelProfile,
   fetchPersonnelQualifications,
   fetchPersonnelRecognitions,
+  fetchPersonnelLanguages,
   fetchPersonnelTaskbooks,
   fetchPersonnelTaskbookPrerequisiteChecks,
   fetchPersonnelTraining,
@@ -21,6 +22,7 @@ import { LOCATION_SELECT, type Location } from "@/lib/locations-types";
 import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
 import { listEmsLevels } from "@/lib/ems-levels";
 import { listQualifications } from "@/lib/qualifications";
+import { listTaskbookTypes } from "@/lib/taskbooks";
 import { listPermissionLevels } from "@/lib/permission-levels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { excludePlatformOperatorsFromRoster } from "@/lib/department-roster";
@@ -39,10 +41,19 @@ export default async function PersonnelEditPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const admin = await requireAdmin();
+  const viewer = await requireUserProfile();
   const { id } = await params;
+  const asAdmin = isAdmin(viewer);
+  const isSelf = viewer.id === id;
+  const canEditOwn = await currentUserHasCapability("edit_own_personnel");
+
+  if (!asAdmin && !(isSelf && canEditOwn)) {
+    redirect(isSelf ? `/personnel/${id}` : "/personnel");
+  }
+
   const supabase = await createSupabaseServerClient();
   const pdipEnabled = await currentUserHasCapability("access_pdip");
+  const canVerifyLanguages = await currentUserHasCapability("verify_personnel_languages");
 
   const { profile, error } = await fetchPersonnelProfile(supabase, id);
   if (isMissingTrainingLmsTables(error) || isMissingPersonnelTables(error)) {
@@ -50,7 +61,7 @@ export default async function PersonnelEditPage({
   }
   if (error) throw error;
   if (!profile) notFound();
-  if (profile.is_platform_operator && !admin.is_platform_operator) notFound();
+  if (profile.is_platform_operator && !viewer.is_platform_operator) notFound();
 
   const [
     { data: locations },
@@ -65,9 +76,11 @@ export default async function PersonnelEditPage({
     { rows: taskbooks, error: taskbooksError },
     { rows: prerequisiteChecks, error: prereqError },
     { rows: recognitions, error: recognitionsError },
+    { rows: languages, error: languagesError },
     { programs, error: trainingError },
     { hours: ytdHours, year: ytdYear, error: ytdError },
     { rows: qualificationCatalog, error: catalogError },
+    { rows: taskbookCatalog, error: taskbookCatalogError },
     { rows: emsLevelCatalog, error: emsCatalogError },
     { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
     { rows: permissionLevels, error: permissionLevelsError },
@@ -101,9 +114,11 @@ export default async function PersonnelEditPage({
     fetchPersonnelTaskbooks(supabase, id),
     fetchPersonnelTaskbookPrerequisiteChecks(supabase, id),
     fetchPersonnelRecognitions(supabase, id),
+    fetchPersonnelLanguages(supabase, id),
     fetchPersonnelTraining(supabase, id),
     fetchPersonnelYtdTrainingHours(supabase, id),
     listQualifications(supabase, { activeOnly: true }),
+    listTaskbookTypes(supabase, { withPrerequisites: true }),
     listEmsLevels(supabase, { activeOnly: true }),
     listEmsClearanceLevels(supabase, { activeOnly: true }),
     listPermissionLevels(supabase),
@@ -120,7 +135,11 @@ export default async function PersonnelEditPage({
     (notesError && isMissingPersonnelTables(notesError)) ||
     (taskbooksError && isMissingPersonnelTables(taskbooksError)) ||
     (prereqError && isMissingPersonnelTables(prereqError)) ||
-    (recognitionsError && isMissingPersonnelTables(recognitionsError))
+    (recognitionsError && isMissingPersonnelTables(recognitionsError)) ||
+    (languagesError && isMissingPersonnelTables(languagesError)) ||
+    (taskbookCatalogError &&
+      (taskbookCatalogError.code === "PGRST205" ||
+        taskbookCatalogError.message.includes("taskbook_types")))
   ) {
     return <PersonnelDatabaseSetup />;
   }
@@ -134,23 +153,24 @@ export default async function PersonnelEditPage({
   if (taskbooksError) throw taskbooksError;
   if (prereqError) throw prereqError;
   if (recognitionsError) throw recognitionsError;
+  if (languagesError) throw languagesError;
   if (trainingError) throw trainingError;
   if (ytdError) throw ytdError;
   if (catalogError) throw new Error(catalogError.message);
+  if (taskbookCatalogError) throw new Error(taskbookCatalogError.message);
   if (emsCatalogError) throw new Error(emsCatalogError.message);
   if (emsClearanceCatalogError) throw new Error(emsClearanceCatalogError.message);
   if (permissionLevelsError) throw new Error(permissionLevelsError.message);
 
-  const { data: allPrograms } = await supabase
-    .from("programs")
-    .select("id, title, status")
-    .order("title");
+  const { data: allPrograms } = asAdmin
+    ? await supabase.from("programs").select("id, title, status").order("title")
+    : { data: [] as { id: string; title: string; status: string }[] };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Edit personnel</h1>
+          <h1 className="text-3xl font-bold">{asAdmin ? "Edit personnel" : "Edit my file"}</h1>
           <p className="mt-2 text-muted-foreground">{personnelDisplayName(profile)}</p>
         </div>
         <PersonnelBackToFileButton personId={id} />
@@ -158,7 +178,7 @@ export default async function PersonnelEditPage({
 
       <PersonnelEditForm
         person={profile}
-        viewerId={admin.id}
+        viewerId={viewer.id}
         locations={(locations ?? []) as Location[]}
         supervisors={(supervisors ?? []) as Profile[]}
         certifications={certifications}
@@ -172,14 +192,18 @@ export default async function PersonnelEditPage({
         documents={documents}
         notes={notes}
         taskbooks={taskbooks}
+        taskbookCatalog={taskbookCatalog}
         prerequisiteChecks={prerequisiteChecks}
         recognitions={recognitions}
+        languages={languages}
         programs={programs}
         allPrograms={allPrograms ?? []}
         ytdHours={ytdHours}
         ytdYear={ytdYear}
         permissionLevels={permissionLevels}
         pdipEnabled={pdipEnabled}
+        canVerifyLanguages={canVerifyLanguages}
+        asAdminEditor={asAdmin}
       />
     </div>
   );

@@ -6,10 +6,22 @@ export function escapeCsvCell(value: unknown): string {
   return text;
 }
 
-export function buildCsv(columns: { key: string; header: string }[], rows: Record<string, unknown>[]) {
+export function buildCsv(columns: { key: string; header: string; format?: string; fileNameKey?: string }[], rows: Record<string, unknown>[]) {
   const headerLine = columns.map((column) => escapeCsvCell(column.header)).join(",");
   const lines = rows.map((row) =>
-    columns.map((column) => escapeCsvCell(row[column.key])).join(",")
+    columns
+      .map((column) => {
+        if (column.format === "image") {
+          const fileNameKey = column.fileNameKey;
+          const fileName = fileNameKey ? row[fileNameKey] : null;
+          if (fileName != null && String(fileName).trim()) {
+            return escapeCsvCell(String(fileName).trim());
+          }
+          return escapeCsvCell(row[column.key] ? "Attached" : "");
+        }
+        return escapeCsvCell(row[column.key]);
+      })
+      .join(",")
   );
   return [headerLine, ...lines].join("\r\n");
 }
