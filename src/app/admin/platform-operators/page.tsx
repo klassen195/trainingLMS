@@ -15,8 +15,9 @@ export default async function PlatformOperatorsAdminPage() {
           <h1 className="text-3xl font-bold">Platform operators</h1>
         </div>
         <p className="text-muted-foreground">
-          A few operators can administer any department without appearing on that department&apos;s
-          personnel roster.
+          Eligible operators can enter platform mode to administer any department. While elevated
+          they do not appear on that department&apos;s personnel roster; exit platform mode to work
+          as a normal member of their home department.
         </p>
       </div>
       <PlatformOperatorsAdminUi operators={operators} />

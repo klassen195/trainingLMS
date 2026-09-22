@@ -26,6 +26,8 @@ export async function AppHeader() {
   const profile = ctx.kind === "authenticated" ? ctx.profile : null;
   const mustChangePassword = ctx.kind === "authenticated" && ctx.mustChangePassword;
   const isPlatformAdmin = ctx.kind === "authenticated" && ctx.isPlatformAdmin;
+  const isPlatformOperatorEligible =
+    ctx.kind === "authenticated" && ctx.isPlatformOperatorEligible;
   const capabilities =
     profile && !mustChangePassword ? await getProfileCapabilities(profile) : null;
   const actingClients = isPlatformAdmin && !mustChangePassword ? await listClients() : [];
@@ -54,6 +56,8 @@ export async function AppHeader() {
         departmentLogoUrl={departmentLogoUrl}
         moduleOrder={moduleOrder}
         enabledModules={enabledModules}
+        canTogglePlatformMode={isPlatformOperatorEligible && !mustChangePassword}
+        isPlatformMode={isPlatformAdmin}
         showAdmin={Boolean(
           profile?.is_admin ||
             capabilities?.manage_users ||

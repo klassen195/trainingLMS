@@ -65,12 +65,17 @@ export default async function AssetsApparatusPage({
           </p>
         </div>
         {admin ? (
-          <Button asChild size="sm">
-            <Link href="/assets/new?kind=apparatus">
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add apparatus
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild size="sm">
+              <Link href="/assets/apparatus/import">Import</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href="/assets/new?kind=apparatus">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add apparatus
+              </Link>
+            </Button>
+          </div>
         ) : null}
       </div>
 

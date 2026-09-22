@@ -10,7 +10,7 @@ import { isMissingTrainingLmsTables } from "@/lib/supabase/errors";
 import { hasRole, isAdmin } from "@/lib/permissions";
 import { loadCapabilityMatrix } from "@/lib/capability-matrix";
 import { profileHasCapability } from "@/lib/capabilities";
-import { isPlatformAdminFromUser } from "@/lib/platform-admin";
+import { isPlatformAdminFromUser, isPlatformOperatorEligibleFromUser } from "@/lib/platform-admin";
 import { createSupabaseServiceClient } from "@/lib/supabase/admin";
 import type { Profile } from "@/lib/training-lms-types";
 
@@ -23,6 +23,7 @@ export type AuthContext =
       profile: Profile;
       clientId: string;
       isPlatformAdmin: boolean;
+      isPlatformOperatorEligible: boolean;
       mustChangePassword: boolean;
     };
 
@@ -102,10 +103,13 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
   }
 
   const isPlatformAdmin = isPlatformAdminFromUser(user);
+  const isPlatformOperatorEligible =
+    Boolean(profile.platform_operator_eligible) || isPlatformOperatorEligibleFromUser(user);
   let clientId =
     profile.client_id ||
     (typeof user.app_metadata?.client_id === "string" ? user.app_metadata.client_id : "");
 
+  // Only elevated platform mode uses acting-department override.
   if (isPlatformAdmin) {
     const { data: acting } = await supabase
       .from("platform_operator_context")
@@ -129,10 +133,12 @@ export const getAuthContext = cache(async (): Promise<AuthContext> => {
       client_id: clientId,
       is_admin: Boolean(profile.is_admin) || isPlatformAdmin,
       is_platform_operator: Boolean(profile.is_platform_operator) || isPlatformAdmin,
+      platform_operator_eligible: isPlatformOperatorEligible,
       is_active: true,
     },
     clientId,
     isPlatformAdmin,
+    isPlatformOperatorEligible,
     mustChangePassword: userMustChangePassword(user),
   };
 });

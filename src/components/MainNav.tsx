@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   GraduationCap,
   Shield,
+  ShieldOff,
   LogOut,
   Menu,
   BookOpen,
@@ -25,6 +26,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { signOut } from "@/app/actions";
+import {
+  enterPlatformMode,
+  exitPlatformMode,
+} from "@/app/admin/platform-operators/actions";
 import { cn } from "@/lib/cn";
 import type { Profile } from "@/lib/training-lms-types";
 import type { Client } from "@/lib/clients";
@@ -99,6 +104,8 @@ export function MainNav({
   actingClientId = null,
   actingClients = [],
   departmentLogoUrl = null,
+  canTogglePlatformMode = false,
+  isPlatformMode = false,
 }: {
   profile: Profile | null;
   mustChangePassword?: boolean;
@@ -108,6 +115,8 @@ export function MainNav({
   actingClientId?: string | null;
   actingClients?: Pick<Client, "id" | "code" | "name" | "is_active">[];
   departmentLogoUrl?: string | null;
+  canTogglePlatformMode?: boolean;
+  isPlatformMode?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -116,7 +125,7 @@ export function MainNav({
 
   const displayName = profile?.display_name ?? profile?.email ?? "Member";
   const initials = displayName.charAt(0).toUpperCase();
-  const accessLabel = profile?.is_platform_operator
+  const accessLabel = isPlatformMode
     ? "Platform"
     : profile?.is_admin
       ? "Admin"
@@ -129,6 +138,17 @@ export function MainNav({
     startTransition(async () => {
       await signOut();
       router.push("/");
+    });
+  }
+
+  function handleTogglePlatformMode() {
+    startTransition(async () => {
+      if (isPlatformMode) {
+        await exitPlatformMode();
+      } else {
+        await enterPlatformMode();
+      }
+      router.refresh();
     });
   }
 
@@ -146,8 +166,9 @@ export function MainNav({
 
   const allNavItems = profile ? loggedInNavItems : [];
 
-  const showDepartmentSwitcher =
-    Boolean(profile && !mustChangePassword && actingClientId && actingClients.length > 0);
+  const showDepartmentSwitcher = Boolean(
+    profile && !mustChangePassword && isPlatformMode && actingClientId && actingClients.length > 0
+  );
 
   return (
     <nav className="relative z-[100] w-full overflow-visible border-b bg-background">
@@ -248,6 +269,21 @@ export function MainNav({
                         Personnel
                       </Link>
                     </DropdownMenuItem>
+                    {canTogglePlatformMode ? (
+                      <DropdownMenuItem disabled={pending} onSelect={handleTogglePlatformMode}>
+                        {isPlatformMode ? (
+                          <>
+                            <ShieldOff className="mr-2 h-4 w-4" />
+                            {pending ? "Exiting..." : "Exit platform mode"}
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="mr-2 h-4 w-4" />
+                            {pending ? "Entering..." : "Enter platform mode"}
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                    ) : null}
                     <DropdownMenuSeparator />
                   </>
                 )}
@@ -366,6 +402,26 @@ export function MainNav({
                       ) : null}
                     </div>
                   </div>
+                  {canTogglePlatformMode && !mustChangePassword ? (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={pending}
+                      onClick={handleTogglePlatformMode}
+                    >
+                      {isPlatformMode ? (
+                        <>
+                          <ShieldOff className="mr-2 h-4 w-4" />
+                          {pending ? "Exiting..." : "Exit platform mode"}
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="mr-2 h-4 w-4" />
+                          {pending ? "Entering..." : "Enter platform mode"}
+                        </>
+                      )}
+                    </Button>
+                  ) : null}
                   <Button variant="outline" className="w-full" disabled={pending} onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign out

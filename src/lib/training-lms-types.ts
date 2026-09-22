@@ -29,6 +29,7 @@ export type Profile = {
   permission_levels?: { id: string; name: string }[];
   is_admin: boolean;
   is_platform_operator?: boolean;
+  platform_operator_eligible?: boolean;
   is_active?: boolean;
   invited_at?: string | null;
   created_at: string;

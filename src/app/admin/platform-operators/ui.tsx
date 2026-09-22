@@ -52,9 +52,9 @@ export function PlatformOperatorsAdminUi({ operators }: { operators: PlatformOpe
         <CardHeader>
           <CardTitle>Grant access</CardTitle>
           <CardDescription>
-            The person must already have an account. They will disappear from every department
-            personnel list and can switch into any silo. They need to sign in again after being
-            granted access.
+            The person must already have an account. They can enter platform mode from the avatar
+            menu to administer any department (and are hidden from personnel lists while elevated).
+            They need to refresh or sign in again after being granted access.
           </CardDescription>
         </CardHeader>
         <CardContent>
