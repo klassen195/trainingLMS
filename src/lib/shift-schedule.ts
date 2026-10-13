@@ -39,7 +39,8 @@ export type ShiftSchedulePreset = {
 export const DEFAULT_SHIFT_SCHEDULE: ShiftScheduleConfig = {
   scheduleType: "48_96",
   namingStyle: "colors",
-  anchorDate: "2026-05-26",
+  /** Default Red-block start for 48/96 (Red → Blue → Green). Departments override via admin. */
+  anchorDate: "2026-05-28",
   startHour: 8,
   startMinute: 0,
 };
@@ -51,6 +52,11 @@ export const SHIFT_DAY_START_HOUR = DEFAULT_SHIFT_SCHEDULE.startHour;
 /** @deprecated Prefer DEFAULT_SHIFT_SCHEDULE.startMinute */
 export const SHIFT_DAY_START_MINUTE = DEFAULT_SHIFT_SCHEDULE.startMinute;
 
+/**
+ * Platoon order is the duty cycle starting at the department anchor date (index 0 = Red).
+ * Order is always Red → Blue → Green (→ White on four-platoon schedules).
+ * Admin → Shift schedule sets which calendar day that Red tour begins.
+ */
 export const SHIFT_SCHEDULE_PRESETS: Record<ShiftScheduleType, ShiftSchedulePreset> = {
   "24_48": {
     type: "24_48",
@@ -58,7 +64,7 @@ export const SHIFT_SCHEDULE_PRESETS: Record<ShiftScheduleType, ShiftSchedulePres
     shortLabel: "24 on / 48 off",
     description: "One day on, two days off. Three platoons; most common career-fire schedule (~56 hrs/week).",
     onDays: 1,
-    platoons: ["Green", "Red", "Blue"],
+    platoons: ["Red", "Blue", "Green"],
   },
   "48_96": {
     type: "48_96",
@@ -66,7 +72,7 @@ export const SHIFT_SCHEDULE_PRESETS: Record<ShiftScheduleType, ShiftSchedulePres
     shortLabel: "48 on / 96 off",
     description: "Two days on, four days off. Three platoons; same average hours as 24/48 with longer breaks.",
     onDays: 2,
-    platoons: ["Green", "Red", "Blue"],
+    platoons: ["Red", "Blue", "Green"],
   },
   "24_72": {
     type: "24_72",
@@ -74,7 +80,7 @@ export const SHIFT_SCHEDULE_PRESETS: Record<ShiftScheduleType, ShiftSchedulePres
     shortLabel: "24 on / 72 off",
     description: "One day on, three days off. Four platoons; lower average hours (~42 hrs/week).",
     onDays: 1,
-    platoons: ["Green", "Red", "Blue", "White"],
+    platoons: ["Red", "Blue", "Green", "White"],
   },
 };
 
@@ -101,7 +107,7 @@ export function shiftScheduleTypeLabel(type: ShiftScheduleType) {
 export function shiftNamingStyleLabel(style: ShiftNamingStyle) {
   switch (style) {
     case "colors":
-      return "Colors (Red / Green / Blue)";
+      return "Colors (Red / Blue / Green)";
     case "letters":
       return "Letters (A / B / C)";
     case "numbers":
@@ -223,10 +229,23 @@ export function personnelShiftLabelForConfig(
   return shiftColorLabel(color, config);
 }
 
+function coerceAnchorDate(value: unknown): string | null {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(value.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return null;
+}
+
 export function parseShiftScheduleConfig(row: {
   shift_schedule_type?: string | null;
   shift_naming_style?: string | null;
-  shift_day_anchor_date?: string | null;
+  shift_day_anchor_date?: string | Date | null;
   shift_day_start_hour?: number | null;
 } | null | undefined): ShiftScheduleConfig {
   if (!row) return { ...DEFAULT_SHIFT_SCHEDULE };
@@ -239,10 +258,7 @@ export function parseShiftScheduleConfig(row: {
   if (typeof row.shift_naming_style === "string" && isShiftNamingStyle(row.shift_naming_style)) {
     namingStyle = row.shift_naming_style;
   }
-  const anchorDate =
-    typeof row.shift_day_anchor_date === "string" && /^\d{4}-\d{2}-\d{2}/.test(row.shift_day_anchor_date)
-      ? row.shift_day_anchor_date.slice(0, 10)
-      : DEFAULT_SHIFT_SCHEDULE.anchorDate;
+  const anchorDate = coerceAnchorDate(row.shift_day_anchor_date) ?? DEFAULT_SHIFT_SCHEDULE.anchorDate;
   const startHour =
     typeof row.shift_day_start_hour === "number" &&
     Number.isFinite(row.shift_day_start_hour) &&

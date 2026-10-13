@@ -136,6 +136,7 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
     error.message.includes("personnel_qualifications") ||
     error.message.includes("personnel_ems_licenses") ||
     error.message.includes("personnel_ems_clearance_log") ||
+    error.message.includes("personnel_private") ||
     error.message.includes("ems_levels") ||
     error.message.includes("ems_clearance_levels") ||
     error.message.includes("ems_cleared_level_id") ||
@@ -143,6 +144,9 @@ export function isMissingPersonnelTables(error: PostgrestError | null) {
     error.message.includes("spouse_name") ||
     error.message.includes("spouse_birthday") ||
     error.message.includes("kids_birthdays") ||
+    error.message.includes("home_address") ||
+    error.message.includes("emergency_contacts") ||
+    error.message.includes("hr_info") ||
     error.message.includes("employee_number") ||
     error.message.includes("Could not find the table") ||
     (error.message.includes("Could not find the") && error.message.includes("column"))
@@ -204,6 +208,17 @@ export function isMissingEmsClearanceLevelsTable(
     error.code === "PGRST205" ||
     (error.message?.includes("ems_clearance_levels") ?? false) ||
     (error.message?.includes("ems_cleared_level_id") ?? false) ||
+    (error.message?.includes("Could not find the table") ?? false)
+  );
+}
+
+export function isMissingPersonnelRanksTable(
+  error: { code?: string; message?: string } | null
+) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    (error.message?.includes("personnel_ranks") ?? false) ||
     (error.message?.includes("Could not find the table") ?? false)
   );
 }

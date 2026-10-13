@@ -3,9 +3,9 @@ import {
   formatPersonnelRankDisplay,
   isTitleOnlyRank,
   rankHasTitle,
-  ranksWithoutProbation,
   swingUpRanks,
 } from "@/lib/labels";
+import { rankBehavior } from "@/lib/ranks-types";
 import { PROFILE_PERMISSION_LEVELS_EMBED } from "@/lib/permission-levels-types";
 
 export { formatPersonnelRankDisplay, isTitleOnlyRank, rankHasTitle };
@@ -412,14 +412,26 @@ export type PersonnelTrainingProgram = {
   completed_count: number;
 };
 
+/** Roster / org columns on profiles (safe for same-tenant directory SELECT). */
 export const PROFILE_ORG_COLUMNS =
-  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_platform_operator, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays, primary_location_id, supervisor_id, ems_cleared_level_id";
+  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_platform_operator, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, primary_location_id, supervisor_id, ems_cleared_level_id";
+
+/** Directory list: omit phone/hire_date and permission embeds to minimize PII in the browser. */
+export const PERSONNEL_DIRECTORY_COLUMNS =
+  "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, employee_number, job_title, shift, primary_location_id, supervisor_id, ems_cleared_level_id";
 
 export const PROFILE_ORG_SELECT = `${PROFILE_ORG_COLUMNS}, ${PROFILE_PERMISSION_LEVELS_EMBED}`;
 
+export const PERSONNEL_PRIVATE_COLUMNS =
+  "home_address, emergency_contacts, hr_info, anniversary, spouse_name, spouse_birthday, kids_birthdays";
+
+export const PERSONNEL_PRIVATE_EMBED = `personnel_private(${PERSONNEL_PRIVATE_COLUMNS})`;
+
 // Use the FK constraint name — `profiles!supervisor_id` is ambiguous on self-joins
 // and can resolve as "reports" (empty) instead of the assigned supervisor.
-export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, primary_location:locations!profiles_primary_location_id_fkey(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)`;
+export const PERSONNEL_PROFILE_SELECT = `${PROFILE_ORG_SELECT}, ${PERSONNEL_PRIVATE_EMBED}, primary_location:locations!profiles_primary_location_id_fkey(id, name), supervisor:profiles!profiles_supervisor_id_fkey(id, display_name, first_name, last_name, email), ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)`;
+
+export const PERSONNEL_DIRECTORY_SELECT = `${PERSONNEL_DIRECTORY_COLUMNS}, primary_location:locations!profiles_primary_location_id_fkey(id, name), ems_cleared_level:ems_clearance_levels!profiles_ems_cleared_level_id_fkey(id, name)`;
 
 export const PERSONNEL_CERTIFICATION_SELECT =
   "id, profile_id, name, issuing_authority, issued_on, expires_on, notes, file_name, storage_path, mime_type, sort_order, pdip_eligible, created_by, created_at";
@@ -1006,8 +1018,7 @@ export function formatSwingUpRanks(ranks: string[] | null | undefined) {
   if (list.length === 0) return "—";
   const order = new Map<string, number>(swingUpRanks.map((rank, index) => [rank, index]));
   return [...list]
-    .filter((rank) => order.has(rank))
-    .sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999))
+    .sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999) || a.localeCompare(b))
     .join(", ");
 }
 
@@ -1018,7 +1029,7 @@ export function isRankOnProbation(
   now = new Date()
 ) {
   if (!rank || !rankPromotedOn) return false;
-  if ((ranksWithoutProbation as readonly string[]).includes(rank)) return false;
+  if (rankBehavior(rank).no_probation) return false;
   const start = new Date(`${rankPromotedOn}T00:00:00`);
   if (Number.isNaN(start.getTime())) return false;
   const end = new Date(start);

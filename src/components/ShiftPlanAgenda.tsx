@@ -122,9 +122,7 @@ export function ShiftPlanAgenda({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-lg">
-                {colorLabel} · {formatDayRange(shiftDate)}
-              </CardTitle>
+              <CardTitle className="text-lg">{formatDayRange(shiftDate)}</CardTitle>
               <Badge className={shiftColorBadgeClass(color)}>{colorLabel}</Badge>
               {isCurrent ? <Badge>Current shift</Badge> : null}
             </div>

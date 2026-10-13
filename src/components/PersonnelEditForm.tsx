@@ -22,11 +22,9 @@ import type {
 import {
   effectiveRankPromotedOn,
   isRankOnProbation,
-  isTitleOnlyRank,
   normalizeSwingUpRanks,
   parseFamilyKids,
   personnelDisplayName,
-  rankHasTitle,
   rankShowsPromotionDate,
   serializeFamilyKids,
   type FamilyKidInput,
@@ -40,6 +38,11 @@ import type { EmsClearanceLevel } from "@/lib/ems-clearance-levels-types";
 import type { EmsLevel } from "@/lib/ems-levels-types";
 import type { Qualification } from "@/lib/qualifications-types";
 import { fireRanks, swingUpRanks } from "@/lib/labels";
+import {
+  rankBehavior,
+  swingUpRanksFromCatalog,
+  type PersonnelRank,
+} from "@/lib/ranks-types";
 import {
   formatPostalCodeInput,
   formatStateInput,
@@ -79,6 +82,7 @@ export function PersonnelEditForm({
   emsClearanceLog = [],
   emsLevelCatalog = [],
   emsClearanceCatalog = [],
+  rankCatalog = [],
   qualifications = [],
   qualificationCatalog = [],
   documents,
@@ -107,6 +111,7 @@ export function PersonnelEditForm({
   emsClearanceLog?: PersonnelEmsClearanceLogEntry[];
   emsLevelCatalog?: EmsLevel[];
   emsClearanceCatalog?: EmsClearanceLevel[];
+  rankCatalog?: PersonnelRank[];
   qualifications?: PersonnelQualification[];
   qualificationCatalog?: Qualification[];
   documents: PersonnelDocument[];
@@ -166,11 +171,17 @@ export function PersonnelEditForm({
   const isSelf = viewerId === person.id;
   const isActive = person.is_active !== false;
 
+  const catalogRankNames =
+    rankCatalog.length > 0
+      ? rankCatalog.filter((row) => row.is_active).map((row) => row.name)
+      : [...fireRanks];
   const rankOptions =
-    person.rank && !(fireRanks as readonly string[]).includes(person.rank)
-      ? [...fireRanks, person.rank]
-      : fireRanks;
-  const swingUpOptions = swingUpRanks;
+    person.rank && !catalogRankNames.includes(person.rank)
+      ? [...catalogRankNames, person.rank]
+      : catalogRankNames;
+  const swingUpOptions =
+    rankCatalog.length > 0 ? swingUpRanksFromCatalog(rankCatalog) : [...swingUpRanks];
+  const currentRankBehavior = rankBehavior(rank, rankCatalog);
 
   function saveProfile() {
     setError(null);
@@ -508,8 +519,9 @@ export function PersonnelEditForm({
                   value={rank}
                   onChange={(e) => {
                     const next = e.target.value;
+                    const nextBehavior = rankBehavior(next, rankCatalog);
                     setRank(next);
-                    if (!next || isTitleOnlyRank(next)) {
+                    if (!next || nextBehavior.title_only) {
                       setRankPromotedOn("");
                     } else if (next === "Firefighter") {
                       setRankPromotedOn(hireDate);
@@ -517,7 +529,7 @@ export function PersonnelEditForm({
                       const today = new Date().toISOString().slice(0, 10);
                       setRankPromotedOn(today);
                     }
-                    if (!rankHasTitle(next)) setJobTitle("");
+                    if (!nextBehavior.has_title) setJobTitle("");
                   }}
                 >
                   <option value="">Not set</option>
@@ -527,14 +539,15 @@ export function PersonnelEditForm({
                     </option>
                   ))}
                 </Select>
-                {isRankOnProbation(
+                {!currentRankBehavior.no_probation &&
+                isRankOnProbation(
                   rank,
                   effectiveRankPromotedOn(rank, rankPromotedOn || null, hireDate || null)
                 ) ? (
                   <p className="text-xs text-amber-800">On probation (first year in rank)</p>
                 ) : null}
               </div>
-              {rankHasTitle(rank) ? (
+              {currentRankBehavior.has_title ? (
                 <div className="space-y-2">
                   <FieldLabel htmlFor="jobTitle">Title</FieldLabel>
                   <Input
@@ -542,7 +555,7 @@ export function PersonnelEditForm({
                     value={jobTitle}
                     onChange={(e) => setJobTitle(e.target.value)}
                     placeholder={
-                      isTitleOnlyRank(rank)
+                      currentRankBehavior.title_only
                         ? "e.g. HR Manager, Finance"
                         : "e.g. Training, Operations"
                     }
@@ -580,7 +593,7 @@ export function PersonnelEditForm({
                   })}
                 </div>
               </div>
-              {rankShowsPromotionDate(rank) ? (
+              {rankShowsPromotionDate(rank) && !currentRankBehavior.title_only ? (
                 <div className="space-y-2">
                   <FieldLabel htmlFor="rankPromotedOn">Promoted to this rank</FieldLabel>
                   <Input

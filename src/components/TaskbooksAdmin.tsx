@@ -36,7 +36,7 @@ import { cn } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/Field";
-import { Input, Select, Textarea } from "@/components/ui/Input";
+import { Input, Select } from "@/components/ui/Input";
 
 type PrereqDraft = { code?: string; label: string };
 
@@ -198,7 +198,6 @@ function SortableTaskbookRow({
   const [requestable, setRequestable] = useState(taskbook.requestable);
   const [pdipEligible, setPdipEligible] = useState(taskbook.pdip_eligible);
   const [qualificationId, setQualificationId] = useState(taskbook.qualification_id ?? "");
-  const [notes, setNotes] = useState(taskbook.notes);
   const [prerequisites, setPrerequisites] = useState<PrereqDraft[]>(
     taskbook.prerequisites.map((item) => ({ code: item.code, label: item.label }))
   );
@@ -225,7 +224,6 @@ function SortableTaskbookRow({
     setRequestable(taskbook.requestable);
     setPdipEligible(taskbook.pdip_eligible);
     setQualificationId(taskbook.qualification_id ?? "");
-    setNotes(taskbook.notes);
     setPrerequisites(
       taskbook.prerequisites.map((item) => ({ code: item.code, label: item.label }))
     );
@@ -322,7 +320,6 @@ function SortableTaskbookRow({
                   requestable: autoIssued ? false : requestable,
                   pdip_eligible: pdipEnabled ? pdipEligible : taskbook.pdip_eligible,
                   qualification_id: qualificationId || null,
-                  notes,
                   prerequisites,
                 });
                 setEditing(false);
@@ -426,16 +423,6 @@ function SortableTaskbookRow({
                 Counts for PDIP
               </label>
             ) : null}
-          </div>
-          <div className="space-y-1">
-            <FieldLabel htmlFor={`taskbook-notes-${taskbook.id}`}>Notes</FieldLabel>
-            <Textarea
-              id={`taskbook-notes-${taskbook.id}`}
-              rows={2}
-              value={notes}
-              disabled={pending}
-              onChange={(e) => setNotes(e.target.value)}
-            />
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">

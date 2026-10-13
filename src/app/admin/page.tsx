@@ -19,6 +19,7 @@ import {
   ListTree,
   ListChecks,
   Image,
+  Award,
 } from "lucide-react";
 import Link from "next/link";
 import { getAuthContext, requireAdmin } from "@/lib/auth";
@@ -58,6 +59,12 @@ const ADMIN_GROUPS: AdminGroup[] = [
         label: "Shift schedule",
         description: "Duty rotation type and platoon naming",
         icon: CalendarClock,
+      },
+      {
+        href: "/admin/ranks",
+        label: "Ranks",
+        description: "Personnel ranks, titles, and swing-up options",
+        icon: Award,
       },
     ],
   },

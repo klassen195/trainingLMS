@@ -7,6 +7,8 @@ import {
   PERSONNEL_EMS_LICENSE_SELECT,
   PERSONNEL_EMS_CLEARANCE_LOG_SELECT,
   PERSONNEL_NOTE_SELECT,
+  PERSONNEL_DIRECTORY_COLUMNS,
+  PERSONNEL_DIRECTORY_SELECT,
   PERSONNEL_PROFILE_SELECT,
   PERSONNEL_QUALIFICATION_SELECT,
   PERSONNEL_RECOGNITION_SELECT,
@@ -218,9 +220,37 @@ function asSingleRelation<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
+type PersonnelPrivateRow = {
+  home_address?: string | null;
+  emergency_contacts?: string | null;
+  hr_info?: string | null;
+  anniversary?: string | null;
+  spouse_name?: string | null;
+  spouse_birthday?: string | null;
+  kids_birthdays?: string | null;
+};
+
+function privateFieldsFromRow(row: Record<string, unknown>): PersonnelPrivateRow {
+  const embedded = asSingleRelation(
+    row.personnel_private as PersonnelPrivateRow | PersonnelPrivateRow[] | null | undefined
+  );
+  if (embedded) return embedded;
+  // Legacy flat columns (pre-migration fallback) or already-normalized rows.
+  return {
+    home_address: (row.home_address as string | null | undefined) ?? null,
+    emergency_contacts: (row.emergency_contacts as string | null | undefined) ?? null,
+    hr_info: (row.hr_info as string | null | undefined) ?? null,
+    anniversary: (row.anniversary as string | null | undefined) ?? null,
+    spouse_name: (row.spouse_name as string | null | undefined) ?? null,
+    spouse_birthday: (row.spouse_birthday as string | null | undefined) ?? null,
+    kids_birthdays: (row.kids_birthdays as string | null | undefined) ?? null,
+  };
+}
+
 export function normalizePersonnelProfile(row: Record<string, unknown>): PersonnelProfile {
   const base = row as unknown as PersonnelProfile;
   const permissionLevels = parseProfilePermissionLevels(row);
+  const privateFields = privateFieldsFromRow(row);
   return {
     ...base,
     ...permissionLevels,
@@ -234,13 +264,13 @@ export function normalizePersonnelProfile(row: Record<string, unknown>): Personn
     phone: (base.phone as string | null | undefined) ?? null,
     hire_date: (base.hire_date as string | null | undefined) ?? null,
     shift: (base.shift as PersonnelProfile["shift"] | undefined) ?? null,
-    home_address: (base.home_address as string | null | undefined) ?? null,
-    emergency_contacts: (base.emergency_contacts as string | null | undefined) ?? null,
-    hr_info: (base.hr_info as string | null | undefined) ?? null,
-    anniversary: (base.anniversary as string | null | undefined) ?? null,
-    spouse_name: (base.spouse_name as string | null | undefined) ?? null,
-    spouse_birthday: (base.spouse_birthday as string | null | undefined) ?? null,
-    kids_birthdays: (base.kids_birthdays as string | null | undefined) ?? null,
+    home_address: privateFields.home_address ?? null,
+    emergency_contacts: privateFields.emergency_contacts ?? null,
+    hr_info: privateFields.hr_info ?? null,
+    anniversary: privateFields.anniversary ?? null,
+    spouse_name: privateFields.spouse_name ?? null,
+    spouse_birthday: privateFields.spouse_birthday ?? null,
+    kids_birthdays: privateFields.kids_birthdays ?? null,
     primary_location_id: (base.primary_location_id as string | null | undefined) ?? null,
     supervisor_id: (base.supervisor_id as string | null | undefined) ?? null,
     ems_cleared_level_id: (base.ems_cleared_level_id as string | null | undefined) ?? null,
@@ -337,14 +367,14 @@ async function finalizePersonnelProfiles(supabase: SupabaseClient, rows: Personn
 
 export async function fetchPersonnelDirectory(supabase: SupabaseClient) {
   const { data, error } = await excludePlatformOperatorsFromRoster(
-    supabase.from("profiles").select(PERSONNEL_PROFILE_SELECT)
+    supabase.from("profiles").select(PERSONNEL_DIRECTORY_SELECT)
   )
     .order("last_name", { ascending: true, nullsFirst: false })
     .order("first_name", { ascending: true, nullsFirst: false });
 
   if (error) {
     const fallback = await excludePlatformOperatorsFromRoster(
-      supabase.from("profiles").select(PROFILE_ORG_COLUMNS)
+      supabase.from("profiles").select(PERSONNEL_DIRECTORY_COLUMNS)
     )
       .order("last_name", { ascending: true, nullsFirst: false })
       .order("first_name", { ascending: true, nullsFirst: false });
@@ -423,7 +453,7 @@ export async function attachPersonnelCertificationPreviewUrls(
 
   const { data } = await supabase.storage
     .from(PERSONNEL_DOCUMENTS_BUCKET)
-    .createSignedUrls(paths, 60 * 60);
+    .createSignedUrls(paths, 60);
   const urls = new Map<string, string>();
   for (const item of data ?? []) {
     if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);

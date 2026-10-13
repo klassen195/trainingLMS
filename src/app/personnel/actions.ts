@@ -26,13 +26,13 @@ import {
   effectiveRankPromotedOn,
   normalizeSwingUpRanks,
   isPersonnelSupervisorOf,
-  isTitleOnlyRank,
-  rankHasTitle,
   EMS_CLEARANCE_NOT_SET_LABEL,
   type PersonnelShift,
 } from "@/lib/personnel-types";
 import { listShiftBattalionChiefIds, personHasSupervisorCoverage } from "@/lib/personnel";
 import { swingUpRanks } from "@/lib/labels";
+import { listPersonnelRanks } from "@/lib/ranks";
+import { rankBehavior, swingUpRanksFromCatalog } from "@/lib/ranks-types";
 import { listTaskbookTypes, findTaskbookTypeByName } from "@/lib/taskbooks";
 import type { TaskbookTypeWithPrerequisites } from "@/lib/taskbook-types";
 import { isRecognitionAwardId } from "@/lib/recognition-awards";
@@ -54,6 +54,58 @@ function throwIfDbError(error: PostgrestError | null) {
     );
   }
   throw new Error(supabaseErrorMessage(error));
+}
+
+/** Resolve a same-tenant profile via the user-scoped client before service-role Auth Admin calls. */
+async function requireTenantMemberProfile(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, email, client_id, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  throwIfDbError(error);
+  if (!data) throw new Error("User not found.");
+  return data;
+}
+
+async function upsertPersonnelPrivate(
+  supabase: SupabaseClient,
+  input: {
+    profileId: string;
+    clientId: string | null | undefined;
+    homeAddress: string | null;
+    emergencyContacts: string | null;
+    hrInfo: string | null | undefined;
+    anniversary: string | null;
+    spouseName: string | null;
+    spouseBirthday: string | null;
+    kidsBirthdays: string | null;
+    includeHrInfo: boolean;
+  }
+) {
+  if (!input.clientId) {
+    throw new Error("Your account is missing an organization. Sign out and sign back in.");
+  }
+
+  const row: Record<string, unknown> = {
+    profile_id: input.profileId,
+    client_id: input.clientId,
+    home_address: input.homeAddress
+      ? serializePostalAddress(parsePostalAddress(input.homeAddress))
+      : null,
+    emergency_contacts: input.emergencyContacts?.trim() || null,
+    anniversary: input.anniversary || null,
+    spouse_name: input.spouseName?.trim() || null,
+    spouse_birthday: input.spouseBirthday || null,
+    kids_birthdays: input.kidsBirthdays?.trim() || null,
+  };
+  if (input.includeHrInfo) {
+    row.hr_info = input.hrInfo?.trim() || null;
+  }
+
+  const { error } = await supabase.from("personnel_private").upsert(row, { onConflict: "profile_id" });
+  throwIfDbError(error);
 }
 
 async function assertCanEditPersonnelFile(profileId: string): Promise<{
@@ -252,15 +304,7 @@ export async function createPersonnelMember(input: {
 export async function issueTemporaryPassword(input: { userId: string }) {
   await requireAdmin();
 
-  const admin = createSupabaseServiceClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("id, email, client_id, is_active")
-    .eq("id", input.userId)
-    .maybeSingle();
-
-  if (profileError) throw new Error(profileError.message);
-  if (!profile) throw new Error("User not found.");
+  const profile = await requireTenantMemberProfile(input.userId);
   if (profile.is_active === false) {
     throw new Error("Reactivate this account before issuing a password.");
   }
@@ -268,6 +312,7 @@ export async function issueTemporaryPassword(input: { userId: string }) {
   const email = normalizeAuthEmail(profile.email ?? "");
   if (!email) throw new Error("This person needs an email address before you can issue a password.");
 
+  const admin = createSupabaseServiceClient();
   const { data: authData, error: authLookupError } = await admin.auth.admin.getUserById(input.userId);
   if (authLookupError) throw new Error(authLookupError.message);
   if (!authData.user) throw new Error("Sign-in account not found.");
@@ -286,11 +331,12 @@ export async function issueTemporaryPassword(input: { userId: string }) {
   });
   if (updateAuthError) throw new Error(updateAuthError.message);
 
-  const { error: updateError } = await admin
+  const supabase = await createSupabaseServerClient();
+  const { error: updateError } = await supabase
     .from("profiles")
     .update({ invited_at: new Date().toISOString() })
     .eq("id", input.userId);
-  if (updateError) throw new Error(updateError.message);
+  throwIfDbError(updateError);
 
   revalidatePersonnel(input.userId);
   return { password: temporaryPassword };
@@ -343,27 +389,36 @@ export async function updatePersonnelProfile(input: {
         first_name: firstName,
         last_name: lastName,
         phone: input.phone ? formatPhoneInput(input.phone.trim()) || null : null,
-        home_address: input.homeAddress
-          ? serializePostalAddress(parsePostalAddress(input.homeAddress))
-          : null,
-        emergency_contacts: input.emergencyContacts?.trim() || null,
-        anniversary: input.anniversary || null,
-        spouse_name: input.spouseName?.trim() || null,
-        spouse_birthday: input.spouseBirthday || null,
-        kids_birthdays: input.kidsBirthdays?.trim() || null,
       })
       .eq("id", input.userId);
     throwIfDbError(error);
+    await upsertPersonnelPrivate(supabase, {
+      profileId: input.userId,
+      clientId: viewer.client_id,
+      homeAddress: input.homeAddress,
+      emergencyContacts: input.emergencyContacts,
+      hrInfo: undefined,
+      anniversary: input.anniversary,
+      spouseName: input.spouseName,
+      spouseBirthday: input.spouseBirthday,
+      kidsBirthdays: input.kidsBirthdays,
+      includeHrInfo: false,
+    });
     revalidatePersonnel(input.userId);
     redirect(personnelFilePath(input.userId, input.section));
   }
 
   const rank = input.rank?.trim() || null;
-  const jobTitle = rankHasTitle(rank) ? input.jobTitle?.trim() || null : null;
+  const { rows: rankCatalog } = await listPersonnelRanks(supabase);
+  const behavior = rankBehavior(rank, rankCatalog);
+  const jobTitle = behavior.has_title ? input.jobTitle?.trim() || null : null;
   const hireDate = input.hireDate || null;
-  const rankPromotedOn = isTitleOnlyRank(rank)
+  const rankPromotedOn = behavior.title_only
     ? null
     : effectiveRankPromotedOn(rank, input.rankPromotedOn || null, hireDate);
+
+  const swingUpOptions =
+    rankCatalog.length > 0 ? swingUpRanksFromCatalog(rankCatalog) : [...swingUpRanks];
 
   const { error } = await supabase
     .from("profiles")
@@ -374,11 +429,11 @@ export async function updatePersonnelProfile(input: {
       rank,
       job_title: jobTitle,
       swing_up: (() => {
-        const allowed = new Set<string>(swingUpRanks);
+        const allowed = new Set<string>(swingUpOptions);
         const selected = input.swingUp
           .map((r) => r.trim())
           .filter((r) => r && allowed.has(r));
-        const order = new Map<string, number>(swingUpRanks.map((rank, index) => [rank, index]));
+        const order = new Map<string, number>(swingUpOptions.map((name, index) => [name, index]));
         return [...selected].sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
       })(),
       rank_promoted_on: rankPromotedOn,
@@ -386,15 +441,6 @@ export async function updatePersonnelProfile(input: {
       phone: input.phone ? formatPhoneInput(input.phone.trim()) || null : null,
       hire_date: hireDate,
       shift: input.shift,
-      home_address: input.homeAddress
-        ? serializePostalAddress(parsePostalAddress(input.homeAddress))
-        : null,
-      emergency_contacts: input.emergencyContacts?.trim() || null,
-      hr_info: input.hrInfo?.trim() || null,
-      anniversary: input.anniversary || null,
-      spouse_name: input.spouseName?.trim() || null,
-      spouse_birthday: input.spouseBirthday || null,
-      kids_birthdays: input.kidsBirthdays?.trim() || null,
       primary_location_id: input.primaryLocationId || null,
       supervisor_id: input.supervisorId || null,
       is_admin: input.isAdmin,
@@ -402,6 +448,18 @@ export async function updatePersonnelProfile(input: {
     .eq("id", input.userId);
 
   throwIfDbError(error);
+  await upsertPersonnelPrivate(supabase, {
+    profileId: input.userId,
+    clientId: viewer.client_id,
+    homeAddress: input.homeAddress,
+    emergencyContacts: input.emergencyContacts,
+    hrInfo: input.hrInfo,
+    anniversary: input.anniversary,
+    spouseName: input.spouseName,
+    spouseBirthday: input.spouseBirthday,
+    kidsBirthdays: input.kidsBirthdays,
+    includeHrInfo: true,
+  });
   await replaceProfilePermissionLevels(supabase, {
     profileId: input.userId,
     clientId: viewer.client_id,
@@ -421,12 +479,17 @@ export async function setPersonnelActive(input: {
     throw new Error("You cannot deactivate your own account.");
   }
 
+  await requireTenantMemberProfile(input.userId);
+
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ is_active: input.isActive })
-    .eq("id", input.userId);
+    .eq("id", input.userId)
+    .select("id")
+    .maybeSingle();
   throwIfDbError(error);
+  if (!updated) throw new Error("User not found.");
 
   const service = createSupabaseServiceClient();
   const { error: banError } = await service.auth.admin.updateUserById(input.userId, {
@@ -1394,13 +1457,21 @@ export async function createPersonnelDocument(input: {
 export async function deletePersonnelDocument(input: {
   id: string;
   profileId: string;
-  storagePath: string;
 }) {
   await requireAdmin();
   const supabase = await createSupabaseServerClient();
 
-  if (input.storagePath) {
-    await supabase.storage.from(PERSONNEL_DOCUMENTS_BUCKET).remove([input.storagePath]);
+  const { data: doc, error: lookupError } = await supabase
+    .from("personnel_documents")
+    .select("id, storage_path")
+    .eq("id", input.id)
+    .eq("profile_id", input.profileId)
+    .maybeSingle();
+  throwIfDbError(lookupError);
+  if (!doc) throw new Error("Document not found.");
+
+  if (doc.storage_path) {
+    await supabase.storage.from(PERSONNEL_DOCUMENTS_BUCKET).remove([doc.storage_path]);
   }
 
   const { error } = await supabase
@@ -1582,23 +1653,38 @@ async function requireTaskbookDecider(profileId: string) {
 }
 
 async function grantSwingUpForRank(profileId: string, rank: string) {
-  if (!(swingUpRanks as readonly string[]).includes(rank)) return;
-
   const admin = createSupabaseServiceClient();
   const { data: profile, error } = await admin
     .from("profiles")
-    .select("swing_up")
+    .select("swing_up, client_id")
     .eq("id", profileId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!profile) throw new Error("Person not found.");
 
+  let swingUpOptions: string[] = [...swingUpRanks];
+  if (profile.client_id) {
+    const { data: catalog } = await admin
+      .from("personnel_ranks")
+      .select("name, sort_order")
+      .eq("client_id", profile.client_id)
+      .eq("is_active", true)
+      .eq("swing_up_eligible", true)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+    if (catalog && catalog.length > 0) {
+      swingUpOptions = catalog.map((row) => row.name as string);
+    }
+  }
+
+  if (!swingUpOptions.includes(rank)) return;
+
   const current = normalizeSwingUpRanks(profile.swing_up);
   if (current.includes(rank)) return;
 
-  const allowed = new Set<string>(swingUpRanks);
+  const allowed = new Set<string>(swingUpOptions);
   const next = [...current, rank].filter((r) => allowed.has(r));
-  const order = new Map<string, number>(swingUpRanks.map((r, i) => [r, i]));
+  const order = new Map<string, number>(swingUpOptions.map((r, i) => [r, i]));
   next.sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
 
   const { error: updateError } = await admin

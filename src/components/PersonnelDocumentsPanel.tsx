@@ -44,11 +44,7 @@ export function PersonnelDocumentsPanel({
               <div className="flex gap-2">
                 <DownloadDocButton id={doc.id} profileId={profileId} />
                 {canManage ? (
-                  <DeleteDocButton
-                    id={doc.id}
-                    profileId={profileId}
-                    storagePath={doc.storage_path}
-                  />
+                  <DeleteDocButton id={doc.id} profileId={profileId} />
                 ) : null}
               </div>
             </li>
@@ -91,15 +87,7 @@ function DownloadDocButton({ id, profileId }: { id: string; profileId: string })
   );
 }
 
-function DeleteDocButton({
-  id,
-  profileId,
-  storagePath,
-}: {
-  id: string;
-  profileId: string;
-  storagePath: string;
-}) {
+function DeleteDocButton({ id, profileId }: { id: string; profileId: string }) {
   const [pending, startTransition] = useTransition();
   return (
     <Button
@@ -111,7 +99,7 @@ function DeleteDocButton({
       onClick={() => {
         if (!confirm("Delete this document?")) return;
         startTransition(async () => {
-          await deletePersonnelDocument({ id, profileId, storagePath });
+          await deletePersonnelDocument({ id, profileId });
         });
       }}
     >

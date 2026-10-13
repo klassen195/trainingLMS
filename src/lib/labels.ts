@@ -18,6 +18,7 @@ import type {
   VehicleCheckType,
 } from "@/lib/vehicle-checks-types";
 import type { ProgramTag } from "@/lib/training-lms-types";
+import { rankBehavior } from "@/lib/ranks-types";
 
 const tagLabels: Record<ProgramTag, string> = {
   fire: "Fire",
@@ -148,7 +149,7 @@ export const fireRanks = [
 
 export type FireRank = (typeof fireRanks)[number];
 
-/** Ranks that do not serve a first-year probation after promotion. */
+/** @deprecated Prefer personnel_ranks.no_probation via rankBehavior() */
 export const ranksWithoutProbation = [
   "Assistant Chief",
   "Division Chief",
@@ -156,22 +157,22 @@ export const ranksWithoutProbation = [
   "Administration",
 ] as const satisfies readonly FireRank[];
 
-/** Ranks that carry an associated title (e.g. division or functional assignment). */
+/** @deprecated Prefer personnel_ranks.has_title via rankBehavior() */
 export const ranksWithTitle = [
   "Assistant Chief",
   "Division Chief",
   "Administration",
 ] as const satisfies readonly FireRank[];
 
-/** Non-fire ranks shown as title only (rank itself is hidden in displays). */
+/** @deprecated Prefer personnel_ranks.title_only via rankBehavior() */
 export const titleOnlyRanks = ["Administration"] as const satisfies readonly FireRank[];
 
 export function rankHasTitle(rank: string | null | undefined) {
-  return Boolean(rank && (ranksWithTitle as readonly string[]).includes(rank));
+  return rankBehavior(rank).has_title;
 }
 
 export function isTitleOnlyRank(rank: string | null | undefined) {
-  return Boolean(rank && (titleOnlyRanks as readonly string[]).includes(rank));
+  return rankBehavior(rank).title_only;
 }
 
 /** Rank column / badge text: title-only ranks show the title, never the rank name. */
@@ -189,7 +190,7 @@ export function formatPersonnelRankDisplay(
   return rank;
 }
 
-/** Ranks available for swing-up qualification (excludes entry and chief ranks). */
+/** @deprecated Prefer personnel_ranks.swing_up_eligible via swingUpRanksFromCatalog() */
 export const swingUpRanks = [
   "Engineer",
   "Captain",

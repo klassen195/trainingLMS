@@ -21,6 +21,7 @@ import type { Profile } from "@/lib/training-lms-types";
 import { LOCATION_SELECT, type Location } from "@/lib/locations-types";
 import { listEmsClearanceLevels } from "@/lib/ems-clearance-levels";
 import { listEmsLevels } from "@/lib/ems-levels";
+import { listPersonnelRanks } from "@/lib/ranks";
 import { listQualifications } from "@/lib/qualifications";
 import { listTaskbookTypes } from "@/lib/taskbooks";
 import { listPermissionLevels } from "@/lib/permission-levels";
@@ -83,6 +84,7 @@ export default async function PersonnelEditPage({
     { rows: taskbookCatalog, error: taskbookCatalogError },
     { rows: emsLevelCatalog, error: emsCatalogError },
     { rows: emsClearanceCatalog, error: emsClearanceCatalogError },
+    { rows: rankCatalog, error: rankCatalogError },
     { rows: permissionLevels, error: permissionLevelsError },
   ] = await Promise.all([
     supabase
@@ -95,7 +97,7 @@ export default async function PersonnelEditPage({
       supabase
         .from("profiles")
         .select(
-          "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, home_address, emergency_contacts, hr_info, primary_location_id, supervisor_id"
+          "id, display_name, first_name, last_name, email, rank, swing_up, rank_promoted_on, is_admin, is_active, invited_at, created_at, employee_number, job_title, department, phone, hire_date, shift, primary_location_id, supervisor_id"
         )
         .or(
           profile.supervisor_id
@@ -121,6 +123,7 @@ export default async function PersonnelEditPage({
     listTaskbookTypes(supabase, { withPrerequisites: true }),
     listEmsLevels(supabase, { activeOnly: true }),
     listEmsClearanceLevels(supabase, { activeOnly: true }),
+    listPersonnelRanks(supabase, { activeOnly: true }),
     listPermissionLevels(supabase),
   ]);
 
@@ -160,6 +163,7 @@ export default async function PersonnelEditPage({
   if (taskbookCatalogError) throw new Error(taskbookCatalogError.message);
   if (emsCatalogError) throw new Error(emsCatalogError.message);
   if (emsClearanceCatalogError) throw new Error(emsClearanceCatalogError.message);
+  if (rankCatalogError) throw new Error(rankCatalogError.message);
   if (permissionLevelsError) throw new Error(permissionLevelsError.message);
 
   const { data: allPrograms } = asAdmin
@@ -187,6 +191,7 @@ export default async function PersonnelEditPage({
         emsClearanceLog={emsClearanceLog}
         emsLevelCatalog={emsLevelCatalog}
         emsClearanceCatalog={emsClearanceCatalog}
+        rankCatalog={rankCatalog}
         qualifications={qualifications}
         qualificationCatalog={qualificationCatalog}
         documents={documents}
