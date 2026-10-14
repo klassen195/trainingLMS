@@ -52,7 +52,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/instructor/programs/${id}/modules/${moduleId}/edit`}>
                   <Pencil className="mr-2 h-4 w-4" />
-                  Edit module
+                  Edit course
                 </Link>
               </Button>
             ) : null}
@@ -64,7 +64,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               {ctx.module.content}
             </article>
           ) : (
-            <p className="text-sm text-muted-foreground">No overview content for this module.</p>
+            <p className="text-sm text-muted-foreground">No overview content for this course.</p>
           )}
 
           {linkedResources.length > 0 ? (
@@ -93,7 +93,7 @@ export default async function ModulePage({ params }: { params: Promise<{ id: str
               completed={ctx.completed}
             />
           ) : ctx.enrolled && ctx.completed ? (
-            <p className="text-sm font-medium text-green-500">All module items completed</p>
+            <p className="text-sm font-medium text-green-500">All course items completed</p>
           ) : null}
         </CardContent>
       </Card>

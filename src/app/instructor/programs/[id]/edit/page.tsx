@@ -47,8 +47,8 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="mb-2 text-4xl font-bold">Edit program</h1>
-          <p className="text-lg text-muted-foreground">Update program details and manage modules.</p>
+          <h1 className="mb-2 text-4xl font-bold">Edit module</h1>
+          <p className="text-lg text-muted-foreground">Update module details and manage courses.</p>
         </div>
         <Button variant="outline" asChild>
           <Link href={`/programs/${id}`}>View program</Link>

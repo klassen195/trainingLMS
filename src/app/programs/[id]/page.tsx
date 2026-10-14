@@ -92,7 +92,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
                 <Button variant="outline" asChild>
                   <Link href={`/instructor/programs/${id}/edit`}>
                     <Pencil className="mr-2 h-4 w-4" />
-                    Edit program
+                    Edit module
                   </Link>
                 </Button>
               ) : null}
@@ -108,7 +108,7 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
           <div className="flex items-center gap-3 rounded-lg border p-4">
             <BookOpen className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="text-sm text-muted-foreground">Modules</p>
+              <p className="text-sm text-muted-foreground">Courses</p>
               <p className="font-medium">{modules.length}</p>
             </div>
           </div>
@@ -162,14 +162,14 @@ export default async function ProgramDetailPage({ params }: { params: Promise<{ 
             <Button size="lg" asChild>
               <Link href={`/programs/${id}/modules/${firstModule.id}`}>
                 <PlayCircle className="mr-2 h-5 w-5" />
-                Start program
+                Start module
               </Link>
             </Button>
           </div>
         ) : null}
 
         <section>
-          <h2 className="mb-4 text-2xl font-bold">Program modules</h2>
+          <h2 className="mb-4 text-2xl font-bold">Module courses</h2>
           <ProgramModuleList
             programId={id}
             modules={modules}

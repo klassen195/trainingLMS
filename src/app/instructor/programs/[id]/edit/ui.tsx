@@ -43,7 +43,7 @@ export function EditProgramForm({
     <div className="space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle>Program details</CardTitle>
+          <CardTitle>Module details</CardTitle>
         </CardHeader>
         <CardContent>
           <form
@@ -95,7 +95,7 @@ export function EditProgramForm({
               </Select>
             </div>
             <Button type="submit" disabled={pending || tags.length === 0}>
-              {pending ? "Saving..." : "Save program"}
+              {pending ? "Saving..." : "Save module"}
             </Button>
           </form>
         </CardContent>
@@ -103,9 +103,9 @@ export function EditProgramForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Modules</CardTitle>
+          <CardTitle>Courses</CardTitle>
           <CardDescription>
-            Drag to reorder modules, or click a module to edit its content and resources.
+            Drag to reorder courses, or click a course to edit its content and resources.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -117,12 +117,12 @@ export function EditProgramForm({
 
           {linkableModules.length ? (
             <div className="space-y-3 border-t pt-4">
-              <h3 className="text-sm font-medium">Link existing module</h3>
+              <h3 className="text-sm font-medium">Link existing course</h3>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-[16rem] flex-1 space-y-2">
-                  <FieldLabel htmlFor="link-module">Module</FieldLabel>
+                  <FieldLabel htmlFor="link-module">Course</FieldLabel>
                   <Select id="link-module" value={linkModuleId} onChange={(e) => setLinkModuleId(e.target.value)}>
-                    <option value="">Select a module</option>
+                    <option value="">Select a course</option>
                     {linkableModules.map((moduleItem) => (
                       <option key={moduleItem.id} value={moduleItem.id}>
                         {moduleItem.title}
@@ -144,7 +144,7 @@ export function EditProgramForm({
                     })
                   }
                 >
-                  Link module
+                  Link course
                 </Button>
               </div>
             </div>
@@ -168,21 +168,21 @@ export function EditProgramForm({
           >
             <h3 className="flex items-center gap-2 text-sm font-medium">
               <Plus className="h-4 w-4" />
-              Create new module
+              Create new course
             </h3>
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[16rem] flex-1 space-y-2">
                 <FieldLabel htmlFor="new-module-title">Title</FieldLabel>
                 <Input
                   id="new-module-title"
-                  placeholder="Module title"
+                  placeholder="Course title"
                   required
                   value={newModuleTitle}
                   onChange={(e) => setNewModuleTitle(e.target.value)}
                 />
               </div>
               <Button type="submit" disabled={pending || !newModuleTitle.trim()}>
-                Create module
+                Create course
               </Button>
             </div>
           </form>

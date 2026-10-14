@@ -37,14 +37,14 @@ export default async function InstructorPage() {
         <div>
           <div className="mb-2 flex items-center gap-3">
             <BookOpen className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold">Instructor Programs</h1>
+            <h1 className="text-4xl font-bold">Instructor Modules</h1>
           </div>
-          <p className="text-lg text-muted-foreground">Create and manage training programs and modules.</p>
+          <p className="text-lg text-muted-foreground">Create and manage training modules and courses.</p>
         </div>
         <Button asChild>
           <Link href="/instructor/programs/new">
             <Plus className="mr-2 h-4 w-4" />
-            New program
+            New module
           </Link>
         </Button>
       </div>
@@ -52,7 +52,7 @@ export default async function InstructorPage() {
       {programList.length === 0 ? (
         <div className="rounded-lg border py-12 text-center">
           <BookOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">No programs yet. Create your first one.</p>
+          <p className="text-muted-foreground">No modules yet. Create your first one.</p>
         </div>
       ) : (
         <div className="space-y-4">

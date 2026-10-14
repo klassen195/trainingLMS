@@ -27,14 +27,14 @@ export function ModuleChecklistsSection({
         <CardHeader>
           <CardTitle className="text-lg">Checklists</CardTitle>
           {!enrolled ? (
-            <p className="text-sm text-muted-foreground">Enroll in this module to track checklist progress.</p>
+            <p className="text-sm text-muted-foreground">Enroll in this course to track checklist progress.</p>
           ) : null}
         </CardHeader>
       ) : (
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">Checklists</h2>
           {!enrolled ? (
-            <p className="text-sm text-muted-foreground">Enroll in this module to track checklist progress.</p>
+            <p className="text-sm text-muted-foreground">Enroll in this course to track checklist progress.</p>
           ) : null}
         </div>
       )}

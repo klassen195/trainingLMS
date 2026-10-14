@@ -61,7 +61,7 @@ export async function TrainingProgressOverview({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgress.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Active programs</p>
+            <p className="mt-1 text-xs text-muted-foreground">Active modules</p>
           </CardContent>
         </Card>
         <Card>
@@ -71,7 +71,7 @@ export async function TrainingProgressOverview({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completed.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Finished programs</p>
+            <p className="mt-1 text-xs text-muted-foreground">Finished modules</p>
           </CardContent>
         </Card>
       </div>
@@ -98,7 +98,7 @@ export async function TrainingProgressOverview({
       <section className="mb-8">
         <div className="mb-6 flex items-center gap-3">
           <Star className="h-6 w-6 text-amber-400" />
-          <h2 className="text-2xl font-bold">My Programs</h2>
+          <h2 className="text-2xl font-bold">My Modules</h2>
         </div>
         <MyProgramsSection items={myPrograms} />
       </section>

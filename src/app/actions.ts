@@ -80,7 +80,7 @@ async function requireModuleEnrollment(
     .eq("module_id", moduleId)
     .eq("user_id", userId)
     .maybeSingle();
-  if (!data) throw new Error("Enroll in this module to track progress");
+  if (!data) throw new Error("Enroll in this course to track progress");
 }
 
 export async function signOut() {
@@ -289,7 +289,7 @@ export async function enrollInProgram(input: { programId: string }) {
 
   const moduleIds = (programModuleRows ?? []).map((row) => row.module_id);
   if (moduleIds.length === 0) {
-    throw new Error("This program has no modules to enroll in.");
+    throw new Error("This module has no courses to enroll in.");
   }
 
   const enrolledAt = new Date().toISOString();
@@ -479,7 +479,7 @@ export async function createProgram(input: {
     .select("id")
     .single();
   throwIfDbError(error);
-  if (!data) throw new Error("Failed to create program");
+  if (!data) throw new Error("Failed to create module");
 
   const { error: tagsError } = await supabase.from("program_tags").insert(
     tags.map((tag) => ({
@@ -672,6 +672,7 @@ export async function prepareModuleResourceUpload(input: {
   programId: string;
   moduleId: string;
   title: string;
+  description?: string;
   resourceType: ModuleResourceType;
   fileName: string;
   sortOrder: number;
@@ -686,6 +687,7 @@ export async function prepareModuleResourceUpload(input: {
       id: resourceId,
       module_id: input.moduleId,
       title: input.title.trim(),
+      description: normalizeResourceDescription(input.description),
       resource_type: input.resourceType,
       storage_path: storagePath,
       file_name: input.fileName,
@@ -695,7 +697,7 @@ export async function prepareModuleResourceUpload(input: {
     .single();
 
   throwIfDbError(error);
-  if (!data) throw new Error("Failed to create module resource");
+  if (!data) throw new Error("Failed to create course resource");
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
   revalidateModuleViews(input.programId, input.moduleId);
@@ -707,6 +709,7 @@ export async function addModuleResourceYoutube(input: {
   programId: string;
   moduleId: string;
   title: string;
+  description?: string;
   youtubeUrl: string;
   sortOrder: number;
 }) {
@@ -717,6 +720,7 @@ export async function addModuleResourceYoutube(input: {
   const { error } = await supabase.from("module_resources").insert({
     module_id: input.moduleId,
     title: input.title.trim(),
+    description: normalizeResourceDescription(input.description),
     resource_type: "youtube",
     storage_path: null,
     file_name: videoId,
@@ -733,6 +737,7 @@ export async function addModuleResourceLink(input: {
   programId: string;
   moduleId: string;
   title: string;
+  description?: string;
   url: string;
   sortOrder: number;
 }) {
@@ -743,6 +748,7 @@ export async function addModuleResourceLink(input: {
   const { error } = await supabase.from("module_resources").insert({
     module_id: input.moduleId,
     title: input.title.trim(),
+    description: normalizeResourceDescription(input.description),
     resource_type: "link",
     storage_path: null,
     file_name: null,
@@ -778,6 +784,30 @@ export async function updateModuleResourceLink(input: {
     .eq("id", input.resourceId)
     .eq("module_id", input.moduleId)
     .eq("resource_type", "link");
+  throwIfDbError(error);
+
+  revalidatePath(`/instructor/programs/${input.programId}/edit`);
+  revalidatePath(`/instructor/programs/${input.programId}/modules/${input.moduleId}/edit`);
+  revalidateModuleViews(input.programId, input.moduleId);
+}
+
+function normalizeResourceDescription(description: string | null | undefined) {
+  return description?.trim() || null;
+}
+
+export async function updateModuleResourceDescription(input: {
+  programId: string;
+  moduleId: string;
+  resourceId: string;
+  description: string;
+}) {
+  const { supabase } = await requireAuthUserId();
+
+  const { error } = await supabase
+    .from("module_resources")
+    .update({ description: normalizeResourceDescription(input.description) })
+    .eq("id", input.resourceId)
+    .eq("module_id", input.moduleId);
   throwIfDbError(error);
 
   revalidatePath(`/instructor/programs/${input.programId}/edit`);
@@ -970,6 +1000,7 @@ export async function addModuleResourceQuiz(input: {
   programId: string;
   moduleId: string;
   title: string;
+  description?: string;
   sortOrder: number;
 }) {
   const { supabase } = await requireAuthUserId();
@@ -978,6 +1009,7 @@ export async function addModuleResourceQuiz(input: {
     .insert({
       module_id: input.moduleId,
       title: input.title.trim(),
+      description: normalizeResourceDescription(input.description),
       resource_type: "quiz",
       storage_path: null,
       file_name: null,

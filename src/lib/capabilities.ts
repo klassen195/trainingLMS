@@ -99,18 +99,18 @@ export const capabilityMeta: Record<
   },
   browse_program_catalog: {
     group: "Training",
-    label: "Browse program catalog",
-    description: "See all published programs, not only assigned enrollments.",
+    label: "Browse module catalog",
+    description: "See all published modules, not only assigned enrollments.",
   },
   self_enroll: {
     group: "Training",
     label: "Self-enroll in training",
-    description: "Enroll in programs and modules without staff assignment.",
+    description: "Enroll in modules and courses without staff assignment.",
   },
   author_training: {
     group: "Training",
     label: "Author training",
-    description: "Create and edit programs and modules. Shows Instructor in navigation.",
+    description: "Create and edit modules and courses. Shows Instructor in navigation.",
   },
   ems_qi: {
     group: "Training",

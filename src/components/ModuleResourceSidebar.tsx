@@ -31,7 +31,7 @@ export function ModuleResourceSidebar({
   return (
     <nav className="rounded-lg border bg-card p-4">
       <div className="mb-4 border-b pb-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Module</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Course</p>
         <p className="mt-1 font-semibold leading-snug">{moduleTitle}</p>
         {!enrolled ? (
           <p className="mt-2 text-xs text-muted-foreground">Not enrolled</p>

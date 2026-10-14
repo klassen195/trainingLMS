@@ -24,13 +24,13 @@ export function ProgramModuleList({
   canOpen: boolean;
 }) {
   if (modules.length === 0) {
-    return <p className="text-sm text-muted-foreground">No modules in this program yet.</p>;
+    return <p className="text-sm text-muted-foreground">No courses in this module yet.</p>;
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Program modules</CardTitle>
+        <CardTitle className="text-lg">Module courses</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {modules.map((moduleItem, index) => {

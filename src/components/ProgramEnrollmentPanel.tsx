@@ -18,12 +18,12 @@ export function ProgramEnrollmentPanel({
     <div className="mb-8 rounded-lg border border-dashed bg-muted/30 p-4">
       <p className="mb-3 text-sm text-muted-foreground">
         {partiallyEnrolled
-          ? `You're enrolled in ${enrolledCount} of ${moduleCount} modules. Enroll in the full program to track progress across every module, or open a module below to enroll individually.`
-          : "Enroll in the full program to track progress across all modules, or open a module below to enroll in just that module."}
+          ? `You're enrolled in ${enrolledCount} of ${moduleCount} courses. Enroll in the full module to track progress across every course, or open a course below to enroll individually.`
+          : "Enroll in the full module to track progress across all courses, or open a course below to enroll in just that course."}
       </p>
       <EnrollInProgramButton
         programId={programId}
-        label={partiallyEnrolled ? "Enroll in all modules" : "Enroll in program"}
+        label={partiallyEnrolled ? "Enroll in all courses" : "Enroll in module"}
       />
     </div>
   );

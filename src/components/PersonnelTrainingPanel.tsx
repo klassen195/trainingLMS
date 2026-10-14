@@ -71,7 +71,7 @@ export function PersonnelTrainingPanel({
                         </Link>
                       )}
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {program.completed_count} of {program.enrolled_count} modules completed
+                        {program.completed_count} of {program.enrolled_count} courses completed
                       </p>
                     </div>
                     {canManage && program.program_id !== "_unlinked" ? (
@@ -114,7 +114,7 @@ function UnassignProgramButton({ userId, programId }: { userId: string; programI
       variant="secondary"
       disabled={pending}
       onClick={() => {
-        if (!confirm("Remove all module enrollments for this program?")) return;
+        if (!confirm("Remove all course enrollments for this module?")) return;
         startTransition(async () => {
           await unassignProgramFromUser({ userId, programId });
         });
@@ -137,7 +137,7 @@ function AssignProgramForm({
   const [error, setError] = useState<string | null>(null);
 
   if (assignable.length === 0) {
-    return <p className="text-sm text-muted-foreground">All programs are already assigned.</p>;
+    return <p className="text-sm text-muted-foreground">All modules are already assigned.</p>;
   }
 
   return (
@@ -158,14 +158,14 @@ function AssignProgramForm({
       }}
     >
       <div className="min-w-[12rem] flex-1 space-y-2">
-        <FieldLabel htmlFor="assign-program">Assign program</FieldLabel>
+        <FieldLabel htmlFor="assign-program">Assign module</FieldLabel>
         <Select
           id="assign-program"
           value={programId}
           onChange={(e) => setProgramId(e.target.value)}
           required
         >
-          <option value="">Select a program…</option>
+          <option value="">Select a module…</option>
           {assignable.map((p) => (
             <option key={p.id} value={p.id}>
               {p.title}

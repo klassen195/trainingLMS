@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 
 export function EnrollInProgramButton({
   programId,
-  label = "Enroll in program",
+  label = "Enroll in module",
 }: {
   programId: string;
   label?: string;

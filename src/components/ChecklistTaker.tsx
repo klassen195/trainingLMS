@@ -38,7 +38,7 @@ export function ChecklistTaker({
       </div>
 
       {!enrolled ? (
-        <p className="text-sm text-muted-foreground">Enroll in this module to track checklist progress.</p>
+        <p className="text-sm text-muted-foreground">Enroll in this course to track checklist progress.</p>
       ) : null}
 
       <ChecklistItemsPanel

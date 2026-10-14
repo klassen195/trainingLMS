@@ -14,7 +14,7 @@ export function MyProgramsSection({ items }: { items: UserHighlightItem[] }) {
     return (
       <div className="rounded-lg border border-dashed py-10 text-center">
         <p className="text-muted-foreground">
-          Star programs or modules to pin them here for quick access.
+          Star modules or courses to pin them here for quick access.
         </p>
       </div>
     );
@@ -57,7 +57,7 @@ function ModuleHighlightCard({ item }: { item: Extract<UserHighlightItem, { kind
         <Link href={`/programs/${item.programId}/modules/${item.module.id}`} className="block h-full">
           <CardHeader>
             <div className="mb-2 flex items-center gap-2 pr-10">
-              <Badge variant="outline">Module</Badge>
+              <Badge variant="outline">Course</Badge>
             </div>
             <CardTitle className="line-clamp-2">{item.module.title}</CardTitle>
             <CardDescription className="line-clamp-1">In {item.programTitle}</CardDescription>
@@ -65,11 +65,11 @@ function ModuleHighlightCard({ item }: { item: Extract<UserHighlightItem, { kind
           <CardContent>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <BookOpen className="h-4 w-4" />
-              <span>Module highlight</span>
+              <span>Course highlight</span>
             </div>
           </CardContent>
           <CardFooter>
-            <span className="text-sm font-medium text-primary">Open module →</span>
+            <span className="text-sm font-medium text-primary">Open course →</span>
           </CardFooter>
         </Link>
       </Card>

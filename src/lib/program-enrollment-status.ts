@@ -10,6 +10,6 @@ export function programEnrollmentLabel(
 export function programEnrollmentSummary(enrolledCount: number, moduleCount: number): string {
   const status = programEnrollmentLabel(enrolledCount, moduleCount);
   if (status === "not_enrolled") return "Not enrolled";
-  if (status === "fully_enrolled") return "Enrolled in all modules";
-  return `Partially enrolled (${enrolledCount} of ${moduleCount} modules)`;
+  if (status === "fully_enrolled") return "Enrolled in all courses";
+  return `Partially enrolled (${enrolledCount} of ${moduleCount} courses)`;
 }

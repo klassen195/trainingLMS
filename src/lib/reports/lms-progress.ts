@@ -33,7 +33,7 @@ export async function loadLmsProgressReport(): Promise<{ rows: LmsProgressReport
     (row) =>
       ({
         id: row.id as string,
-        title: (row.title as string) || "Program",
+        title: (row.title as string) || "Module",
         description: null,
         tags: [],
         status: (row.status as Program["status"]) || "published",
@@ -104,7 +104,7 @@ export async function loadLmsProgressReport(): Promise<{ rows: LmsProgressReport
       const pct = progressByProgram.find((row) => row.program.id === program.id)?.pct ?? null;
       rows.push({
         person,
-        program: program.title || "Program",
+        program: program.title || "Module",
         status: program.status || "",
         progress: pct == null ? "—" : `${Math.round(pct)}%`,
         enrolledModules: enrolledCount,
@@ -123,8 +123,8 @@ export async function loadLmsProgressReport(): Promise<{ rows: LmsProgressReport
 
 export const LMS_PROGRESS_COLUMNS = [
   { key: "person", header: "Person" },
-  { key: "program", header: "Program" },
-  { key: "status", header: "Program status" },
+  { key: "program", header: "Module" },
+  { key: "status", header: "Module status" },
   { key: "progress", header: "Progress" },
-  { key: "enrolledModules", header: "Enrolled modules" },
+  { key: "enrolledModules", header: "Enrolled courses" },
 ];

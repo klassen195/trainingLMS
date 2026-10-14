@@ -55,7 +55,7 @@ export const REPORT_CATALOG: ReportDefinition[] = [
   {
     id: "lms-progress",
     title: "LMS progress",
-    description: "Program enrollment and completion progress across the department.",
+    description: "Module enrollment and completion progress across the department.",
     href: "/reports/lms-progress",
     requiredCapabilities: ["access_programs"],
   },

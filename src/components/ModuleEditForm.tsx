@@ -150,7 +150,7 @@ export function ModuleEditForm({
         <>
           <p className="font-medium">{moduleItem.title}</p>
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">{moduleItem.content}</p>
-          <p className="text-xs text-muted-foreground">Shared module — only the creator can edit content.</p>
+          <p className="text-xs text-muted-foreground">Shared course — only the creator can edit content.</p>
         </>
       )}
       <div className="space-y-2">
@@ -179,7 +179,7 @@ export function ModuleEditForm({
               })
             }
           >
-            Remove from program
+            Remove from module
           </Button>
         </div>
       ) : null}

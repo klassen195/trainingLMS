@@ -6,8 +6,8 @@ export default async function NewProgramPage() {
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
-      <h1 className="mb-2 text-4xl font-bold">Create program</h1>
-      <p className="mb-8 text-lg text-muted-foreground">Add a new training program to the catalog.</p>
+      <h1 className="mb-2 text-4xl font-bold">Create module</h1>
+      <p className="mb-8 text-lg text-muted-foreground">Add a new training module to the catalog.</p>
       <NewProgramForm />
     </div>
   );

@@ -133,13 +133,13 @@ export function ProgramModuleSortableList({
   }
 
   if (orderedModules.length === 0) {
-    return <p className="text-sm text-muted-foreground">No modules yet. Create one below.</p>;
+    return <p className="text-sm text-muted-foreground">No courses yet. Create one below.</p>;
   }
 
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">
-        {pending ? "Saving order..." : "Drag modules to reorder."}
+        {pending ? "Saving order..." : "Drag courses to reorder."}
       </p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={orderedModules.map((moduleItem) => moduleItem.id)} strategy={verticalListSortingStrategy}>

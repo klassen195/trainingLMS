@@ -47,7 +47,7 @@ export function QuizTaker({
   }
 
   if (!enrolled) {
-    return <p className="text-sm text-muted-foreground">Enroll in this module to take the quiz.</p>;
+    return <p className="text-sm text-muted-foreground">Enroll in this course to take the quiz.</p>;
   }
 
   if (settings.poolSize === 0) {

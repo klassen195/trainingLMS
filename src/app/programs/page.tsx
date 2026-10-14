@@ -53,15 +53,15 @@ export default async function ProgramsPage({
           </div>
           <p className="text-lg text-muted-foreground">
             {limitedCatalog
-              ? "Programs you have been enrolled in by an instructor or admin."
-              : "Your training progress and the published program catalog."}
+              ? "Modules you have been enrolled in by an instructor or admin."
+              : "Your training progress and the published module catalog."}
           </p>
         </div>
         <TrainingProgressOverview supabase={supabase} profileId={profile.id} programs={programList} />
         {programList.length === 0 && limitedCatalog ? (
           <div className="rounded-lg border py-12 text-center">
             <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-            <p className="text-muted-foreground">No assigned programs yet.</p>
+            <p className="text-muted-foreground">No assigned modules yet.</p>
           </div>
         ) : (
           <section>
@@ -92,7 +92,7 @@ export default async function ProgramsPage({
           <h1 className="text-4xl font-bold">{tagLabel(activeTag)}</h1>
         </div>
         <p className="text-lg text-muted-foreground">
-          {filteredPrograms.length} published program{filteredPrograms.length === 1 ? "" : "s"} in this division.
+          {filteredPrograms.length} published module{filteredPrograms.length === 1 ? "" : "s"} in this division.
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export default async function ProgramsPage({
         <div className="rounded-lg border py-12 text-center">
           <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
           <p className="text-muted-foreground">
-            {limitedCatalog ? "No assigned programs with this tag yet." : "No programs with this tag yet."}
+            {limitedCatalog ? "No assigned modules with this tag yet." : "No modules with this tag yet."}
           </p>
         </div>
       ) : (

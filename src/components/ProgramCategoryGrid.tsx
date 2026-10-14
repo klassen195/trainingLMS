@@ -17,7 +17,7 @@ export function ProgramCategoryGrid({
     return (
       <div className="rounded-lg border py-12 text-center">
         <GraduationCap className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-        <p className="text-muted-foreground">No published programs yet. Check back soon.</p>
+        <p className="text-muted-foreground">No published modules yet. Check back soon.</p>
       </div>
     );
   }
@@ -37,7 +37,7 @@ export function ProgramCategoryGrid({
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  {count} program{count === 1 ? "" : "s"}
+                  {count} module{count === 1 ? "" : "s"}
                 </p>
               </CardContent>
             </Card>

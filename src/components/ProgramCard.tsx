@@ -61,14 +61,14 @@ export function ProgramCard({
           <CardContent>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <BookOpen className="h-4 w-4" />
-              <span>{moduleCount} module{moduleCount === 1 ? "" : "s"}</span>
+              <span>{moduleCount} course{moduleCount === 1 ? "" : "s"}</span>
             </div>
             {enrollmentStatus === "not_enrolled" ? (
               <p className="mt-4 text-sm text-muted-foreground">Not enrolled</p>
             ) : enrollmentStatus === "partially_enrolled" ? (
               <div className="mt-4 space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  Partially enrolled ({enrolledCount} of {moduleCount} modules)
+                  Partially enrolled ({enrolledCount} of {moduleCount} courses)
                 </p>
                 {showProgress && progressPercent > 0 ? (
                   <ProgressBar value={progressPercent} showLabel />
@@ -85,7 +85,7 @@ export function ProgramCard({
             ) : null}
           </CardContent>
           <CardFooter>
-            <span className="text-sm font-medium text-primary">View program →</span>
+            <span className="text-sm font-medium text-primary">View module →</span>
           </CardFooter>
         </Link>
       </Card>

@@ -24,11 +24,35 @@ import { Button } from "@/components/ui/Button";
 import { ChecklistItemsEditor } from "@/components/ChecklistItemsEditor";
 import { LinkResourceEditor } from "@/components/LinkResourceEditor";
 import { ModuleResourceSortableList } from "@/components/ModuleResourceSortableList";
+import { ResourceDescriptionEditor } from "@/components/ResourceDescriptionEditor";
 import { FieldLabel } from "@/components/ui/Field";
 import { Input, Textarea } from "@/components/ui/Input";
 
 const addResourceSectionClassName =
   "space-y-3 rounded-lg border border-dashed border-border bg-muted/20 p-4";
+
+function DescriptionField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <FieldLabel htmlFor={id}>Description (optional)</FieldLabel>
+      <Textarea
+        id={id}
+        rows={2}
+        placeholder="Shown under the title on the course page"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
 
 export function ModuleResourcesEditor({
   programId,
@@ -46,10 +70,14 @@ export function ModuleResourcesEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const [title, setTitle] = useState("");
+  const [fileDescription, setFileDescription] = useState("");
   const [quizTitle, setQuizTitle] = useState("");
+  const [quizDescription, setQuizDescription] = useState("");
   const [youtubeTitle, setYoutubeTitle] = useState("");
+  const [youtubeDescription, setYoutubeDescription] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
+  const [linkDescription, setLinkDescription] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [checklistTitle, setChecklistTitle] = useState("");
   const [checklistItemsText, setChecklistItemsText] = useState("");
@@ -124,6 +152,12 @@ export function ModuleResourcesEditor({
                     url={resource.external_url ?? ""}
                   />
                 ) : null}
+                <ResourceDescriptionEditor
+                  programId={programId}
+                  moduleId={moduleId}
+                  resourceId={resource.id}
+                  description={resource.description ?? ""}
+                />
               </>
             )}
           />
@@ -144,6 +178,11 @@ export function ModuleResourcesEditor({
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
+        <DescriptionField
+          id={`resource-description-${moduleId}`}
+          value={fileDescription}
+          onChange={setFileDescription}
+        />
         <div className="space-y-2">
           <FieldLabel htmlFor={`resource-file-${moduleId}`}>File</FieldLabel>
           <input
@@ -179,6 +218,7 @@ export function ModuleResourcesEditor({
                   programId,
                   moduleId,
                   title: title.trim(),
+                  description: fileDescription,
                   resourceType,
                   fileName: file.name,
                   sortOrder: resources.length + 1,
@@ -200,6 +240,7 @@ export function ModuleResourcesEditor({
                 }
 
                 setTitle("");
+                setFileDescription("");
                 if (fileInputRef.current) fileInputRef.current.value = "";
                 router.refresh();
               } catch (err) {
@@ -223,6 +264,11 @@ export function ModuleResourcesEditor({
             onChange={(e) => setYoutubeTitle(e.target.value)}
           />
         </div>
+        <DescriptionField
+          id={`youtube-description-${moduleId}`}
+          value={youtubeDescription}
+          onChange={setYoutubeDescription}
+        />
         <div className="space-y-2">
           <FieldLabel htmlFor={`youtube-url-${moduleId}`}>YouTube URL</FieldLabel>
           <Input
@@ -244,10 +290,12 @@ export function ModuleResourcesEditor({
                   programId,
                   moduleId,
                   title: youtubeTitle.trim(),
+                  description: youtubeDescription,
                   youtubeUrl: youtubeUrl.trim(),
                   sortOrder: resources.length + 1,
                 });
                 setYoutubeTitle("");
+                setYoutubeDescription("");
                 setYoutubeUrl("");
                 router.refresh();
               } catch (err) {
@@ -271,6 +319,11 @@ export function ModuleResourcesEditor({
             onChange={(e) => setLinkTitle(e.target.value)}
           />
         </div>
+        <DescriptionField
+          id={`link-description-${moduleId}`}
+          value={linkDescription}
+          onChange={setLinkDescription}
+        />
         <div className="space-y-2">
           <FieldLabel htmlFor={`link-url-${moduleId}`}>Website URL</FieldLabel>
           <Input
@@ -292,10 +345,12 @@ export function ModuleResourcesEditor({
                   programId,
                   moduleId,
                   title: linkTitle.trim(),
+                  description: linkDescription,
                   url: linkUrl.trim(),
                   sortOrder: resources.length + 1,
                 });
                 setLinkTitle("");
+                setLinkDescription("");
                 setLinkUrl("");
                 router.refresh();
               } catch (err) {
@@ -314,11 +369,16 @@ export function ModuleResourcesEditor({
           <FieldLabel htmlFor={`quiz-title-${moduleId}`}>Quiz title</FieldLabel>
           <Input
             id={`quiz-title-${moduleId}`}
-            placeholder="e.g. Module knowledge check"
+            placeholder="e.g. Course knowledge check"
             value={quizTitle}
             onChange={(e) => setQuizTitle(e.target.value)}
           />
         </div>
+        <DescriptionField
+          id={`quiz-description-${moduleId}`}
+          value={quizDescription}
+          onChange={setQuizDescription}
+        />
         <p className="text-xs text-muted-foreground">
           Creates a quiz resource. An admin configures the question pool and pass rules.
         </p>
@@ -333,9 +393,11 @@ export function ModuleResourcesEditor({
                   programId,
                   moduleId,
                   title: quizTitle.trim(),
+                  description: quizDescription,
                   sortOrder: resources.length + 1,
                 });
                 setQuizTitle("");
+                setQuizDescription("");
                 router.refresh();
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to add quiz");
@@ -351,7 +413,7 @@ export function ModuleResourcesEditor({
       <div className="space-y-4 border-t border-border pt-4">
         <h4 className="text-sm font-medium text-foreground">Checklists</h4>
         <p className="text-xs text-muted-foreground">
-          Checklists appear on the module page below resources. Learners can check items off directly there.
+          Checklists appear on the course page below resources. Learners can check items off directly there.
         </p>
 
         {checklistResources.length ? (

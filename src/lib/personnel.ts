@@ -453,7 +453,7 @@ export async function attachPersonnelCertificationPreviewUrls(
 
   const { data } = await supabase.storage
     .from(PERSONNEL_DOCUMENTS_BUCKET)
-    .createSignedUrls(paths, 60);
+    .createSignedUrls(paths, 60 * 60);
   const urls = new Map<string, string>();
   for (const item of data ?? []) {
     if (item.path && item.signedUrl) urls.set(item.path, item.signedUrl);
@@ -907,7 +907,7 @@ export async function fetchPersonnelTraining(
     const moduleId = link.module_id as string;
     acc.modules.set(moduleId, {
       module_id: moduleId,
-      title: titleByModule.get(moduleId) ?? "Module",
+      title: titleByModule.get(moduleId) ?? "Course",
       enrolled_at: enrolledAtByModule.get(moduleId) ?? "",
       completed_at: completedAtByModule.get(moduleId) ?? null,
     });
@@ -920,7 +920,7 @@ export async function fetchPersonnelTraining(
     if (linkedModuleIds.has(moduleId)) continue;
     orphanModules.push({
       module_id: moduleId,
-      title: titleByModule.get(moduleId) ?? "Module",
+      title: titleByModule.get(moduleId) ?? "Course",
       enrolled_at: enrolledAtByModule.get(moduleId) ?? "",
       completed_at: completedAtByModule.get(moduleId) ?? null,
     });
@@ -945,7 +945,7 @@ export async function fetchPersonnelTraining(
   if (orphanModules.length > 0) {
     programs.push({
       program_id: "_unlinked",
-      title: "Other modules",
+      title: "Other courses",
       status: "published",
       modules: orphanModules.sort((a, b) => a.title.localeCompare(b.title)),
       enrolled_count: orphanModules.length,

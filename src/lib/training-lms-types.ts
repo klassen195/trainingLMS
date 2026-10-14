@@ -115,6 +115,7 @@ export type ModuleResource = {
   id: string;
   module_id: string;
   title: string;
+  description: string | null;
   resource_type: ModuleResourceType;
   storage_path: string | null;
   file_name: string | null;

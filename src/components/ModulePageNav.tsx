@@ -27,7 +27,7 @@ export function ModulePageNav({
         <div />
       )}
       <Button variant="ghost" asChild>
-        <Link href={`/programs/${programId}`}>Back to program</Link>
+        <Link href={`/programs/${programId}`}>Back to module</Link>
       </Button>
       {nextModuleId ? (
         <Button asChild>

@@ -80,7 +80,7 @@ export function NewProgramForm() {
         disabled={pending || tags.length === 0}
         className="bg-[#C11B2B] text-white"
       >
-        {pending ? "Creating..." : "Create program"}
+        {pending ? "Creating..." : "Create module"}
       </Button>
     </form>
   );

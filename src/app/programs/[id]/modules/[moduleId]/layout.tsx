@@ -43,7 +43,7 @@ export default async function ModuleLayout({
             {!caps.self_enroll ? (
               !ctx.enrolled ? (
                 <div className="mb-6 rounded-lg border p-4 text-sm text-muted-foreground">
-                  You need to be enrolled in this module by an instructor or admin to track progress.
+                  You need to be enrolled in this course by an instructor or admin to track progress.
                 </div>
               ) : null
             ) : !ctx.enrolled ? (

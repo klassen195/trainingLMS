@@ -50,15 +50,15 @@ export default async function EditModulePage({
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="mb-2 text-4xl font-bold">Edit module</h1>
+          <h1 className="mb-2 text-4xl font-bold">Edit course</h1>
           <p className="text-lg text-muted-foreground">{program.title}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" asChild>
-            <Link href={`/instructor/programs/${id}/edit`}>Back to program</Link>
+            <Link href={`/instructor/programs/${id}/edit`}>Back to module</Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href={`/programs/${id}/modules/${moduleId}`}>View module</Link>
+            <Link href={`/programs/${id}/modules/${moduleId}`}>View course</Link>
           </Button>
         </div>
       </div>

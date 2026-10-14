@@ -19,10 +19,10 @@ export function UnenrollFromProgramButton({
       size="sm"
       disabled={pending}
       onClick={() => {
-        const moduleLabel = enrolledCount === 1 ? "1 module" : `${enrolledCount} modules`;
+        const moduleLabel = enrolledCount === 1 ? "1 course" : `${enrolledCount} courses`;
         if (
           !window.confirm(
-            `Leave this program? You'll be unenrolled from ${moduleLabel}. Your progress will be saved if you enroll again later.`
+            `Leave this module? You'll be unenrolled from ${moduleLabel}. Your progress will be saved if you enroll again later.`
           )
         ) {
           return;
@@ -30,7 +30,7 @@ export function UnenrollFromProgramButton({
         startTransition(() => unenrollFromProgram({ programId }));
       }}
     >
-      {pending ? "Leaving..." : "Leave program"}
+      {pending ? "Leaving..." : "Leave module"}
     </Button>
   );
 }

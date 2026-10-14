@@ -1522,7 +1522,7 @@ export async function assignProgramToUser(input: { userId: string; programId: st
 
   const moduleIds = (programModuleRows ?? []).map((row) => row.module_id);
   if (moduleIds.length === 0) {
-    throw new Error("This program has no modules to enroll in.");
+    throw new Error("This module has no courses to enroll in.");
   }
 
   const enrolledAt = new Date().toISOString();

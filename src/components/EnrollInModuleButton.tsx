@@ -19,7 +19,7 @@ export function EnrollInModuleButton({
       disabled={pending}
       onClick={() => startTransition(() => enrollInModule({ programId, moduleId }))}
     >
-      {pending ? "Enrolling..." : "Enroll in module"}
+      {pending ? "Enrolling..." : "Enroll in course"}
     </Button>
   );
 }

@@ -43,8 +43,8 @@ export function HighlightStarButton(props: HighlightStarButtonProps) {
       className={cn("h-9 w-9 shrink-0", className)}
       disabled={pending}
       aria-pressed={highlighted}
-      aria-label={highlighted ? `Remove ${label} from My Programs` : `Add ${label} to My Programs`}
-      title={highlighted ? "Remove from My Programs" : "Add to My Programs"}
+      aria-label={highlighted ? `Remove ${label} from My Modules` : `Add ${label} to My Modules`}
+      title={highlighted ? "Remove from My Modules" : "Add to My Modules"}
       onClick={handleClick}
     >
       <Star

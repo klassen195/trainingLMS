@@ -23,7 +23,7 @@ export default async function LmsProgressReportPage() {
       </div>
       <ReportShell
         title="LMS progress"
-        description="Program enrollment and completion progress for active personnel."
+        description="Module enrollment and completion progress for active personnel."
         branding={branding}
         columns={LMS_PROGRESS_COLUMNS}
         rows={rows}

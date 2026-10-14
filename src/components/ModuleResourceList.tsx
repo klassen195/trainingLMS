@@ -30,7 +30,7 @@ export function ModuleResourceList({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Module resources</CardTitle>
+        <CardTitle className="text-lg">Course resources</CardTitle>
         {!enrolled ? (
           <p className="text-sm text-muted-foreground">Not enrolled — progress is not tracked</p>
         ) : null}
@@ -57,7 +57,7 @@ export function ModuleResourceList({
                   <Circle className="h-5 w-5 text-muted-foreground" />
                 )}
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">{resource.title}</span>
                   {isCompleted ? (
@@ -67,9 +67,12 @@ export function ModuleResourceList({
                     </Badge>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{resourceTypeLabel(resource.resource_type)}</p>
+                {resource.description ? (
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{resource.description}</p>
+                ) : null}
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              <span className="shrink-0 text-xs text-muted-foreground">{resourceTypeLabel(resource.resource_type)}</span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
             </motion.div>
           );
 

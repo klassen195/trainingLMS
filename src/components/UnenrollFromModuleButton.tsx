@@ -19,11 +19,11 @@ export function UnenrollFromModuleButton({
       size="sm"
       disabled={pending}
       onClick={() => {
-        if (!window.confirm("Leave this module? Your progress will be saved if you enroll again later.")) return;
+        if (!window.confirm("Leave this course? Your progress will be saved if you enroll again later.")) return;
         startTransition(() => unenrollFromModule({ programId, moduleId }));
       }}
     >
-      {pending ? "Leaving..." : "Leave module"}
+      {pending ? "Leaving..." : "Leave course"}
     </Button>
   );
 }
