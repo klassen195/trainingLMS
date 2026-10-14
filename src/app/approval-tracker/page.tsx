@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ListChecks, Plus } from "lucide-react";
 import { requireCapability } from "@/lib/capability-access";
 import { loadApprovalBoardContext } from "@/app/approval-tracker/actions";
+import { ApprovalPolicyIdeasDrawer } from "@/components/ApprovalPolicyIdeasDrawer";
 import { ApprovalTrackerBoard } from "@/components/ApprovalTrackerBoard";
 import { Button } from "@/components/ui/Button";
 import { isMissingApprovalTrackerTables } from "@/lib/supabase/errors";
@@ -39,7 +40,7 @@ export default async function ApprovalTrackerPage({
   }
 
   return (
-    <div className="container mx-auto px-4 py-5">
+    <div className="container mx-auto py-5 pl-14 pr-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="mb-1 flex items-center gap-2">
@@ -57,6 +58,15 @@ export default async function ApprovalTrackerPage({
           </Link>
         </Button>
       </div>
+
+      {board ? (
+        <ApprovalPolicyIdeasDrawer
+          ideas={board.ideas}
+          profiles={board.profiles}
+          currentUserId={board.profile.id}
+          isAdminUser={board.isAdminUser}
+        />
+      ) : null}
 
       {loadError || !board ? (
         <div className="rounded-md border py-8 text-center">

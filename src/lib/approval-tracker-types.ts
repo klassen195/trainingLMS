@@ -137,6 +137,17 @@ export type ApprovalDocumentListItem = ApprovalDocument & {
   assignee?: ApprovalProfileSummary | null;
 };
 
+export type ApprovalPolicyIdea = {
+  id: string;
+  title: string;
+  doc_type: ApprovalDocType;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  creator?: ApprovalProfileSummary | null;
+};
+
 export type ApprovalDocumentEvent = {
   id: string;
   document_id: string;
@@ -188,6 +199,9 @@ export const APPROVAL_DOCUMENT_SELECT =
   "id, title, doc_type, submission_kind, committee, subcommittee, current_stage, notes, file_name, storage_path, mime_type, created_by, assigned_to, stage_entered_at, archived_at, created_at, updated_at";
 
 export const APPROVAL_DOCUMENT_LIST_SELECT = `${APPROVAL_DOCUMENT_SELECT}, creator:profiles!created_by(id, display_name, first_name, last_name, email), assignee:profiles!assigned_to(id, display_name, first_name, last_name, email)`;
+
+export const APPROVAL_POLICY_IDEA_SELECT =
+  "id, title, doc_type, notes, created_by, created_at, updated_at, creator:profiles!created_by(id, display_name, first_name, last_name, email)";
 
 export const APPROVAL_EVENT_SELECT =
   "id, document_id, from_stage, to_stage, action, comment, acted_by, created_at, actor:profiles!acted_by(id, display_name, first_name, last_name, email)";

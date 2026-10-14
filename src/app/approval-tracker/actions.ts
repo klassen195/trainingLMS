@@ -12,6 +12,7 @@ import {
   APPROVAL_DOCUMENT_LIST_SELECT,
   APPROVAL_EVENT_SELECT,
   APPROVAL_FILES_BUCKET,
+  APPROVAL_POLICY_IDEA_SELECT,
   APPROVAL_PROFILE_OPTION_SELECT,
   APPROVAL_STAGE_MEMBER_SELECT,
   APPROVAL_STAGES,
@@ -31,6 +32,7 @@ import {
   type ApprovalDocumentDetail,
   type ApprovalDocumentEvent,
   type ApprovalDocumentListItem,
+  type ApprovalPolicyIdea,
   type ApprovalProfileOption,
   type ApprovalProfileSummary,
   type ApprovalStage,
@@ -621,12 +623,85 @@ export async function replaceApprovalCommitteeMembers(input: {
   revalidateApprovals();
 }
 
+export async function listApprovalPolicyIdeas(): Promise<ApprovalPolicyIdea[]> {
+  await requireCapability("approval_tracker");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("approval_policy_ideas")
+    .select(APPROVAL_POLICY_IDEA_SELECT)
+    .order("created_at", { ascending: true });
+  throwIfDbError(error);
+  return ((data ?? []) as unknown as ApprovalPolicyIdea[]).map((idea) => ({
+    ...idea,
+    creator: asProfile(idea.creator),
+  }));
+}
+
+export async function createApprovalPolicyIdea(input: {
+  title: string;
+  docType: string;
+  notes?: string | null;
+}) {
+  const profile = await assertCapability("approval_tracker");
+  const title = parseTitle(input.title);
+  const docType = parseDocType(input.docType);
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("approval_policy_ideas").insert({
+    title,
+    doc_type: docType,
+    notes: input.notes?.trim() || null,
+    created_by: profile.id,
+  });
+  throwIfDbError(error);
+  revalidateApprovals();
+}
+
+export async function deleteApprovalPolicyIdea(input: { id: string }) {
+  await assertCapability("approval_tracker");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("approval_policy_ideas")
+    .delete()
+    .eq("id", input.id)
+    .select("id");
+  throwIfDbError(error);
+  if (!data?.length) {
+    throw new Error("Only the person who added this idea or an admin can remove it.");
+  }
+  revalidateApprovals();
+}
+
+export async function assignApprovalPolicyIdea(input: {
+  id: string;
+  assignedTo: string;
+  submissionKind: string;
+}): Promise<{ id: string }> {
+  await assertCapability("approval_tracker");
+  const assignedTo = parseAssignedTo(input.assignedTo);
+  const submissionKind = parseSubmissionKind(input.submissionKind);
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("assign_approval_policy_idea", {
+    p_idea_id: input.id,
+    p_assigned_to: assignedTo,
+    p_submission_kind: submissionKind,
+  });
+  throwIfDbError(error);
+  if (typeof data !== "string") throw new Error("Failed to assign policy idea.");
+
+  revalidateApprovals(data);
+  return { id: data };
+}
+
 export async function loadApprovalBoardContext() {
   const profile = await requireCapability("approval_tracker");
-  const [documents, members, committeeMembers] = await Promise.all([
+  const [documents, members, committeeMembers, ideas, profiles] = await Promise.all([
     listApprovalDocuments({ includeArchived: true }),
     listApprovalStageMembers(),
     listApprovalCommitteeMembers(),
+    listApprovalPolicyIdeas(),
+    listApprovalProfiles(),
   ]);
   const votes = await listApprovalCommitteeVotes(
     documents.filter((doc) => doc.current_stage === "committee").map((doc) => doc.id)
@@ -638,5 +713,7 @@ export async function loadApprovalBoardContext() {
     stageMemberIds: groupStageMemberIds(members),
     committeeMembers,
     votes,
+    ideas,
+    profiles,
   };
 }
