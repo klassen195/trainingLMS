@@ -17,6 +17,8 @@ import { formatDate } from "@/lib/dates";
 import {
   formatEstimatedCost,
   getTrainingAuthorizationBadge,
+  isPastUpcomingTraining,
+  upcomingTrainingDisplayStatus,
   upcomingTrainingStatusLabel,
   upcomingTrainingTimeRange,
 } from "@/lib/upcoming-training-types";
@@ -72,7 +74,8 @@ export default async function UpcomingTrainingDetailPage({
   }
 
   const canManage = caps.manage_upcoming_training;
-  const canApply = listing.status === "open";
+  const displayStatus = upcomingTrainingDisplayStatus(listing);
+  const canApply = listing.status === "open" && !isPastUpcomingTraining(listing);
   const authorizationBadge = getTrainingAuthorizationBadge(listing.authorization_level);
   const timeRange = upcomingTrainingTimeRange(listing);
 
@@ -83,8 +86,18 @@ export default async function UpcomingTrainingDetailPage({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold">{listing.title}</h1>
-            <Badge variant={listing.status === "open" ? "default" : "secondary"}>
-              {upcomingTrainingStatusLabel(listing.status)}
+            <Badge
+              variant={
+                displayStatus === "open"
+                  ? "default"
+                  : displayStatus === "cancelled"
+                    ? "destructive"
+                    : displayStatus === "closed"
+                      ? "outline"
+                      : "secondary"
+              }
+            >
+              {upcomingTrainingStatusLabel(displayStatus)}
             </Badge>
           </div>
           {listing.provider ? (

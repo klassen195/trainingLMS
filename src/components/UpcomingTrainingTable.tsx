@@ -3,17 +3,25 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { formatDate } from "@/lib/dates";
+import { formatDate, isoDateLocal } from "@/lib/dates";
 import { cn } from "@/lib/cn";
 import {
   formatEstimatedCost,
   getTrainingAuthorizationBadge,
   trainingAuthorizationLevelLabel,
+  upcomingTrainingDisplayStatus,
   upcomingTrainingStatusLabel,
   upcomingTrainingTimeRange,
+  isPastUpcomingTraining,
   type UpcomingTrainingListItem,
   type UpcomingTrainingStatus,
 } from "@/lib/upcoming-training-types";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/Accordion";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 
@@ -119,7 +127,9 @@ function sortRows(
         break;
       }
       case "status":
-        cmp = STATUS_ORDER[a.row.status] - STATUS_ORDER[b.row.status];
+        cmp =
+          STATUS_ORDER[upcomingTrainingDisplayStatus(a.row)] -
+          STATUS_ORDER[upcomingTrainingDisplayStatus(b.row)];
         break;
     }
     if (cmp !== 0) return cmp * dir;
@@ -140,7 +150,7 @@ function matchesQuery(row: UpcomingTrainingListItem, query: string) {
     row.location,
     row.description,
     row.external_url,
-    upcomingTrainingStatusLabel(row.status),
+    upcomingTrainingStatusLabel(upcomingTrainingDisplayStatus(row)),
     trainingAuthorizationLevelLabel(row.authorization_level),
   ]
     .filter(Boolean)
@@ -163,16 +173,28 @@ export function UpcomingTrainingTable({
   const [sortBy, setSortBy] = useState<SortColumn>("starts_on");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
+  const today = isoDateLocal(new Date());
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((row) => matchesQuery(row, q));
   }, [query, rows]);
 
-  const sortedRows = useMemo(
-    () => sortRows(filteredRows, sortBy, sortDir),
-    [filteredRows, sortBy, sortDir]
-  );
+  const { currentRows, archiveRows } = useMemo(() => {
+    const current: UpcomingTrainingListItem[] = [];
+    const archive: UpcomingTrainingListItem[] = [];
+    for (const row of filteredRows) {
+      if (isPastUpcomingTraining(row, today)) archive.push(row);
+      else current.push(row);
+    }
+    return {
+      currentRows: sortRows(current, sortBy, sortDir),
+      archiveRows: sortRows(archive, sortBy, sortDir),
+    };
+  }, [filteredRows, sortBy, sortDir, today]);
+
+  const matchCount = currentRows.length + archiveRows.length;
 
   const columns = useMemo(
     () => SORTABLE_COLUMNS.filter((col) => showStatus || !col.managersOnly),
@@ -197,6 +219,114 @@ export function UpcomingTrainingTable({
     );
   }
 
+  function renderTable(
+    tableRows: UpcomingTrainingListItem[],
+    framed: boolean,
+    archived = false
+  ) {
+    const tableColumns =
+      archived && !showStatus ? [...columns, { id: "status" as const, label: "Status" }] : columns;
+
+    return (
+      <div className={cn("overflow-x-auto", framed && "rounded-md border")}>
+        <table className="w-full min-w-[40rem] text-left text-sm">
+          <thead className="border-b bg-muted/40">
+            <tr>
+              {tableColumns.map((col) => (
+                <th key={col.id} className="px-3 py-2 font-medium">
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center gap-1 hover:text-foreground",
+                      sortBy === col.id ? "text-foreground" : "text-muted-foreground"
+                    )}
+                    onClick={() => toggleSort(col.id)}
+                  >
+                    {col.label}
+                    {sortIcon(col.id)}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map((row) => {
+              const levelBadge = getTrainingAuthorizationBadge(row.authorization_level);
+              const timeRange = upcomingTrainingTimeRange(row);
+              const href = `/document-training/upcoming/${row.id}`;
+              const displayStatus = upcomingTrainingDisplayStatus(row);
+              return (
+                <tr
+                  key={row.id}
+                  role="link"
+                  tabIndex={0}
+                  className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
+                  onClick={() => router.push(href)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(href);
+                    }
+                  }}
+                >
+                  <td className="px-3 py-2">
+                    <div className="font-medium text-primary">{row.title}</div>
+                    {row.city || row.location ? (
+                      <div className="text-xs text-muted-foreground">
+                        {[row.city, row.location].filter(Boolean).join(" · ")}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{row.provider || "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    <div>
+                      {row.starts_on ? formatDate(row.starts_on) : "—"}
+                      {row.ends_on && row.ends_on !== row.starts_on
+                        ? ` – ${formatDate(row.ends_on)}`
+                        : ""}
+                    </div>
+                    {timeRange ? (
+                      <div className="text-xs text-muted-foreground">{timeRange}</div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {row.application_deadline ? formatDate(row.application_deadline) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {formatEstimatedCost(row.estimated_cost)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {levelBadge ? (
+                      // Static badge art under /public/training-levels
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={levelBadge.badgeSrc}
+                        alt={levelBadge.label}
+                        title={levelBadge.label}
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 object-contain"
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  {showStatus || archived ? (
+                    <td className="px-3 py-2">
+                      <Badge variant={statusVariant(displayStatus)}>
+                        {upcomingTrainingStatusLabel(displayStatus)}
+                      </Badge>
+                    </td>
+                  ) : null}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   if (rows.length === 0) {
     return (
       <div className="rounded-md border py-8 text-center">
@@ -218,112 +348,52 @@ export function UpcomingTrainingTable({
         />
         {query.trim() ? (
           <p className="text-xs text-muted-foreground">
-            {sortedRows.length} match{sortedRows.length === 1 ? "" : "es"}
+            {matchCount} match{matchCount === 1 ? "" : "es"}
+            {archiveRows.length > 0
+              ? ` (${archiveRows.length} in archive)`
+              : ""}
           </p>
         ) : null}
       </div>
 
-      {sortedRows.length === 0 ? (
+      {currentRows.length > 0 ? (
+        renderTable(currentRows, true)
+      ) : query.trim() && archiveRows.length === 0 ? (
         <div className="rounded-md border py-8 text-center">
           <p className="text-sm text-muted-foreground">No opportunities match your search.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <table className="w-full min-w-[40rem] text-left text-sm">
-            <thead className="border-b bg-muted/40">
-              <tr>
-                {columns.map((col) => (
-                  <th key={col.id} className="px-3 py-2 font-medium">
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex items-center gap-1 hover:text-foreground",
-                        sortBy === col.id ? "text-foreground" : "text-muted-foreground"
-                      )}
-                      onClick={() => toggleSort(col.id)}
-                    >
-                      {col.label}
-                      {sortIcon(col.id)}
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map((row) => {
-                const levelBadge = getTrainingAuthorizationBadge(row.authorization_level);
-                const timeRange = upcomingTrainingTimeRange(row);
-                const href = `/document-training/upcoming/${row.id}`;
-                return (
-                  <tr
-                    key={row.id}
-                    role="link"
-                    tabIndex={0}
-                    className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
-                    onClick={() => router.push(href)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        router.push(href);
-                      }
-                    }}
-                  >
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-primary">{row.title}</div>
-                      {row.city || row.location ? (
-                        <div className="text-xs text-muted-foreground">
-                          {[row.city, row.location].filter(Boolean).join(" · ")}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">{row.provider || "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      <div>
-                        {row.starts_on ? formatDate(row.starts_on) : "—"}
-                        {row.ends_on && row.ends_on !== row.starts_on
-                          ? ` – ${formatDate(row.ends_on)}`
-                          : ""}
-                      </div>
-                      {timeRange ? (
-                        <div className="text-xs text-muted-foreground">{timeRange}</div>
-                      ) : null}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {row.application_deadline ? formatDate(row.application_deadline) : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-muted-foreground">
-                      {formatEstimatedCost(row.estimated_cost)}
-                    </td>
-                    <td className="px-3 py-2">
-                      {levelBadge ? (
-                        // Static badge art under /public/training-levels
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={levelBadge.badgeSrc}
-                          alt={levelBadge.label}
-                          title={levelBadge.label}
-                          width={40}
-                          height={40}
-                          className="h-10 w-10 object-contain"
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    {showStatus ? (
-                      <td className="px-3 py-2">
-                        <Badge variant={statusVariant(row.status)}>
-                          {upcomingTrainingStatusLabel(row.status)}
-                        </Badge>
-                      </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="rounded-md border py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            {query.trim()
+              ? "No current opportunities match your search."
+              : "No upcoming training right now."}
+          </p>
         </div>
       )}
+
+      {archiveRows.length > 0 ? (
+        <Accordion
+          type="single"
+          collapsible
+          key={query.trim() ? "search" : "browse"}
+          defaultValue={query.trim() ? "archive" : undefined}
+        >
+          <AccordionItem value="archive" className="overflow-hidden rounded-md border">
+            <AccordionTrigger className="bg-muted/30 px-3 py-2 text-sm hover:no-underline">
+              <span className="flex items-center gap-2">
+                <span className="font-semibold">Archive</span>
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
+                  {archiveRows.length}
+                </Badge>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="p-0">
+              {renderTable(archiveRows, false, true)}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      ) : null}
     </div>
   );
 }

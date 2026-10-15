@@ -1,5 +1,5 @@
 import { BATTALION_CHIEF_RANK } from "@/lib/personnel-types";
-import { formatTime } from "@/lib/dates";
+import { formatTime, isoDateLocal } from "@/lib/dates";
 
 export const UPCOMING_TRAINING_STATUSES = ["draft", "open", "closed", "cancelled"] as const;
 export type UpcomingTrainingStatus = (typeof UPCOMING_TRAINING_STATUSES)[number];
@@ -325,6 +325,43 @@ export function upcomingTrainingStatusLabel(status: UpcomingTrainingStatus) {
     case "cancelled":
       return "Cancelled";
   }
+}
+
+function upcomingTrainingCalendarDay(value: string | null | undefined) {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return null;
+  return isoDateLocal(dt);
+}
+
+/** True once the listing's last calendar day is before today. Undated listings stay current. */
+export function isPastUpcomingTraining(
+  listing: { starts_on?: string | null; ends_on?: string | null },
+  today = isoDateLocal(new Date())
+) {
+  const days = [
+    upcomingTrainingCalendarDay(listing.starts_on),
+    upcomingTrainingCalendarDay(listing.ends_on),
+  ].filter((day): day is string => Boolean(day));
+  if (days.length === 0) return false;
+  const lastDay = days.reduce((latest, day) => (day > latest ? day : latest));
+  return lastDay < today;
+}
+
+/** Status shown in the list. Past classes read as Closed; cancelled stays cancelled. */
+export function upcomingTrainingDisplayStatus(
+  listing: {
+    status: UpcomingTrainingStatus;
+    starts_on?: string | null;
+    ends_on?: string | null;
+  },
+  today = isoDateLocal(new Date())
+): UpcomingTrainingStatus {
+  if (listing.status === "cancelled") return listing.status;
+  if (isPastUpcomingTraining(listing, today)) return "closed";
+  return listing.status;
 }
 
 export function trainingAttendanceStageLabel(stage: TrainingAttendanceStage) {

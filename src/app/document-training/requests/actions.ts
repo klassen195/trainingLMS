@@ -21,6 +21,7 @@ import {
   TRAINING_ATTENDANCE_REQUEST_SELECT,
   UPCOMING_TRAINING_SELECT,
   initialStageForApplicant,
+  isPastUpcomingTraining,
   isTrainingAttendancePending,
   nextStageAfterApproval,
   type TrainingAttendancePendingStage,
@@ -289,7 +290,7 @@ export async function applyToUpcomingTraining(input: {
   throwIfDbError(listingError);
   if (!listing) throw new Error("Upcoming training not found.");
   const openListing = listing as UpcomingTraining;
-  if (openListing.status !== "open") {
+  if (openListing.status !== "open" || isPastUpcomingTraining(openListing)) {
     throw new Error("This opportunity is not open for applications.");
   }
 
