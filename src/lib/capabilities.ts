@@ -33,6 +33,8 @@ export const APP_CAPABILITIES = [
   "verify_personnel_languages",
   "edit_own_personnel",
   "manage_incidents",
+  "view_rope_inventory",
+  "manage_rope_inventory",
 ] as const;
 
 export type AppCapability = (typeof APP_CAPABILITIES)[number];
@@ -212,6 +214,18 @@ export const capabilityMeta: Record<
     group: "Assets & operations",
     label: "Manage incidents",
     description: "Run ICS tactical boards. Shows Incidents in navigation.",
+  },
+  view_rope_inventory: {
+    group: "Assets & operations",
+    label: "View tech rescue inventory",
+    description:
+      "See the tech rescue complement at each station, including compartments, bags, and the reserve cache.",
+  },
+  manage_rope_inventory: {
+    group: "Assets & operations",
+    label: "Manage tech rescue inventory",
+    description:
+      "Edit tech rescue compartments and bags, loadouts, and move gear to and from the reserve cache.",
   },
 };
 

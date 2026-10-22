@@ -63,6 +63,7 @@ export default async function AssetsPpePage() {
       <AssetsSectionNav
         showApparatus={caps.view_apparatus || canManage}
         showMaintenance={caps.resolve_maintenance}
+        showRope={caps.view_rope_inventory || caps.manage_rope_inventory}
       />
 
       <EquipmentTable

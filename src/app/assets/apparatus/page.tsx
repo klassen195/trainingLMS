@@ -82,6 +82,7 @@ export default async function AssetsApparatusPage({
       <AssetsSectionNav
         showApparatus
         showMaintenance={caps.resolve_maintenance}
+        showRope={caps.view_rope_inventory || caps.manage_rope_inventory}
       />
 
       <div className="mb-3 flex flex-wrap gap-1.5">

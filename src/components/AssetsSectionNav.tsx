@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HardHat, Truck, Wrench } from "lucide-react";
+import { Cable, HardHat, Truck, Wrench } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export function AssetsSectionNav({
   showApparatus = true,
   showMaintenance = false,
+  showRope = false,
 }: {
   showApparatus?: boolean;
   showMaintenance?: boolean;
+  showRope?: boolean;
 }) {
   const pathname = usePathname();
   const tabs = [
     { href: "/assets/ppe", label: "Equipment", icon: HardHat, show: true },
     { href: "/assets/apparatus", label: "Apparatus", icon: Truck, show: showApparatus },
     { href: "/assets/maintenance", label: "Maintenance", icon: Wrench, show: showMaintenance },
+    { href: "/assets/rope", label: "Tech Rescue", icon: Cable, show: showRope },
   ].filter((tab) => tab.show);
 
   return (

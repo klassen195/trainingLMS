@@ -183,13 +183,13 @@ export function equipmentAssignmentLabel(
   return "Unassigned";
 }
 
-/** Compact label for pickers: "E11 — 0V95" or "0V95". */
+/** Compact label for pickers: "E11 (0V95)" or "0V95". */
 export function apparatusOptionLabel(
   asset: Pick<Asset, "build_number" | "unit_number"> & { name?: string | null }
 ) {
   const build = asset.build_number?.trim() || "Unknown";
   if (asset.unit_number?.trim()) {
-    return `${asset.unit_number.trim()} — ${build}`;
+    return `${asset.unit_number.trim()} (${build})`;
   }
   return build;
 }

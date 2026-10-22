@@ -101,6 +101,7 @@ export default async function AssetsMaintenancePage() {
       <AssetsSectionNav
         showApparatus={caps.view_apparatus || caps.manage_assets}
         showMaintenance
+        showRope={caps.view_rope_inventory || caps.manage_rope_inventory}
       />
 
       <MaintenanceRequestAdminList requests={requests} />

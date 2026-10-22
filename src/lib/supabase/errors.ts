@@ -259,6 +259,31 @@ export function isMissingUpcomingTrainingTables(error: PostgrestError | null) {
   );
 }
 
+export function isMissingRopeInventory(error: PostgrestError | null) {
+  if (!error) return false;
+  return (
+    error.code === "PGRST205" ||
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    error.message.includes("tracks_rope_inventory") ||
+    error.message.includes("rope_gear_types") ||
+    error.message.includes("rope_gear_categories") ||
+    error.message.includes("rope_compartments") ||
+    error.message.includes("rope_bags") ||
+    error.message.includes("rope_bag_lines") ||
+    error.message.includes("rope_placements") ||
+    error.message.includes("rope_cache_stock") ||
+    error.message.includes("rope_inventory_events") ||
+    error.message.includes("rope_audits") ||
+    error.message.includes("rope_audit_findings") ||
+    error.message.includes("rope_save_audit") ||
+    error.message.includes("rope_set_apparatus_tracking") ||
+    error.message.includes("rope_set_asset_location") ||
+    error.message.includes("Could not find the table") ||
+    (error.message.includes("Could not find the") && error.message.includes("column"))
+  );
+}
+
 export function supabaseErrorMessage(error: PostgrestError) {
   return error.message || `Database error (${error.code})`;
 }
