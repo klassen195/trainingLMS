@@ -52,7 +52,7 @@ export function RopeBagCards({
   return (
     <div className="space-y-3">
       {open && openSummary ? (
-        <div ref={openRef} className="rounded-xl border bg-card p-4 shadow-sm">
+        <div ref={openRef} className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4 shadow-sm">
           <RopeBagSection
             canManage={canManage}
             bagId={openSummary.id}
